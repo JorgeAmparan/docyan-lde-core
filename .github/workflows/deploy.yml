@@ -15,8 +15,12 @@ jobs:
       - name: Set up Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only
+      - name: Deploy backend (docyan-lde-api) to Fly.io
+        # B2.2: el config del backend es fly.api.toml (NO el default fly.toml, que
+        # se eliminó). Cada app de la topología tiene su propio fly.<app>.toml en
+        # la raíz (fly.api / fly.graph) o en su subdir (worker/ redis/ embedder/),
+        # para que ningún deploy desde la raíz herede un config ajeno.
+        run: flyctl deploy --remote-only --config fly.api.toml --app docyan-lde-api
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 

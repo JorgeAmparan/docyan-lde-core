@@ -16,7 +16,6 @@ nunca la decisión.
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -79,9 +78,10 @@ class SupabaseBudgetStore:
         if self._client is None:
             from supabase import create_client
 
-            self._client = create_client(
-                os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY")
-            )
+            # B0.7: validación loud + service_role (helper compartido).
+            from app.core.supabase_client import require_supabase_config
+            _url, _key = require_supabase_config("budget_manager", service=True)
+            self._client = create_client(_url, _key)
         return self._client
 
     @staticmethod

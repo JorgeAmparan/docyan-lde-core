@@ -174,6 +174,38 @@ flag):** `app/core/dii.py` (`DOCYAN_ENABLE_DII`), `app/api/routers/billing.py`
 
 ---
 
+## 3.2. Migraciones de DB (008/009) — requieren conexión Postgres directa
+
+Las migraciones `migrations/008_tenant_budget.sql` y `009_tenant_schemas.sql` son
+**DDL** (CREATE TABLE + RLS + triggers + functions). **PostgREST / supabase-py NO
+ejecutan DDL** — hace falta una conexión Postgres directa.
+
+> ⚠️ El `SUPABASE_SERVICE_KEY` es un JWT para la Data API; **no** sirve para
+> conectarse a Postgres. Se necesita la **connection string** con el password de
+> Postgres: Supabase Dashboard → Project Settings → **Database** → *Connection
+> string* (`postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres`).
+
+Aplicar (idempotente, una transacción por archivo):
+
+```bash
+export SUPABASE_DB_URL="postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres"
+python scripts/apply_migrations.py            # aplica 008 + 009
+python scripts/apply_migrations.py --verify   # verifica tablas (\d equivalente)
+```
+
+Sembrar saldo de prueba para el smoke de ingesta (tras crear la tabla; vía
+PostgREST con el service key — ya es CRUD, no DDL):
+
+```bash
+set -a; . ./.env; set +a
+curl -s -X POST "$SUPABASE_URL/rest/v1/tenant_budget" \
+  -H "apikey: $SUPABASE_SERVICE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+  -H "Content-Type: application/json" -H "Prefer: return=representation" \
+  -d '{"tenant_id":"smoke-test-tenant","saldo_actual_usd":10.0}'
+```
+
+---
+
 ## 4. Nota operativa importante (verdad operacional)
 
 El Sprint Contract referenció `app/ingesta/budget_manager.py`,

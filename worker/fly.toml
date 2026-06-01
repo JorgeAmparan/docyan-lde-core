@@ -4,17 +4,22 @@
 # el documento llega por referencia (document store) y el resultado va al grafo.
 #
 # Deploy DESDE LA RAÍZ del repo (el Dockerfile hace COPY app/ y COPY worker/, que
-# requieren build context = raíz). Verificado empíricamente (B2.2):
-#   flyctl deploy --app docyan-lde-ingest --config worker/fly.toml
-# Con --config worker/fly.toml desde la raíz: context = cwd = raíz (COPY app/worker
-# resuelven) y flyctl resuelve [build].dockerfile RELATIVO al dir del --config
-# (worker/), por lo que la ruta correcta es "Dockerfile" → worker/Dockerfile.
-# (Es el mismo aprendizaje de B2.1, pero inverso a redis: redis deploya desde su
-# subdir; el worker deploya desde la raíz porque copia app/ y worker/.)
+# requieren build context = raíz). Comando blindado (B2.2 — ver docs/deploy_topologia_fly.md):
+#   flyctl deploy --remote-only --config worker/fly.toml \
+#     --app docyan-lde-ingest --dockerfile worker/Dockerfile
+# Por qué --app y --dockerfile EXPLÍCITOS: el bug de B2.2 fue que un deploy real
+# (no --build-only) desde la raíz, con un fly.toml DEFAULT en la raíz, terminaba
+# releaseando la imagen/app del backend. Se eliminó el default root fly.toml
+# (ahora fly.api.toml), y se pasan --app (target inequívoco) y --dockerfile
+# (ruta relativa a cwd=raíz, inequívoca) para no depender de cómo flyctl resuelva
+# [build].dockerfile entre versiones. [build].dockerfile queda como fallback.
 app = "docyan-lde-ingest"
 primary_region = "dfw"
 
 [build]
+  # Valor verificado en --build-only (B2.2): flyctl lo resuelve relativo al dir
+  # del --config (worker/) → worker/Dockerfile. El comando de deploy además pasa
+  # --dockerfile worker/Dockerfile (relativo a cwd=raíz) como override inequívoco.
   dockerfile = "Dockerfile"
 
 [env]
