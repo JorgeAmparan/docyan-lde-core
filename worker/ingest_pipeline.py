@@ -165,31 +165,55 @@ class IngestPipeline:
         markdown = convertir_a_markdown(local_path)
         schema = self._resolver_schema(job, muestra=markdown[:8000])
 
-        graphrag = _build_graphrag(job.tenant_id, schema)
-        try:
-            # 1. Extracción al grafo del tenant (provenance nativo). Wiring del PoC:
-            #    extractor = Gemini 2.5 Flash; resolver = LLMVerifiedResolution con
-            #    Gemini + el embedder BGE-M3. Sin pasarlos, el SDK usaría defaults.
-            extractor, resolver = llm_config.build_extractor_and_resolver(
-                graphrag.embedder
-            )
-            ingest_result = await graphrag.ingest(
-                text=markdown,
-                document_id=job.job_id,
-                extractor=extractor,
-                resolver=resolver,
-            )
-
-            # 2. Deduplicación fuzzy — BUG PoC #1: el PoC NO la llamó (653 residuos).
-            #    Es async y NO tiene variante _sync → con await.
-            duplicados_resueltos = 0
-            if llm_config.LLM_CONFIG["deduplicate_fuzzy"]:
-                duplicados_resueltos = await graphrag.deduplicate_entities(fuzzy=True)
-
-            # 3. Finalize (async; también existe finalize_sync para contextos sync).
-            await graphrag.finalize()
-        finally:
-            graphrag.close()
+        # Fallback multi-modelo (B2.2): el worker prueba la cadena
+        # [primario, *fallbacks] de llm_config. Si la extracción falla con un
+        # modelo (presupuesto/quota/rate-limit/API error), reintenta el documento
+        # con el siguiente. Idempotente: `apply_changes` del SDK es crash-safe por
+        # SHA-256, así que re-ingerir el mismo document_id no duplica.
+        chain = llm_config.extraction_model_chain()
+        ingest_result = None
+        duplicados_resueltos = 0
+        modelo_usado = None
+        last_exc: Exception | None = None
+        for i, model in enumerate(chain):
+            graphrag = _build_graphrag(job.tenant_id, schema)
+            try:
+                # Wiring del PoC: extractor = modelo de extracción; resolver =
+                # LLMVerifiedResolution con el mismo LLM + el embedder BGE-M3.
+                extractor, resolver = llm_config.build_extractor_and_resolver(
+                    graphrag.embedder, model=model
+                )
+                ingest_result = await graphrag.ingest(
+                    text=markdown,
+                    document_id=job.job_id,
+                    extractor=extractor,
+                    resolver=resolver,
+                )
+                # Deduplicación fuzzy — BUG PoC #1 (653 residuos). Async, con await.
+                if llm_config.LLM_CONFIG["deduplicate_fuzzy"]:
+                    duplicados_resueltos = await graphrag.deduplicate_entities(fuzzy=True)
+                # Finalize (async; existe finalize_sync para contextos sync).
+                await graphrag.finalize()
+                modelo_usado = model
+                if i > 0:
+                    logger.warning(
+                        "job %s: extracción OK con modelo de fallback %s (#%d del chain)",
+                        job.job_id, model, i + 1,
+                    )
+                break
+            except Exception as exc:  # noqa: BLE001 — fallback de modelo deliberado
+                last_exc = exc
+                logger.warning(
+                    "job %s: extracción falló con modelo %s (%d/%d): %s",
+                    job.job_id, model, i + 1, len(chain), exc,
+                )
+            finally:
+                graphrag.close()
+        if ingest_result is None:
+            raise RuntimeError(
+                f"job {job.job_id}: la extracción falló con todos los modelos del "
+                f"chain {chain}. Último error: {last_exc}"
+            ) from last_exc
 
         # Marca uso del schema (señal de utilidad para el registry vivo).
         if self.schema_registry is not None and schema is not None:
@@ -206,5 +230,6 @@ class IngestPipeline:
             "relaciones_creadas": getattr(ingest_result, "relationships_created", None),
             "chunks_indexados": getattr(ingest_result, "chunks_indexed", None),
             "duplicados_resueltos": duplicados_resueltos,
+            "modelo_extraccion": modelo_usado,
             "metadata": getattr(ingest_result, "metadata", {}),
         }

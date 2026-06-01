@@ -13,7 +13,9 @@ primary_region = "dfw"
   # — ver docs/runbook_secrets_produccion.md. NO poner secrets aquí.
   FALKOR_HOST = "docyan-lde-graph.internal"
   FALKOR_PORT = "6379"
-  EMBEDDER_URL = "http://docyan-lde-embedder.internal:8000"
+  # flycast (NO .internal): el embedder bind 0.0.0.0 por diseño; fly-proxy puentea
+  # IPv4↔IPv6. Con .internal directo la conexión es rechazada (B2.2).
+  EMBEDDER_URL = "http://docyan-lde-embedder.flycast:8000"
   BGE_M3_TIMEOUT = "30"
 
 [http_service]

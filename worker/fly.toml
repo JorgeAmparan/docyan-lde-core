@@ -26,22 +26,38 @@ primary_region = "dfw"
   # Endpoints internos (los SECRETS reales — API keys — se fijan con flyctl secrets).
   FALKOR_HOST = "docyan-lde-graph.internal"
   FALKOR_PORT = "6379"
-  EMBEDDER_URL = "http://docyan-lde-embedder.internal:8000"
+  # flycast (NO .internal): el embedder bind 0.0.0.0 (IPv4) por diseño y se
+  # alcanza por fly-proxy (.flycast), que puentea IPv4↔IPv6. Con .internal (6PN
+  # IPv6 directo) la conexión es rechazada (B2.2).
+  EMBEDDER_URL = "http://docyan-lde-embedder.flycast:8000"
   HF_HUB_OFFLINE = "1"
   TRANSFORMERS_OFFLINE = "1"
   # Modelos Docling precargados en build (docling-tools models download); el
   # pipeline los usa como artifacts_path para convertir offline (B2.2).
   DOCLING_ARTIFACTS_PATH = "/root/.cache/docling/models"
+  # Resiliencia de extracción (B2.2): el modelo PRIMARIO sigue siendo Gemini 2.5
+  # Flash (default del código, CLAUDE.md/Adenda §3). Si falla (presupuesto/quota/
+  # rate-limit/API error) el worker reintenta el documento con este FALLBACK.
+  # Requiere ANTHROPIC_API_KEY como secret en docyan-lde-ingest.
+  INGEST_EXTRACTION_FALLBACK_MODELS = "anthropic/claude-sonnet-4-6"
+  # NOTA OPERATIVA: mientras Gemini no tenga presupuesto, se invierte vía
+  # `flyctl secrets set INGEST_EXTRACTION_MODEL=anthropic/claude-sonnet-4-6`
+  # (primario temporal = Sonnet). Al volver el saldo de Gemini: `flyctl secrets
+  # unset INGEST_EXTRACTION_MODEL` → primario vuelve a Gemini, Sonnet queda de fallback.
 
 # Servicio HTTP PRIVADO (flycast / .internal). SIN handlers públicos: el worker
 # recibe jobs por la cola Redis y sirve /health a la red privada de Fly.
 [[services]]
   internal_port = 8000
   protocol = "tcp"
-  # Jobs largos: la máquina puede dormirse entre ráfagas y despertar con la cola.
-  auto_stop_machines = "suspend"
-  auto_start_machines = true
-  min_machines_running = 0
+  # CRÍTICO (B2.2): el worker es un CONSUMIDOR DE COLA, no un servicio HTTP. El
+  # autosuspend de Fly se dispara por inactividad de TRÁFICO HTTP, NO por la cola
+  # Redis. Con "suspend" + min=0, Fly suspendía la máquina A MITAD de un job (el
+  # job se quedaba en `processing` para siempre — verificado en B2.2). Un worker
+  # de cola debe estar SIEMPRE vivo: auto_stop off + min 1.
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
 
   [[services.ports]]
     port = 8000

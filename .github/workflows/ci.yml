@@ -50,8 +50,13 @@ jobs:
       BGE_M3_URL: http://localhost:8080
       REDIS_URL: redis://localhost:6379/0
       FALKORDB_HOST: localhost
-      ORG_ID: ci-test-org
-      API_KEY: ci-test-api-key
+      # Deben coincidir con los defaults de tests/conftest.py: los tests de
+      # integración del cotizador (B2.2) autentican vía X-API-Key en modo dev
+      # (DEV_API_KEY) y esperan org = "test-org". Si CI los sobreescribe, el
+      # camino dev-key no matchea y cae al lookup de api_keys en Supabase (DNS
+      # fake → 401). Fuente única: conftest.
+      ORG_ID: test-org
+      API_KEY: test-api-key-for-pytest
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/docyan_test
 
     steps:
