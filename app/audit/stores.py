@@ -23,7 +23,7 @@ import json
 from typing import Any
 
 from app.audit.familias import FAMILIAS_INERTES_MVP, FamiliaFAT
-from app.audit.fat_extendido import GENESIS_HASH, EventoFAT
+from app.audit.fat_extendido import GENESIS_HASH, EventoFAT, canon_timestamp
 
 # Familias cuyo almacenamiento físico es FalkorDB (críticas, enlazadas al grafo).
 # F7 gobernanza es crítica y activa; F1/F2/F3 son críticas e inertes en MVP.
@@ -185,7 +185,14 @@ class FalkorFATStore:
             "hash_evento": evento.hash_evento,
             "hash_evento_anterior": evento.hash_evento_anterior,
         }
-        self._client().create_node(evento.tenant_id, self._LABEL, props)
+        # :EventoFAT es un nodo de AUDITORÍA, no una entidad de dominio: se escribe
+        # con Cypher crudo (confinado al grafo del tenant por `query`), sin pasar
+        # por la validación de la ontología DKG (que solo conoce labels de negocio).
+        self._client().query(
+            evento.tenant_id,
+            f"CREATE (e:{self._LABEL}) SET e = $props RETURN e",
+            {"props": props},
+        )
 
     def last_hash(self, tenant_id: str) -> str:
         rows = self._client().query(
@@ -253,7 +260,11 @@ class HybridFATStore:
         eventos = self.supabase.list_for_tenant(tenant_id) + self.falkor.list_for_tenant(
             tenant_id
         )
-        return sorted(eventos, key=lambda e: e.timestamp)
+        # Orden cronológico por INSTANTE canónico (no por string), porque Supabase y
+        # FalkorDB pueden devolver el timestamp con formatos distintos del mismo
+        # instante. La cadena de hashes se construyó en orden de inserción; leerla
+        # en ese mismo orden es lo que valida el verificador de integridad.
+        return sorted(eventos, key=lambda e: canon_timestamp(e.timestamp))
 
     def delete_eventos(self, evento_ids: list[str]) -> int:
         return self.supabase.delete_eventos(evento_ids) + self.falkor.delete_eventos(

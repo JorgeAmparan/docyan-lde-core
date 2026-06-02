@@ -64,6 +64,26 @@ def _payload_canonico(payload: dict[str, Any]) -> str:
     )
 
 
+def canon_timestamp(ts: str) -> str:
+    """
+    Representación CANÓNICA y round-trip-estable del timestamp para el hash.
+
+    El hash debe ser idéntico aunque el almacén normalice el `created_at` (Supabase
+    devuelve p.ej. `.40035+00:00` donde se escribió `.400350+00:00`, o recorta la
+    fracción cuando es cero). Se normaliza a UTC con microsegundos de 6 dígitos y
+    offset `+00:00`, de modo que dos representaciones del MISMO instante produzcan
+    el mismo hash. Si el string no es ISO parseable, se usa tal cual (defensa).
+    """
+    try:
+        dt = datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        return ts
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+
+
 def compute_hash_evento(
     *,
     evento_id: str,
@@ -81,7 +101,7 @@ def compute_hash_evento(
     base = _SEP.join(
         [
             evento_id,
-            timestamp,
+            canon_timestamp(timestamp),
             tipo_evento,
             _payload_canonico(payload),
             hash_evento_anterior or GENESIS_HASH,

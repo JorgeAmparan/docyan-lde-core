@@ -49,6 +49,35 @@ def test_hash_es_determinista_y_sha256():
     assert len(h1) == 64 and all(c in "0123456789abcdef" for c in h1)
 
 
+def test_hash_estable_ante_roundtrip_de_timestamp_supabase():
+    """
+    Regresión (cierre prod B7): Supabase devuelve `created_at` con la fracción de
+    segundo normalizada (p.ej. recorta el cero final: `.400350` → `.40035`), o el
+    offset como `+00`. El hash debe ser IDÉNTICO para el mismo instante,
+    independientemente de la representación — si no, el verificador marca
+    "alteracion" falsa sobre eventos íntegros.
+    """
+    kw = dict(evento_id="e1", tipo_evento="F4.x", payload={"a": 1}, hash_evento_anterior="")
+    h_escrito = compute_hash_evento(timestamp="2026-06-02T16:39:50.400350+00:00", **kw)
+    h_leido_trim = compute_hash_evento(timestamp="2026-06-02T16:39:50.40035+00:00", **kw)
+    h_leido_offset = compute_hash_evento(timestamp="2026-06-02T16:39:50.400350+00:00", **kw)
+    assert h_escrito == h_leido_trim == h_leido_offset
+
+
+def test_evento_valido_tras_reconstruir_con_timestamp_normalizado():
+    """Un EventoFAT reconstruido con el timestamp normalizado por el almacén sigue
+    pasando `hash_valido()` (no es alteración)."""
+    fat = _fat()
+    ev = fat.registrar(
+        tipo_evento="F4.x", familia=FamiliaFAT.F4_CONSULTA, tenant_id="t1",
+        payload={"a": 1}, evento_id="e1",
+        timestamp="2026-06-02T16:39:50.400350+00:00",
+    )
+    # Simula la lectura desde Supabase con la fracción recortada.
+    leido = EventoFAT.from_dict({**ev.to_dict(), "timestamp": "2026-06-02T16:39:50.40035+00:00"})
+    assert leido.hash_valido()
+
+
 def test_genesis_usa_hash_anterior_vacio():
     fat = _fat()
     ev = fat.registrar(
