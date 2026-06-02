@@ -256,7 +256,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/connectors/drive/process": {
+    "/ingest_sources/{source}/configure": {
         parameters: {
             query?: never;
             header?: never;
@@ -266,18 +266,110 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Procesar Drive
-         * @description Procesa todos los documentos de una carpeta de Google Drive.
-         *     Requiere GOOGLE_SERVICE_ACCOUNT_FILE o GOOGLE_CREDENTIALS_FILE en .env
+         * Configure Source
+         * @description Registra/valida la configuración de conexión a una fuente documental.
+         *
+         *     Multi-tenant strict: el `tenant_id` se resuelve del usuario logueado.
+         *     STUB B0.5 — la persistencia de credenciales (Supabase, cifrada) y la
+         *     verificación de conexión real se implementan en B12 Onboarding.
          */
-        post: operations["procesar_drive_connectors_drive_process_post"];
+        post: operations["configure_source_ingest_sources__source__configure_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/connectors/drive/files": {
+    "/ingest_sources/{source}/list_documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List Documents
+         * @description Lista documentos disponibles en la fuente para el tenant.
+         *
+         *     STUB B0.5 — el listado real (vía los clientes de `app.ingest_sources.*`)
+         *     se conecta en B1+/B12. No finge resultados: devuelve lista vacía con
+         *     status='not_implemented'.
+         */
+        post: operations["list_documents_ingest_sources__source__list_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingest_sources/{source}/ingest_document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest Document
+         * @description Ingiere un documento desde la fuente al DKG del tenant.
+         *
+         *     STUB B0.5 — la ingesta real (Docling + LlamaIndex → GraphRAG-SDK →
+         *     FalkorDB, con cotizador pre-ingesta) se construye en B1+/B3. No finge
+         *     ingesta: devuelve status='not_implemented'.
+         */
+        post: operations["ingest_document_ingest_sources__source__ingest_document_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingesta/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cotizar Documento
+         * @description Cotiza un documento (gate financiero) y crea el job. NO ingiere: devuelve la
+         *     estimación + job_id pendiente de confirmación, o el rechazo con motivo.
+         */
+        post: operations["cotizar_documento_ingesta_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingesta/documents/{job_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Ingesta
+         * @description Confirma e encola un job aprobado hacia el worker. Sin esto, no hay ingesta.
+         */
+        post: operations["confirmar_ingesta_ingesta_documents__job_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingesta/documents/{job_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -285,10 +377,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Listar Drive
-         * @description Lista archivos disponibles en Google Drive.
+         * Estado Job
+         * @description Estado de un job (aislado por tenant).
          */
-        get: operations["listar_drive_connectors_drive_files_get"];
+        get: operations["estado_job_ingesta_documents__job_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -297,7 +389,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/connectors/microsip/process": {
+    "/entities/{entity_id}/observations": {
         parameters: {
             query?: never;
             header?: never;
@@ -307,935 +399,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Procesar Microsip
-         * @description Extrae y procesa datos de MicroSip ERP via API REST.
-         *     Usa credenciales del .env si no se proporcionan.
+         * Crear Observacion
+         * @description Crea una observación del usuario sobre una entidad (multi-tenant strict).
          */
-        post: operations["procesar_microsip_connectors_microsip_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/microsip/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Test Microsip Login
-         * @description Verifica conectividad con MicroSip ERP.
-         */
-        post: operations["test_microsip_login_connectors_microsip_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/microsip/db/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Test Microsip Db
-         * @description Verifica conectividad directa a la BD de MicroSip.
-         */
-        post: operations["test_microsip_db_connectors_microsip_db_connect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/microsip/db/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Procesar Microsip Db
-         * @description Extrae y procesa datos directamente de la BD de MicroSip.
-         */
-        post: operations["procesar_microsip_db_connectors_microsip_db_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/microsip/files/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Procesar Microsip Files
-         * @description Procesa archivos exportados de MicroSip (XML CFDI, CSV, PDF).
-         *     Coloca los archivos en el directorio configurado en MICROSIP_EXPORT_DIR.
-         */
-        post: operations["procesar_microsip_files_connectors_microsip_files_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/sql/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Test Sql Connection
-         * @description Verifica conectividad a cualquier base de datos SQL.
-         */
-        post: operations["test_sql_connection_connectors_sql_connect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/sql/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Procesar Sql
-         * @description Procesa tablas de una BD SQL a través del pipeline DOCYAN™.
-         *     Si tabla está definida, procesa solo esa tabla.
-         *     Si tablas es una lista, procesa esas tablas.
-         *     Si ninguno está definido, procesa toda la BD.
-         */
-        post: operations["procesar_sql_connectors_sql_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/webhook/receive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Webhook Generico
-         * @description Webhook genérico — recibe cualquier payload JSON.
-         */
-        post: operations["webhook_generico_connectors_webhook_receive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/make/webhook": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Make Webhook
-         * @description Recibe datos desde escenarios de Make (Integromat).
-         */
-        post: operations["make_webhook_connectors_make_webhook_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/zapier/webhook": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Zapier Webhook
-         * @description Recibe datos desde Zaps de Zapier.
-         */
-        post: operations["zapier_webhook_connectors_zapier_webhook_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/n8n/webhook": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * N8N Webhook
-         * @description Recibe datos desde workflows de n8n.
-         */
-        post: operations["n8n_webhook_connectors_n8n_webhook_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/bubble/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Bubble Process
-         * @description Recibe datos desde apps Bubble.io.
-         */
-        post: operations["bubble_process_connectors_bubble_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/lovable/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Lovable Process
-         * @description Recibe datos desde apps generadas con Lovable.
-         */
-        post: operations["lovable_process_connectors_lovable_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/chrome-ext/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Chrome Ext Process
-         * @description Recibe datos capturados por la extensión de Chrome.
-         */
-        post: operations["chrome_ext_process_connectors_chrome_ext_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/notion/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Notion Sync
-         * @description Sincroniza páginas y bases de datos de Notion.
-         */
-        post: operations["notion_sync_connectors_notion_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/hubspot/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Hubspot Sync
-         * @description Sincroniza contactos, deals y companies de HubSpot.
-         */
-        post: operations["hubspot_sync_connectors_hubspot_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/pipedrive/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pipedrive Sync
-         * @description Sincroniza deals, persons y organizations de Pipedrive.
-         */
-        post: operations["pipedrive_sync_connectors_pipedrive_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/binderp/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Binderp Sync
-         * @description Sincroniza facturas, clientes, productos e inventario de Bind ERP.
-         */
-        post: operations["binderp_sync_connectors_binderp_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/gmail/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Gmail Sync
-         * @description Sincroniza correos y adjuntos de Gmail.
-         */
-        post: operations["gmail_sync_connectors_gmail_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/meet/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Meet Sync
-         * @description Sincroniza transcripciones de Google Meet.
-         */
-        post: operations["meet_sync_connectors_meet_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/onedrive/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Onedrive Process
-         * @description Descarga y procesa archivos de OneDrive.
-         */
-        post: operations["onedrive_process_connectors_onedrive_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/onedrive/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Onedrive Files
-         * @description Lista archivos disponibles en OneDrive.
-         */
-        get: operations["onedrive_files_connectors_onedrive_files_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/outlook/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Outlook Sync
-         * @description Sincroniza correos y adjuntos de Outlook/Office 365.
-         */
-        post: operations["outlook_sync_connectors_outlook_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/slack/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Slack Sync
-         * @description Sincroniza mensajes de canales de Slack.
-         */
-        post: operations["slack_sync_connectors_slack_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/whatsapp/webhook": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Whatsapp Webhook
-         * @description Recibe mensajes de WhatsApp Business Cloud API.
-         */
-        post: operations["whatsapp_webhook_connectors_whatsapp_webhook_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/whatsapp/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Whatsapp Verify
-         * @description Verificación de webhook de WhatsApp (challenge-response).
-         */
-        get: operations["whatsapp_verify_connectors_whatsapp_verify_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/zoom/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Zoom Sync
-         * @description Sincroniza transcripciones y grabaciones de Zoom.
-         */
-        post: operations["zoom_sync_connectors_zoom_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/salesforce/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Salesforce Sync
-         * @description Sincroniza objetos de Salesforce (Account, Contact, Lead, Opportunity).
-         */
-        post: operations["salesforce_sync_connectors_salesforce_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/salesforce/query": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Salesforce Query
-         * @description Ejecuta una query SOQL personalizada y procesa el resultado.
-         */
-        post: operations["salesforce_query_connectors_salesforce_query_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/zoho/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Zoho Sync
-         * @description Sincroniza módulos de Zoho CRM (Leads, Contacts, Accounts, Deals).
-         */
-        post: operations["zoho_sync_connectors_zoho_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/odoo/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Odoo Sync
-         * @description Sincroniza modelos de Odoo (contactos, ventas, facturas, productos).
-         */
-        post: operations["odoo_sync_connectors_odoo_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/odbc/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Odbc Connect
-         * @description Verifica conectividad ODBC.
-         */
-        post: operations["odbc_connect_connectors_odbc_connect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/odbc/query": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Odbc Query
-         * @description Ejecuta query ODBC y procesa resultado via DII.
-         */
-        post: operations["odbc_query_connectors_odbc_query_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/odbc/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Odbc Process
-         * @description Procesa múltiples tablas ODBC via DII.
-         */
-        post: operations["odbc_process_connectors_odbc_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/ftp/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ftp Sync
-         * @description Descarga archivos de FTP/SFTP y los procesa via DII.
-         */
-        post: operations["ftp_sync_connectors_ftp_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/imap/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Imap Sync
-         * @description Sincroniza correos de cualquier servidor IMAP.
-         */
-        post: operations["imap_sync_connectors_imap_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/teams/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Teams Sync
-         * @description Sincroniza mensajes y archivos de canales de Microsoft Teams.
-         */
-        post: operations["teams_sync_connectors_teams_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/teams/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Teams List
-         * @description Lista teams accesibles.
-         */
-        get: operations["teams_list_connectors_teams_list_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/teams/channels": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Teams Channels
-         * @description Lista canales de un team.
-         */
-        get: operations["teams_channels_connectors_teams_channels_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/contpaqi/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Contpaqi Process
-         * @description Extrae y procesa datos de CONTPAQi via conexión directa a BD.
-         */
-        post: operations["contpaqi_process_connectors_contpaqi_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/contpaqi/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Contpaqi Files
-         * @description Procesa archivos exportados de CONTPAQi (XML CFDI, CSV, PDF).
-         */
-        post: operations["contpaqi_files_connectors_contpaqi_files_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/aspel/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Aspel Process
-         * @description Extrae y procesa datos de Aspel SAE/COI via conexión directa a BD.
-         */
-        post: operations["aspel_process_connectors_aspel_process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/aspel/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Aspel Files
-         * @description Procesa archivos exportados de Aspel (XML CFDI, CSV, PDF).
-         */
-        post: operations["aspel_files_connectors_aspel_files_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/sapb1/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sapb1 Sync
-         * @description Sincroniza objetos de SAP Business One via Service Layer.
-         */
-        post: operations["sapb1_sync_connectors_sapb1_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/sapb1/query": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Sapb1 Query
-         * @description Ejecuta query SQL en SAP B1 y procesa resultado via DII.
-         */
-        post: operations["sapb1_query_connectors_sapb1_query_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/onpremise/receive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Onpremise Receive
-         * @description Recibe datos desde agente on-premise en red del cliente.
-         */
-        post: operations["onpremise_receive_connectors_onpremise_receive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/connectors/onpremise/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Onpremise Status
-         * @description Consulta status de agentes on-premise registrados.
-         */
-        get: operations["onpremise_status_connectors_onpremise_status_get"];
-        put?: never;
-        post?: never;
+        post: operations["crear_observacion_entities__entity_id__observations_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1347,6 +514,480 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/dkg/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dkg Health
+         * @description PING a FalkorDB (docyan-lde-graph).
+         */
+        get: operations["dkg_health_admin_dkg_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/tenants/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tenants Test
+         * @description Crea un :Tenant de prueba en el grafo aislado del org y lo lee de vuelta.
+         *     Idempotente: limpia el grafo de autotest antes de crear.
+         */
+        post: operations["tenants_test_admin_tenants_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/embedding/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Embedding Test
+         * @description Pide un embedding del texto 'hola' al servicio BGE-M3 (docyan-lde-embedder)
+         *     y verifica que la dimensión sea 1024 (BGE-M3) y NO 1536 (OpenAI).
+         */
+        post: operations["embedding_test_admin_embedding_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/fat/integrity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fat Integrity
+         * @description Verifica la integridad de la cadena de hashes FAT del tenant del admin (B7).
+         *
+         *     Lee los eventos del FAT (Supabase + FalkorDB entrelazados por timestamp) y
+         *     recorre la cadena SHA-256 detectando alteraciones y huecos. NO toca datos de
+         *     otros tenants (multi-tenant absoluto: scope-a por el `org_id` del admin).
+         */
+        get: operations["fat_integrity_admin_fat_integrity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/qr/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generar Qr
+         * @description Genera y registra un QR para una entidad del tenant autenticado.
+         */
+        post: operations["generar_qr_qr_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/qr/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revocar Qr
+         * @description Revoca un token QR del tenant (por nonce). Tras esto, no resuelve.
+         */
+        post: operations["revocar_qr_qr_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/qr/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolver Qr
+         * @description PÚBLICO. Resuelve el token a contexto. `redirect` (default) → 307 al frontend;
+         *     `json` → contexto resuelto. Cualquier fallo → 404 sin detalle (no filtra
+         *     existencia: aislamiento multi-tenant absoluto).
+         */
+        get: operations["resolver_qr_qr__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Crear Sesion */
+        post: operations["crear_sesion_mo_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtener Sesion */
+        get: operations["obtener_sesion_mo_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/sessions/{session_id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transferir Sesion */
+        post: operations["transferir_sesion_mo_sessions__session_id__transfer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/sessions/{session_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cerrar Sesion */
+        post: operations["cerrar_sesion_mo_sessions__session_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Consultar */
+        post: operations["consultar_mo_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/ingesta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ingesta */
+        post: operations["ingesta_mo_ingesta_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/ingesta/{job_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirmar Ingesta */
+        post: operations["confirmar_ingesta_mo_ingesta__job_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/queries/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Guardar Consulta */
+        post: operations["guardar_consulta_mo_queries_save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/queries/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Consultas Guardadas */
+        get: operations["listar_consultas_guardadas_mo_queries_saved_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/queries/saved/{consulta_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disparar Consulta Guardada */
+        post: operations["disparar_consulta_guardada_mo_queries_saved__consulta_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/queries/saved/{consulta_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borrar Consulta Guardada */
+        delete: operations["borrar_consulta_guardada_mo_queries_saved__consulta_id__delete"];
+        options?: never;
+        head?: never;
+        /** Renombrar Consulta Guardada */
+        patch: operations["renombrar_consulta_guardada_mo_queries_saved__consulta_id__patch"];
+        trace?: never;
+    };
+    "/mo/playbooks/sugerencias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Sugerencias */
+        get: operations["listar_sugerencias_mo_playbooks_sugerencias_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/playbooks/sugerencias/{sugerencia_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aceptar Sugerencia */
+        post: operations["aceptar_sugerencia_mo_playbooks_sugerencias__sugerencia_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/playbooks/sugerencias/{sugerencia_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechazar Sugerencia */
+        post: operations["rechazar_sugerencia_mo_playbooks_sugerencias__sugerencia_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/playbooks/sugerencias/{sugerencia_id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ignorar Sugerencia */
+        post: operations["ignorar_sugerencia_mo_playbooks_sugerencias__sugerencia_id__ignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/playbooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Playbooks */
+        get: operations["listar_playbooks_mo_playbooks_get"];
+        put?: never;
+        /** Crear Playbook */
+        post: operations["crear_playbook_mo_playbooks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/playbooks/seed_for_vertical": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Seed For Vertical */
+        post: operations["seed_for_vertical_mo_playbooks_seed_for_vertical_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/playbooks/{playbook_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disparar Playbook */
+        post: operations["disparar_playbook_mo_playbooks__playbook_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/playbooks/{playbook_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borrar Playbook */
+        delete: operations["borrar_playbook_mo_playbooks__playbook_id__delete"];
+        options?: never;
+        head?: never;
+        /** Actualizar Playbook */
+        patch: operations["actualizar_playbook_mo_playbooks__playbook_id__patch"];
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -1402,80 +1043,98 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AspelDBRequest */
-        AspelDBRequest: {
-            /** Dsn */
-            dsn?: string | null;
-            /**
-             * Db Type
-             * @default mssql
-             */
-            db_type: string | null;
-            /** Host */
-            host?: string | null;
-            /**
-             * Port
-             * @default 1433
-             */
-            port: number | null;
-            /** Database */
-            database?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /**
-             * Modulo
-             * @default sae
-             */
-            modulo: string | null;
+        /** AceptarSugerenciaRequest */
+        AceptarSugerenciaRequest: {
+            /** Nombre */
+            nombre?: string | null;
         };
-        /** AspelFileRequest */
-        AspelFileRequest: {
-            /** Directorio */
-            directorio?: string | null;
+        /** AceptarSugerenciaResponse */
+        AceptarSugerenciaResponse: {
+            /** Sugerencia Id */
+            sugerencia_id: string;
+            playbook: components["schemas"]["PlaybookOut"];
         };
-        /** BindERPRequest */
-        BindERPRequest: {
-            /** Api Key */
-            api_key?: string | null;
-            /** Base Url */
-            base_url?: string | null;
-            /** Objetos */
-            objetos?: unknown[] | null;
+        /** ActualizarPlaybookRequest */
+        ActualizarPlaybookRequest: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Descripcion */
+            descripcion?: string | null;
+            /** Pasos */
+            pasos?: components["schemas"]["PasoPlaybookIn"][] | null;
+        };
+        /** AlertaItem */
+        AlertaItem: {
+            /** Alerta Id */
+            alerta_id?: string | null;
+            /** Descripcion */
+            descripcion: string;
+            /** Fecha Vencimiento */
+            fecha_vencimiento?: string | null;
+            /**
+             * Urgencia
+             * @default media
+             */
+            urgencia: string;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /**
+             * Administrativa
+             * @default true
+             */
+            administrativa: boolean;
+        };
+        /** AlertsDashboardPayload */
+        AlertsDashboardPayload: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "alerts_dashboard";
+            /** Titulo */
+            titulo: string;
+            /** Alertas */
+            alertas?: components["schemas"]["AlertaItem"][];
+            /**
+             * Solo Administrativas
+             * @default true
+             */
+            solo_administrativas: boolean;
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
+        };
+        /** Body_cotizar_documento_ingesta_documents_post */
+        Body_cotizar_documento_ingesta_documents_post: {
+            /** File */
+            file: string;
+            /** Tipo Forzado */
+            tipo_forzado?: string | null;
         };
         /** Body_procesar_documento_documents_process_post */
         Body_procesar_documento_documents_process_post: {
             /** File */
             file: string;
         };
-        /** CONTPAQiDBRequest */
-        CONTPAQiDBRequest: {
-            /** Dsn */
-            dsn?: string | null;
-            /**
-             * Db Type
-             * @default mssql
-             */
-            db_type: string | null;
-            /** Host */
-            host?: string | null;
-            /**
-             * Port
-             * @default 1433
-             */
-            port: number | null;
-            /** Database */
-            database?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
+        /**
+         * Canal
+         * @description Canal por el que entra/sale un request (responsabilidad 7: adaptación).
+         * @enum {string}
+         */
+        Canal: "pwa" | "whatsapp" | "api";
+        /** CapituloVideo */
+        CapituloVideo: {
+            /** Titulo */
+            titulo: string;
+            /** Inicio Seg */
+            inicio_seg: number;
         };
-        /** CONTPAQiFileRequest */
-        CONTPAQiFileRequest: {
-            /** Directorio */
-            directorio?: string | null;
+        /** CerrarSesionRequest */
+        CerrarSesionRequest: {
+            /**
+             * Reason
+             * @default completed
+             */
+            reason: string;
         };
         /** ChatRequest */
         ChatRequest: {
@@ -1506,94 +1165,432 @@ export interface components {
              */
             cancel_url: string;
         };
-        /** DriveRequest */
-        DriveRequest: {
-            /** Folder Id */
-            folder_id: string;
+        /**
+         * Cita
+         * @description Cita de procedencia: documento + sección + página (+ span de caracteres).
+         */
+        Cita: {
+            /** Documento Id */
+            documento_id?: string | null;
+            /** Documento Nombre */
+            documento_nombre?: string | null;
+            /** Seccion */
+            seccion?: string | null;
+            /** Pagina */
+            pagina?: number | null;
+            /** Span Inicio */
+            span_inicio?: number | null;
+            /** Span Fin */
+            span_fin?: number | null;
         };
-        /** FTPRequest */
-        FTPRequest: {
-            /** Host */
-            host?: string | null;
-            /** Port */
-            port?: number | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
+        /** ComparativeViewPayload */
+        ComparativeViewPayload: {
             /**
-             * Protocol
-             * @default ftp
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
-            protocol: string | null;
+            kind: "comparative_view";
+            /** Titulo */
+            titulo: string;
             /**
-             * Remote Path
-             * @default /
+             * Estrategia
+             * @enum {string}
              */
-            remote_path: string | null;
-            /** Ssh Key Path */
-            ssh_key_path?: string | null;
+            estrategia: "versiones_documento" | "entidades_mismo_tipo";
+            /** Referencia Izquierda */
+            referencia_izquierda: string;
+            /** Referencia Derecha */
+            referencia_derecha: string;
+            /** Diferencias */
+            diferencias?: components["schemas"]["DiferenciaDetectada"][];
+            /**
+             * Cacheada
+             * @default false
+             */
+            cacheada: boolean;
+            /**
+             * Computo Asincrono
+             * @default false
+             */
+            computo_asincrono: boolean;
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
         };
-        /** GmailRequest */
-        GmailRequest: {
+        /** ConsultaGuardadaOut */
+        ConsultaGuardadaOut: {
+            /** Id */
+            id: string;
+            /** Nombre */
+            nombre: string;
+            /** Consulta Original */
+            consulta_original: string;
+            /** Tipo Intencion */
+            tipo_intencion: string;
+            /** Tipo Documento Origen */
+            tipo_documento_origen?: string | null;
+            /** Entidad Referenciada Id */
+            entidad_referenciada_id?: string | null;
             /**
-             * User Email
-             * @default me
+             * Disparos Totales
+             * @default 0
              */
-            user_email: string | null;
+            disparos_totales: number;
+            /** Ultimo Disparo At */
+            ultimo_disparo_at?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** ConsultaRequest */
+        ConsultaRequest: {
+            /** Texto */
+            texto: string;
+            /** @default pwa */
+            canal: components["schemas"]["Canal"];
+            /** Session Id */
+            session_id?: string | null;
+            /** Score Confianza */
+            score_confianza?: number | null;
             /**
-             * Query
-             * @default newer_than:7d
+             * Segmento Critico
+             * @default false
              */
-            query: string | null;
+            segmento_critico: boolean;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Token Qr */
+            token_qr?: string | null;
+            /** Tipo Documento */
+            tipo_documento?: string | null;
+            /** Criticidad */
+            criticidad?: string | null;
             /**
-             * Max Results
-             * @default 50
+             * Params
+             * @default {}
              */
-            max_results: number | null;
+            params: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ConsultaResuelta
+         * @description Envelope que el MO devuelve para una consulta clasificada (`POST /mo/query`).
+         *
+         *     Lleva la clasificación (tipo + score + método) + el payload tipado del
+         *     pipeline + los cruces estructurales sugeridos a otros tipos.
+         */
+        ConsultaResuelta: {
+            /** Tipo Intencion */
+            tipo_intencion: string;
+            /** Score */
+            score: number;
+            /** Ruta */
+            ruta: string;
+            /** Metodo */
+            metodo: string;
+            /** Cruces */
+            cruces?: components["schemas"]["CruceSugerido"][];
+            /** Payload */
+            payload: components["schemas"]["InfoCardPayload"] | components["schemas"]["ProcedureCardPayload"] | components["schemas"]["DiagramViewerPayload"] | components["schemas"]["VideoPlayerPayload"] | components["schemas"]["DiagnosticTreePayload"] | components["schemas"]["TimelinePayload"] | components["schemas"]["AlertsDashboardPayload"] | components["schemas"]["ComparativeViewPayload"];
+            /**
+             * Degradado
+             * @default false
+             */
+            degradado: boolean;
+            /** Nota */
+            nota?: string | null;
+        };
+        /** ConsultasGuardadasList */
+        ConsultasGuardadasList: {
+            /** Items */
+            items?: components["schemas"]["ConsultaGuardadaOut"][];
+            /**
+             * Termino Playbook Disponible
+             * @default false
+             */
+            termino_playbook_disponible: boolean;
+        };
+        /** CrearPlaybookRequest */
+        CrearPlaybookRequest: {
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion?: string | null;
+            /** Pasos */
+            pasos: components["schemas"]["PasoPlaybookIn"][];
+        };
+        /** CrearSesionRequest */
+        CrearSesionRequest: {
+            session_type: components["schemas"]["SessionType"];
+            /** @default pwa */
+            canal: components["schemas"]["Canal"];
+            /**
+             * Initial State
+             * @default {}
+             */
+            initial_state: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * CruceSugerido
+         * @description Cruce estructural a otro tipo de intención (doc 03). Permite a la UI ofrecer
+         *     el salto (p. ej. de un procedimiento a la especificación que referencia).
+         */
+        CruceSugerido: {
+            /** Tipo Intencion */
+            tipo_intencion: string;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Etiqueta */
+            etiqueta: string;
+            /** Motivo */
+            motivo: string;
+        };
+        /** DiagnosticTreePayload */
+        DiagnosticTreePayload: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "diagnostic_tree";
+            /** Arbol Id */
+            arbol_id?: string | null;
+            /** Titulo */
+            titulo: string;
+            /** Nodo Actual Id */
+            nodo_actual_id?: string | null;
+            /** Pregunta */
+            pregunta?: string | null;
+            /** Opciones */
+            opciones?: components["schemas"]["OpcionDecision"][];
+            /**
+             * Es Hoja
+             * @default false
+             */
+            es_hoja: boolean;
+            /** Causa Probable */
+            causa_probable?: string | null;
+            /** Accion Resolutoria */
+            accion_resolutoria?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
+        };
+        /** DiagramViewerPayload */
+        DiagramViewerPayload: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "diagram_viewer";
+            /** Recurso Id */
+            recurso_id?: string | null;
+            /** Titulo */
+            titulo: string;
+            /** Recurso Url */
+            recurso_url?: string | null;
+            /** Etiquetas */
+            etiquetas?: components["schemas"]["EtiquetaDiagrama"][];
+            /** Leyenda Simbolica */
+            leyenda_simbolica?: components["schemas"]["SimboloLeyenda"][];
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
+        };
+        /** DiferenciaDetectada */
+        DiferenciaDetectada: {
+            /** Campo */
+            campo: string;
+            /** Valor Izquierda */
+            valor_izquierda?: string | null;
+            /** Valor Derecha */
+            valor_derecha?: string | null;
+            /**
+             * Es Cambio Seguridad
+             * @default false
+             */
+            es_cambio_seguridad: boolean;
+        };
+        /** DispararConsultaResponse */
+        DispararConsultaResponse: {
+            consulta: components["schemas"]["ConsultaGuardadaOut"];
+            resultado: components["schemas"]["ConsultaResuelta"];
+            /** Servido */
+            servido: boolean;
+        };
+        /** DispararPlaybookResponse */
+        DispararPlaybookResponse: {
+            playbook: components["schemas"]["PlaybookOut"];
+            /** Vista Unificada */
+            vista_unificada?: components["schemas"]["PasoVistaUnificada"][];
+        };
+        /** DocumentRef */
+        DocumentRef: {
+            /** External Id */
+            external_id: string;
+            /** Name */
+            name: string;
+            /** Mime Type */
+            mime_type?: string | null;
+            /** Size Bytes */
+            size_bytes?: number | null;
+        };
+        /**
+         * DocumentSource
+         * @description Fuentes documentales soportadas (Modo conectado, adenda 6.1).
+         * @enum {string}
+         */
+        DocumentSource: "google_drive" | "onedrive" | "ftp" | "notion";
+        /** EspecificacionItem */
+        EspecificacionItem: {
+            /** Nombre */
+            nombre: string;
+            /** Valor */
+            valor?: string | null;
+            /** Unidad */
+            unidad?: string | null;
+            cita?: components["schemas"]["Cita"] | null;
+        };
+        /** EtiquetaDiagrama */
+        EtiquetaDiagrama: {
+            /** Texto */
+            texto: string;
+            /** X */
+            x?: number | null;
+            /** Y */
+            y?: number | null;
+            /** Lookup Dtm */
+            lookup_dtm?: string | null;
+        };
+        /** EventoTimeline */
+        EventoTimeline: {
+            /** Tipo */
+            tipo: string;
+            /** Descripcion */
+            descripcion: string;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+        };
+        /** GenerarQrRequest */
+        GenerarQrRequest: {
+            /** Entidad Id */
+            entidad_id: string;
+            /** Ttl Dias */
+            ttl_dias?: number | null;
+            /**
+             * Render
+             * @default true
+             */
+            render: boolean;
+        };
+        /** GuardarConsultaRequest */
+        GuardarConsultaRequest: {
+            /** Nombre */
+            nombre: string;
+            /** Consulta Original */
+            consulta_original: string;
+            /** Tipo Intencion */
+            tipo_intencion: string;
+            /** Tipo Documento Origen */
+            tipo_documento_origen?: string | null;
+            /** Entidad Referenciada Id */
+            entidad_referenciada_id?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
         };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** HubSpotRequest */
-        HubSpotRequest: {
-            /** Api Key */
-            api_key?: string | null;
-            /** Objetos */
-            objetos?: unknown[] | null;
+        /** InfoCardPayload */
+        InfoCardPayload: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "info_card";
+            /** Titulo */
+            titulo: string;
+            /** Termino Tecnico */
+            termino_tecnico?: string | null;
+            /** Definicion */
+            definicion?: string | null;
+            /** Especificaciones */
+            especificaciones?: components["schemas"]["EspecificacionItem"][];
+            /**
+             * Match Multiple
+             * @default false
+             */
+            match_multiple: boolean;
+            /** Desambiguacion */
+            desambiguacion?: string[];
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
         };
-        /** IMAPRequest */
-        IMAPRequest: {
-            /** Host */
-            host?: string | null;
-            /** Port */
-            port?: number | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
+        /** IngestDocumentRequest */
+        IngestDocumentRequest: {
             /**
-             * Use Ssl
-             * @default true
+             * External Id
+             * @description ID del documento en la fuente.
              */
-            use_ssl: boolean | null;
+            external_id: string;
+        };
+        /** IngestDocumentResponse */
+        IngestDocumentResponse: {
+            source: components["schemas"]["DocumentSource"];
+            /** Tenant Id */
+            tenant_id: string;
+            /** External Id */
+            external_id: string;
+            /** Status */
+            status: string;
+            /** Detail */
+            detail: string;
+        };
+        /** IngestaRequest */
+        IngestaRequest: {
+            /** Texto Documento */
+            texto_documento: string;
             /**
-             * Folder
-             * @default INBOX
+             * Nombre Archivo
+             * @default documento
              */
-            folder: string | null;
+            nombre_archivo: string;
+            /** Tipo Documento */
+            tipo_documento?: string | null;
+            /** @default api */
+            canal: components["schemas"]["Canal"];
+            /** Session Id */
+            session_id?: string | null;
+        };
+        /** ListDocumentsRequest */
+        ListDocumentsRequest: {
             /**
-             * Search Criteria
-             * @default UNSEEN
+             * Folder Id
+             * @description Carpeta/ruta a listar.
              */
-            search_criteria: string | null;
-            /**
-             * Max Messages
-             * @default 50
-             */
-            max_messages: number | null;
+            folder_id?: string | null;
+        };
+        /** ListDocumentsResponse */
+        ListDocumentsResponse: {
+            source: components["schemas"]["DocumentSource"];
+            /** Tenant Id */
+            tenant_id: string;
+            /** Documents */
+            documents: components["schemas"]["DocumentRef"][];
+            /** Total */
+            total: number;
+            /** Status */
+            status: string;
+            /** Detail */
+            detail: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -1605,168 +1602,117 @@ export interface components {
             /** Password */
             password: string;
         };
-        /** MeetRequest */
-        MeetRequest: {
-            /** Folder Id */
-            folder_id?: string | null;
-            /**
-             * Max Results
-             * @default 20
-             */
-            max_results: number | null;
+        /** ObservacionRequest */
+        ObservacionRequest: {
+            /** Texto */
+            texto: string;
         };
-        /** MicroSipDBRequest */
-        MicroSipDBRequest: {
-            /**
-             * Db Type
-             * @default mysql
-             */
-            db_type: string;
-            /** Host */
-            host: string;
-            /**
-             * Port
-             * @default 3306
-             */
-            port: number;
-            /** Database */
-            database: string;
-            /** Username */
-            username: string;
-            /** Password */
-            password: string;
+        /** OpcionDecision */
+        OpcionDecision: {
+            /** Etiqueta */
+            etiqueta: string;
+            /** Siguiente Nodo Id */
+            siguiente_nodo_id?: string | null;
+            /** Causa Probable */
+            causa_probable?: string | null;
+            /** Accion Resolutoria */
+            accion_resolutoria?: string | null;
         };
-        /** MicroSipFileRequest */
-        MicroSipFileRequest: {
-            /** Directorio */
-            directorio?: string;
+        /** PasoPlaybookIn */
+        PasoPlaybookIn: {
+            /** Consulta Guardada Id */
+            consulta_guardada_id: string;
+            /** Nota Paso */
+            nota_paso?: string | null;
+            /** Orden */
+            orden?: number | null;
         };
-        /** MicroSipRequest */
-        MicroSipRequest: {
-            /** Base Url */
-            base_url?: string;
-            /** Username */
-            username?: string;
-            /** Password */
-            password?: string;
-            /** Selected Db */
-            selected_db?: string;
+        /** PasoPlaybookOut */
+        PasoPlaybookOut: {
+            /** Id */
+            id: string;
+            /** Orden */
+            orden: number;
+            /** Consulta Guardada Id */
+            consulta_guardada_id: string;
+            /** Nota Paso */
+            nota_paso?: string | null;
         };
-        /** NotionRequest */
-        NotionRequest: {
-            /** Token */
-            token?: string | null;
-            /** Database Ids */
-            database_ids?: unknown[] | null;
-            /** Page Ids */
-            page_ids?: unknown[] | null;
+        /** PasoProcedimiento */
+        PasoProcedimiento: {
+            /** Orden */
+            orden: number;
+            /** Descripcion */
+            descripcion: string;
+            /** Epp */
+            epp?: string[];
+            /** Herramientas */
+            herramientas?: string[];
+            /** Advertencias */
+            advertencias?: string[];
+            /** Precondiciones */
+            precondiciones?: string[];
+            /** Postcondiciones */
+            postcondiciones?: string[];
+            cita?: components["schemas"]["Cita"] | null;
         };
-        /** ODBCConnectRequest */
-        ODBCConnectRequest: {
-            /** Connection String */
-            connection_string?: string | null;
-            /** Dsn */
-            dsn?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-        };
-        /** ODBCProcessRequest */
-        ODBCProcessRequest: {
-            /** Connection String */
-            connection_string?: string | null;
-            /** Dsn */
-            dsn?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /** Tablas */
-            tablas?: unknown[] | null;
-            /**
-             * Limite
-             * @default 100
-             */
-            limite: number | null;
-        };
-        /** ODBCQueryRequest */
-        ODBCQueryRequest: {
-            /** Connection String */
-            connection_string?: string | null;
-            /** Dsn */
-            dsn?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /** Sql */
-            sql: string;
-            /**
-             * Nombre
-             * @default query
-             */
-            nombre: string | null;
-        };
-        /** OdooRequest */
-        OdooRequest: {
-            /** Url */
-            url?: string | null;
-            /** Db */
-            db?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /** Modelos */
-            modelos?: {
+        /** PasoVistaUnificada */
+        PasoVistaUnificada: {
+            /** Orden */
+            orden: number;
+            /** Consulta Guardada Id */
+            consulta_guardada_id?: string | null;
+            /** Nombre */
+            nombre?: string | null;
+            /** Nota Paso */
+            nota_paso?: string | null;
+            /** Tipo Intencion */
+            tipo_intencion?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Provenance */
+            provenance?: {
                 [key: string]: unknown;
-            } | null;
+            }[];
+            resultado?: components["schemas"]["ConsultaResuelta"] | null;
+            /** Error */
+            error?: string | null;
         };
-        /** OneDriveRequest */
-        OneDriveRequest: {
-            /** Client Id */
-            client_id?: string | null;
-            /** Client Secret */
-            client_secret?: string | null;
-            /** Tenant Id */
-            tenant_id?: string | null;
-            /** User Id */
-            user_id?: string | null;
-            /** Folder Path */
-            folder_path?: string | null;
+        /**
+         * PatronesEDB
+         * @description Patrones del EDB visibles — sustento explícito del Nivel 3 (Adenda).
+         */
+        PatronesEDB: {
+            /** Consultas Frecuentes */
+            consultas_frecuentes?: string[];
+            /** Problemas Recurrentes */
+            problemas_recurrentes?: string[];
+            /** Observaciones Acumuladas */
+            observaciones_acumuladas?: string[];
         };
-        /** OutlookRequest */
-        OutlookRequest: {
-            /** Client Id */
-            client_id?: string | null;
-            /** Client Secret */
-            client_secret?: string | null;
-            /** Tenant Id */
-            tenant_id?: string | null;
-            /** User Id */
-            user_id?: string | null;
+        /** PlaybookOut */
+        PlaybookOut: {
+            /** Id */
+            id: string;
+            /** Nombre */
+            nombre: string;
+            /** Descripcion */
+            descripcion?: string | null;
+            /** Tipo Creacion */
+            tipo_creacion: string;
+            /** Vertical */
+            vertical?: string | null;
             /**
-             * Folder
-             * @default inbox
+             * Disparos Totales
+             * @default 0
              */
-            folder: string | null;
-            /**
-             * Max Results
-             * @default 50
-             */
-            max_results: number | null;
-            /** Filter Query */
-            filter_query?: string | null;
-        };
-        /** PipedriveRequest */
-        PipedriveRequest: {
-            /** Api Token */
-            api_token?: string | null;
-            /** Domain */
-            domain?: string | null;
-            /** Objetos */
-            objetos?: unknown[] | null;
+            disparos_totales: number;
+            /** Ultimo Disparo At */
+            ultimo_disparo_at?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Pasos */
+            pasos?: components["schemas"]["PasoPlaybookOut"][];
         };
         /** PortalRequest */
         PortalRequest: {
@@ -1777,6 +1723,44 @@ export interface components {
              * @default https://docyan.dle/dashboard
              */
             return_url: string;
+        };
+        /** ProcedureCardPayload */
+        ProcedureCardPayload: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "procedure_card";
+            /** Procedimiento Id */
+            procedimiento_id?: string | null;
+            /** Titulo */
+            titulo: string;
+            /** Pasos */
+            pasos?: components["schemas"]["PasoProcedimiento"][];
+            /**
+             * Modo Ejecutar Paso A Paso
+             * @default false
+             */
+            modo_ejecutar_paso_a_paso: boolean;
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
+        };
+        /**
+         * QueryResponse
+         * @description Respuesta tipada de `POST /mo/query` (B8): clasificación + payload tipado.
+         */
+        QueryResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Kind */
+            kind: string;
+            /** Canal */
+            canal: string;
+            /** Servido */
+            servido: boolean;
+            /** Session Id */
+            session_id?: string | null;
+            resultado: components["schemas"]["ConsultaResuelta"];
         };
         /** RefreshRequest */
         RefreshRequest: {
@@ -1818,124 +1802,15 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** SAPB1QueryRequest */
-        SAPB1QueryRequest: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /** Company */
-            company?: string | null;
-            /** Query */
-            query: string;
+        /** RenombrarRequest */
+        RenombrarRequest: {
+            /** Nombre */
+            nombre: string;
         };
-        /** SAPB1Request */
-        SAPB1Request: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /** Company */
-            company?: string | null;
-            /** Objetos */
-            objetos?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** SQLConnectRequest */
-        SQLConnectRequest: {
-            /**
-             * Db Type
-             * @default mysql
-             */
-            db_type: string;
-            /** Host */
-            host: string;
-            /**
-             * Port
-             * @default 3306
-             */
-            port: number;
-            /** Database */
-            database: string;
-            /** Username */
-            username: string;
-            /** Password */
-            password: string;
-            /** Connection String */
-            connection_string?: string;
-        };
-        /** SQLQueryRequest */
-        SQLQueryRequest: {
-            /**
-             * Db Type
-             * @default mysql
-             */
-            db_type: string;
-            /** Host */
-            host: string;
-            /**
-             * Port
-             * @default 3306
-             */
-            port: number;
-            /** Database */
-            database: string;
-            /** Username */
-            username: string;
-            /** Password */
-            password: string;
-            /** Tabla */
-            tabla?: string;
-            /** Tablas */
-            tablas?: unknown[];
-            /**
-             * Limite
-             * @default 100
-             */
-            limite: number;
-            /** Connection String */
-            connection_string?: string;
-        };
-        /** SalesforceQueryRequest */
-        SalesforceQueryRequest: {
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /** Security Token */
-            security_token?: string | null;
-            /**
-             * Domain
-             * @default login
-             */
-            domain: string | null;
-            /** Soql */
-            soql: string;
-        };
-        /** SalesforceRequest */
-        SalesforceRequest: {
-            /** Username */
-            username?: string | null;
-            /** Password */
-            password?: string | null;
-            /** Security Token */
-            security_token?: string | null;
-            /**
-             * Domain
-             * @default login
-             */
-            domain: string | null;
-            /** Objetos */
-            objetos?: unknown[] | null;
-            /** Queries */
-            queries?: {
-                [key: string]: unknown;
-            } | null;
+        /** RevocarQrRequest */
+        RevocarQrRequest: {
+            /** Nonce */
+            nonce: string;
         };
         /** SearchRequest */
         SearchRequest: {
@@ -1947,35 +1822,147 @@ export interface components {
              */
             limit: number;
         };
-        /** SlackRequest */
-        SlackRequest: {
-            /** Bot Token */
-            bot_token?: string | null;
-            /** Channels */
-            channels?: unknown[] | null;
-            /**
-             * Max Messages
-             * @default 200
-             */
-            max_messages: number | null;
+        /** SeedVerticalRequest */
+        SeedVerticalRequest: {
+            /** Vertical */
+            vertical: string;
         };
-        /** TeamsRequest */
-        TeamsRequest: {
-            /** Client Id */
-            client_id?: string | null;
-            /** Client Secret */
-            client_secret?: string | null;
-            /** Tenant Id */
-            tenant_id?: string | null;
-            /** Team Id */
-            team_id?: string | null;
-            /** Channel Ids */
-            channel_ids?: unknown[] | null;
+        /** SeedVerticalResponse */
+        SeedVerticalResponse: {
+            /** Vertical */
+            vertical: string;
+            /** Creados */
+            creados?: components["schemas"]["PlaybookOut"][];
+            /** Nota */
+            nota?: string | null;
+        };
+        /**
+         * SessionType
+         * @description Tipo de sesión — determina el TTL (decisión #6, doc 14).
+         * @enum {string}
+         */
+        SessionType: "consulta" | "troubleshooting" | "revision" | "onboarding";
+        /** SimboloLeyenda */
+        SimboloLeyenda: {
+            /** Simbolo */
+            simbolo: string;
+            /** Significado */
+            significado: string;
+        };
+        /**
+         * SourceConfigRequest
+         * @description Configuración de conexión a un repositorio documental del cliente.
+         *
+         *     Los campos son opcionales y dependientes de la fuente; la validación
+         *     específica por fuente se realiza en B1+ al construir cada cliente real.
+         */
+        SourceConfigRequest: {
             /**
-             * Max Messages
-             * @default 200
+             * Token
+             * @description Token/credencial de la fuente (OAuth, API key, integration token).
              */
-            max_messages: number | null;
+            token?: string | null;
+            /**
+             * Host
+             * @description Host del repositorio (FTP/SFTP).
+             */
+            host?: string | null;
+            /**
+             * Port
+             * @description Puerto (FTP/SFTP).
+             */
+            port?: number | null;
+            /**
+             * Username
+             * @description Usuario (FTP/SFTP).
+             */
+            username?: string | null;
+            /**
+             * Password
+             * @description Contraseña (FTP/SFTP).
+             */
+            password?: string | null;
+            /**
+             * Folder Id
+             * @description ID de carpeta/biblioteca a monitorear (Drive/OneDrive).
+             */
+            folder_id?: string | null;
+            /**
+             * Remote Path
+             * @description Ruta remota a sincronizar (FTP/SFTP).
+             */
+            remote_path?: string | null;
+        };
+        /** SourceConfigResponse */
+        SourceConfigResponse: {
+            source: components["schemas"]["DocumentSource"];
+            /** Tenant Id */
+            tenant_id: string;
+            /** Status */
+            status: string;
+            /** Detail */
+            detail: string;
+        };
+        /** SubtituloVideo */
+        SubtituloVideo: {
+            /** Idioma */
+            idioma: string;
+            /** Texto */
+            texto: string;
+            /** Inicio Seg */
+            inicio_seg?: number | null;
+            /** Fin Seg */
+            fin_seg?: number | null;
+        };
+        /** SugerenciaOut */
+        SugerenciaOut: {
+            /** Id */
+            id: string;
+            /** Tipo Sugerencia */
+            tipo_sugerencia: string;
+            /** Consulta Guardada Ids */
+            consulta_guardada_ids?: string[];
+            /** Evidencia Estructural */
+            evidencia_estructural?: {
+                [key: string]: unknown;
+            };
+            /** Evidencia Conductual */
+            evidencia_conductual?: {
+                [key: string]: unknown;
+            };
+            /** Estado */
+            estado: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Decidido At */
+            decidido_at?: string | null;
+        };
+        /** TimelinePayload */
+        TimelinePayload: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "timeline";
+            /** Titulo */
+            titulo: string;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Eventos */
+            eventos?: components["schemas"]["EventoTimeline"][];
+            /** Certificados Vigencia */
+            certificados_vigencia?: components["schemas"]["EventoTimeline"][];
+            /** Observaciones */
+            observaciones?: components["schemas"]["EventoTimeline"][];
+            /** Mediciones */
+            mediciones?: components["schemas"]["EventoTimeline"][];
+            patrones_edb?: components["schemas"]["PatronesEDB"];
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
+        };
+        /** TransferirSesionRequest */
+        TransferirSesionRequest: {
+            canal: components["schemas"]["Canal"];
         };
         /** ValidationError */
         ValidationError: {
@@ -1990,35 +1977,34 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
-        /** ZohoRequest */
-        ZohoRequest: {
-            /** Client Id */
-            client_id?: string | null;
-            /** Client Secret */
-            client_secret?: string | null;
-            /** Refresh Token */
-            refresh_token?: string | null;
-            /** Modulos */
-            modulos?: unknown[] | null;
-        };
-        /** ZoomRequest */
-        ZoomRequest: {
-            /** Account Id */
-            account_id?: string | null;
-            /** Client Id */
-            client_id?: string | null;
-            /** Client Secret */
-            client_secret?: string | null;
+        /** VideoPlayerPayload */
+        VideoPlayerPayload: {
             /**
-             * User Id
-             * @default me
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
-            user_id: string | null;
+            kind: "video_player";
+            /** Recurso Id */
+            recurso_id?: string | null;
+            /** Titulo */
+            titulo: string;
+            /** Video Url */
+            video_url?: string | null;
+            /** Capitulos */
+            capitulos?: components["schemas"]["CapituloVideo"][];
+            /** Subtitulos */
+            subtitulos?: components["schemas"]["SubtituloVideo"][];
+            /** Transcripcion */
+            transcripcion?: string | null;
             /**
-             * Days Back
-             * @default 7
+             * Subtitulos Disponibles En Par Activo
+             * @default false
              */
-            days_back: number | null;
+            subtitulos_disponibles_en_par_activo: boolean;
+            /** Acompana Procedimiento Id */
+            acompana_procedimiento_id?: string | null;
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
         };
     };
     responses: never;
@@ -2445,7 +2431,112 @@ export interface operations {
             };
         };
     };
-    procesar_drive_connectors_drive_process_post: {
+    configure_source_ingest_sources__source__configure_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source: components["schemas"]["DocumentSource"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_documents_ingest_sources__source__list_documents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source: components["schemas"]["DocumentSource"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListDocumentsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingest_document_ingest_sources__source__ingest_document_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source: components["schemas"]["DocumentSource"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngestDocumentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestDocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cotizar_documento_ingesta_documents_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2454,7 +2545,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DriveRequest"];
+                "multipart/form-data": components["schemas"]["Body_cotizar_documento_ingesta_documents_post"];
             };
         };
         responses: {
@@ -2478,13 +2569,13 @@ export interface operations {
             };
         };
     };
-    listar_drive_connectors_drive_files_get: {
+    confirmar_ingesta_ingesta_documents__job_id__confirm_post: {
         parameters: {
-            query?: {
-                folder_id?: string;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                job_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2509,615 +2600,13 @@ export interface operations {
             };
         };
     };
-    procesar_microsip_connectors_microsip_process_post: {
+    estado_job_ingesta_documents__job_id__get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["MicroSipRequest"];
+            path: {
+                job_id: string;
             };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    test_microsip_login_connectors_microsip_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MicroSipRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    test_microsip_db_connectors_microsip_db_connect_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MicroSipDBRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    procesar_microsip_db_connectors_microsip_db_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MicroSipDBRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    procesar_microsip_files_connectors_microsip_files_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["MicroSipFileRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    test_sql_connection_connectors_sql_connect_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SQLConnectRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    procesar_sql_connectors_sql_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SQLQueryRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    webhook_generico_connectors_webhook_receive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    make_webhook_connectors_make_webhook_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    zapier_webhook_connectors_zapier_webhook_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    n8n_webhook_connectors_n8n_webhook_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    bubble_process_connectors_bubble_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    lovable_process_connectors_lovable_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    chrome_ext_process_connectors_chrome_ext_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    notion_sync_connectors_notion_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NotionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    hubspot_sync_connectors_hubspot_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["HubSpotRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    pipedrive_sync_connectors_pipedrive_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PipedriveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    binderp_sync_connectors_binderp_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BindERPRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    gmail_sync_connectors_gmail_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GmailRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    meet_sync_connectors_meet_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MeetRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    onedrive_process_connectors_onedrive_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OneDriveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    onedrive_files_connectors_onedrive_files_get: {
-        parameters: {
-            query?: {
-                folder_path?: string;
-            };
-            header?: never;
-            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3142,767 +2631,20 @@ export interface operations {
             };
         };
     };
-    outlook_sync_connectors_outlook_sync_post: {
+    crear_observacion_entities__entity_id__observations_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                entity_id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OutlookRequest"];
+                "application/json": components["schemas"]["ObservacionRequest"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    slack_sync_connectors_slack_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SlackRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    whatsapp_webhook_connectors_whatsapp_webhook_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    whatsapp_verify_connectors_whatsapp_verify_get: {
-        parameters: {
-            query?: {
-                mode?: string;
-                token?: string;
-                challenge?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    zoom_sync_connectors_zoom_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ZoomRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    salesforce_sync_connectors_salesforce_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SalesforceRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    salesforce_query_connectors_salesforce_query_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SalesforceQueryRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    zoho_sync_connectors_zoho_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ZohoRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    odoo_sync_connectors_odoo_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OdooRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    odbc_connect_connectors_odbc_connect_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ODBCConnectRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    odbc_query_connectors_odbc_query_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ODBCQueryRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    odbc_process_connectors_odbc_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ODBCProcessRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    ftp_sync_connectors_ftp_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FTPRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    imap_sync_connectors_imap_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["IMAPRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    teams_sync_connectors_teams_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TeamsRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    teams_list_connectors_teams_list_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    teams_channels_connectors_teams_channels_get: {
-        parameters: {
-            query: {
-                team_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    contpaqi_process_connectors_contpaqi_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CONTPAQiDBRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    contpaqi_files_connectors_contpaqi_files_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CONTPAQiFileRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    aspel_process_connectors_aspel_process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AspelDBRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    aspel_files_connectors_aspel_files_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["AspelFileRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sapb1_sync_connectors_sapb1_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SAPB1Request"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    sapb1_query_connectors_sapb1_query_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SAPB1QueryRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    onpremise_receive_connectors_onpremise_receive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    onpremise_status_connectors_onpremise_status_get: {
-        parameters: {
-            query?: {
-                agent_id?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -4050,6 +2792,866 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dkg_health_admin_dkg_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    tenants_test_admin_tenants_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    embedding_test_admin_embedding_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    fat_integrity_admin_fat_integrity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    generar_qr_qr_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerarQrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revocar_qr_qr_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevocarQrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolver_qr_qr__token__get: {
+        parameters: {
+            query?: {
+                format?: string;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_sesion_mo_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearSesionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    obtener_sesion_mo_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transferir_sesion_mo_sessions__session_id__transfer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferirSesionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cerrar_sesion_mo_sessions__session_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CerrarSesionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    consultar_mo_query_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsultaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ingesta_mo_ingesta_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngestaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_ingesta_mo_ingesta__job_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    guardar_consulta_mo_queries_save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardarConsultaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultaGuardadaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_consultas_guardadas_mo_queries_saved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultasGuardadasList"];
+                };
+            };
+        };
+    };
+    disparar_consulta_guardada_mo_queries_saved__consulta_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consulta_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispararConsultaResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    borrar_consulta_guardada_mo_queries_saved__consulta_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consulta_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renombrar_consulta_guardada_mo_queries_saved__consulta_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consulta_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenombrarRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsultaGuardadaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_sugerencias_mo_playbooks_sugerencias_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SugerenciaOut"][];
+                };
+            };
+        };
+    };
+    aceptar_sugerencia_mo_playbooks_sugerencias__sugerencia_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sugerencia_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AceptarSugerenciaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AceptarSugerenciaResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rechazar_sugerencia_mo_playbooks_sugerencias__sugerencia_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sugerencia_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SugerenciaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ignorar_sugerencia_mo_playbooks_sugerencias__sugerencia_id__ignore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sugerencia_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SugerenciaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_playbooks_mo_playbooks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybookOut"][];
+                };
+            };
+        };
+    };
+    crear_playbook_mo_playbooks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearPlaybookRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybookOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    seed_for_vertical_mo_playbooks_seed_for_vertical_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeedVerticalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeedVerticalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disparar_playbook_mo_playbooks__playbook_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playbook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispararPlaybookResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    borrar_playbook_mo_playbooks__playbook_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playbook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_playbook_mo_playbooks__playbook_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playbook_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizarPlaybookRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybookOut"];
                 };
             };
             /** @description Validation Error */
