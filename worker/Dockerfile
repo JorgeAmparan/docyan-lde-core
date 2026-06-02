@@ -47,6 +47,19 @@ RUN docling-tools models download layout tableformer
 # y con HF_HUB_OFFLINE=1 falla — verificado en B2.2).
 ENV DOCLING_ARTIFACTS_PATH=/root/.cache/docling/models
 
+# 4) Precarga del modelo GLiNER NER EN BUILD (B3.5 item 3). graphrag-sdk 1.1.1 usa
+#    `GraphExtraction` con `GLiNERExtractor()` por DEFAULT como Step-1 NER (NER local
+#    híbrido: GLiNER extrae entidades, el LLM verifica + extrae relaciones). El worker
+#    construye `GraphExtraction(llm=...)` sin pasar entity_extractor, así que entra el
+#    default. `GLiNERExtractor` carga `urchade/gliner_medium-v2.1` vía
+#    `GLiNER.from_pretrained()`; con `HF_HUB_OFFLINE=1` (runtime) y SIN el modelo en
+#    la imagen, `from_pretrained` falla y la ingesta pierde el NER híbrido (deuda B2).
+#    Cachearlo aquí (con red, antes de activar el modo offline) lo deja en la caché HF
+#    de la imagen para que el NER híbrido funcione offline como se diseñó.
+ARG GLINER_MODEL=urchade/gliner_medium-v2.1
+ENV GLINER_MODEL=${GLINER_MODEL}
+RUN python -c "from gliner import GLiNER; GLiNER.from_pretrained('${GLINER_MODEL}')"
+
 # Código: el worker importa el paquete `app` (embedder_adapter, dkg_ontology,
 # schemas_documentales, jobs) y `worker`.
 COPY app /srv/app

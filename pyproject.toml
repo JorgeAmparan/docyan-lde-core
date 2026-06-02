@@ -91,7 +91,48 @@ filterwarnings = [
 ]
 
 [tool.mypy]
+# B3.5 item 1 — mypy en el toolchain y en CI (el contrato B3 pedía ruff + mypy;
+# hasta B3 solo aplicaba ruff). Estrategia por capas:
+#   - Global LENIENTE: deps de terceros sin stubs no rompen (ignore_missing_imports),
+#     y `follow_imports = silent` hace que SOLO los archivos pasados en CLI reporten
+#     errores (los módulos legacy importados transitivamente no ensucian el run).
+#   - Camino crítico MVP (app.graph.*, app.ingesta.*, app.schemas_documentales.*,
+#     supabase_client): STRICT real (ver overrides abajo). CI corre mypy sobre estas
+#     rutas (.github/workflows/ci.yml, job `mypy`).
+#   - Legacy DII-era (dii/intent/ri/edb/mr): ignore_errors, fuera de alcance MVP.
 python_version = "3.11"
 ignore_missing_imports = true
+follow_imports = "silent"
 no_strict_optional = true
 exclude = "(venv|frontend|migrations)"
+
+# ── Camino crítico MVP: STRICT ──────────────────────────────────────────────
+# Tipado obligatorio (CLAUDE.md §8: "Type hints obligatorios en funciones
+# públicas"). Estos módulos son nuevos (B1/B2/B3) y se mantienen estrictos.
+[[tool.mypy.overrides]]
+module = [
+    "app.graph.*",
+    "app.ingesta.*",
+    "app.schemas_documentales.*",
+    "app.core.supabase_client",
+    "app.jobs.*",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+# ── Legacy DII-era: fuera de alcance MVP (CLAUDE.md §4) ──────────────────────
+# El DII está deprecado (se elimina tras B5) y su cohorte (intent/ri/edb/mr)
+# arrastra deuda de tipos del repo previo. No se tipa en este sprint.
+[[tool.mypy.overrides]]
+module = [
+    "app.core.dii",      # legacy, fuera de alcance MVP (deprecated, elim. tras B5)
+    "app.core.intent",   # legacy, fuera de alcance MVP
+    "app.core.ri",       # legacy, fuera de alcance MVP
+    "app.core.edb",      # legacy, fuera de alcance MVP
+    "app.core.mr",       # legacy traducción, fuera de alcance del strict de ingesta
+]
+ignore_errors = true
