@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import pathlib
 import uuid
+from typing import Any, cast
 
 
 class LocalDocumentStore:
@@ -52,11 +53,11 @@ class LocalDocumentStore:
 class SupabaseStorageDocumentStore:
     """Almacén en Supabase Storage (producción). Bucket configurable."""
 
-    def __init__(self, bucket: str | None = None, client=None):
+    def __init__(self, bucket: str | None = None, client: Any = None) -> None:
         self.bucket = bucket or os.getenv("INGEST_STORAGE_BUCKET", "ingest-tmp")
         self._client = client
 
-    def _sb(self):
+    def _sb(self) -> Any:
         if self._client is None:
             from supabase import create_client
 
@@ -72,7 +73,7 @@ class SupabaseStorageDocumentStore:
         return key
 
     def get(self, ref: str) -> bytes:
-        return self._sb().storage.from_(self.bucket).download(ref)
+        return cast(bytes, self._sb().storage.from_(self.bucket).download(ref))
 
     def delete(self, ref: str) -> None:
         self._sb().storage.from_(self.bucket).remove([ref])

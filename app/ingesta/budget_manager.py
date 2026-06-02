@@ -17,7 +17,7 @@ nunca la decisión.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass
@@ -71,10 +71,10 @@ class SupabaseBudgetStore:
 
     TABLE = "tenant_budget"
 
-    def __init__(self, client=None):
+    def __init__(self, client: Any = None) -> None:
         self._client = client
 
-    def _sb(self):
+    def _sb(self) -> Any:
         if self._client is None:
             from supabase import create_client
 

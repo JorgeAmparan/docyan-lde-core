@@ -96,9 +96,16 @@ filterwarnings = [
 #   - Global LENIENTE: deps de terceros sin stubs no rompen (ignore_missing_imports),
 #     y `follow_imports = silent` hace que SOLO los archivos pasados en CLI reporten
 #     errores (los módulos legacy importados transitivamente no ensucian el run).
-#   - Camino crítico MVP (app.graph.*, app.ingesta.*, app.schemas_documentales.*,
+#   - Camino crítico MVP de pura lógica (app.ingesta.*, app.schemas_documentales.*,
 #     supabase_client): STRICT real (ver overrides abajo). CI corre mypy sobre estas
-#     rutas (.github/workflows/ci.yml, job `mypy`).
+#     rutas + la capa de grafo (.github/workflows/ci.yml, job `mypy`).
+#   - Capa de grafo/cola (app.graph.*, app.jobs.*): NON-STRICT justificado — envuelve
+#     graphrag-sdk/falkordb/redis, que NO traen stubs y ni siquiera están instalados
+#     en el entorno de type-check (graphrag-sdk arrastra torch, fuera de la imagen
+#     de CI). Forzar strict ahí pelea contra tipos de terceros ausentes (Any-returns
+#     de clientes sin tipar, base de clase dinámica del SDK), no contra deuda propia.
+#     Decisión B3.5 item 1: "modo strict solo donde es realista" (contrato). Se
+#     type-checkea con la config global (consistencia básica), sin disallow_untyped_defs.
 #   - Legacy DII-era (dii/intent/ri/edb/mr): ignore_errors, fuera de alcance MVP.
 python_version = "3.11"
 ignore_missing_imports = true
@@ -106,16 +113,15 @@ follow_imports = "silent"
 no_strict_optional = true
 exclude = "(venv|frontend|migrations)"
 
-# ── Camino crítico MVP: STRICT ──────────────────────────────────────────────
+# ── Camino crítico MVP de pura lógica: STRICT ───────────────────────────────
 # Tipado obligatorio (CLAUDE.md §8: "Type hints obligatorios en funciones
-# públicas"). Estos módulos son nuevos (B1/B2/B3) y se mantienen estrictos.
+# públicas"). Módulos nuevos (B2/B3) sin dependencia de tipos de terceros ausentes:
+# el cotizador (gate financiero), los schemas documentales y el helper de Supabase.
 [[tool.mypy.overrides]]
 module = [
-    "app.graph.*",
     "app.ingesta.*",
     "app.schemas_documentales.*",
     "app.core.supabase_client",
-    "app.jobs.*",
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true

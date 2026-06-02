@@ -16,6 +16,7 @@ vivo (tabla `tenant_schemas`, JSONB — migración 009).
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -69,7 +70,7 @@ class DocumentSchema:
                 )
 
     # ── Conversión a GraphRAG-SDK (import perezoso) ──────────────────────────
-    def to_sdk_schema(self):
+    def to_sdk_schema(self) -> Any:
         """
         Construye un `graphrag_sdk.GraphSchema`. Import perezoso: el SDK solo
         existe en el worker de ingesta (B2), no en el backend.
