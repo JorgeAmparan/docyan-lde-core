@@ -5,12 +5,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ─── DOCYAN™ ORCHESTRATOR ──────────────────────────────────────────────────
+# ─── DOCYAN™ — CLI de pipeline legacy (NO es el Master Orchestrator) ─────────
 #
-# Punto de entrada principal de DOCYAN LDE™.
-# Coordina el pipeline completo:
-# DII → EDB → GRG → TM
-# Con Intent-A y Intent-B integrados en cada componente.
+# AVISO (B4): `DocyanOrchestrator` es un script CLI pre-modelado (DII→EDB→GRG→TM)
+# que se conserva SOLO como utilidad de línea de comandos. NO es el Master
+# Orchestrator del plan: ese vive en `app/orchestrator/master_orchestrator.py`
+# (MasterOrchestrator), es la fachada del sistema y cubre las 10 responsabilidades
+# del doc 05. El DII que este CLI usa está deprecado (se elimina tras B5). Para
+# orquestación de negocio usar SIEMPRE el MO de `app.orchestrator`.
 # ─────────────────────────────────────────────────────────────────────────────
 
 from app.core.dii import DigestInputIntelligence

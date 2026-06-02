@@ -17,7 +17,7 @@ class TraceabilityMatrix:
     """
 
     # Componentes válidos
-    COMPONENTES = ["DII", "EDB", "GRG", "TM", "MR", "API", "INTENT", "RI"]
+    COMPONENTES = ["DII", "EDB", "GRG", "TM", "MR", "API", "INTENT", "RI", "MO"]
 
     # Acciones válidas
     ACCIONES = [

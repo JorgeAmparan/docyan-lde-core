@@ -41,6 +41,8 @@ dependencies = [
     "tenacity",       # mitigación rate limiting Gemini (B1/B3)
     # --- Scheduler (decisión #3) ---
     "apscheduler",
+    # --- Tokens QR (B4) — render SVG sin PIL (pure-python) ---
+    "segno",
     # --- Legacy DII/intent (google-genai) — se retira en B1 junto al DII ---
     "google-genai",
 ]

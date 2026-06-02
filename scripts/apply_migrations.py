@@ -49,6 +49,9 @@ MIGRATIONS_DIR = os.path.join(REPO, "migrations")
 EXPECTED_TABLES = {
     "008": "tenant_budget",
     "009": "tenant_schemas",
+    "010": "dtm_projects",
+    "011": "sessions_completed",
+    "012": "qr_tokens",
 }
 
 # Errores de "ya existe" que tratamos como idempotentes.
