@@ -1,0 +1,162 @@
+"""
+Scheduler proactivo del MO (B4 §1 responsabilidad 8 / §4, decisión #3).
+
+DOCYAN LDE™ by XCID.
+
+APScheduler con backend Redis (JobStore) es el ÚNICO punto de programación
+temporal del sistema: ningún componente debe usar `cron` directo, threads con
+sleep, ni `time.sleep` en loops. El scheduler corre en el backend
+`docyan-lde-api` (no en el worker).
+
+Las FUNCIONES de las tareas son de nivel de módulo (serializables por
+RedisJobStore) y resuelven sus dependencias vía `app.orchestrator.providers`, que
+los tests sobreescriben con backends en memoria. Para ejecución determinista en
+tests, `DocyanScheduler.trigger(job_id)` corre la tarea sincrónicamente ("tiempo
+simulado") sin esperar el reloj real.
+
+APScheduler se importa de forma perezosa: importar este módulo NO requiere tener
+apscheduler salvo que se construya un DocyanScheduler.
+"""
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass
+
+logger = logging.getLogger("docyan.scheduler")
+
+
+# ── Funciones de las tareas (nivel de módulo → serializables) ─────────────────
+
+
+def cleanup_expired_sessions_job() -> int:
+    """Barre sesiones expiradas (cada hora). Devuelve cuántas se eliminaron."""
+    from app.orchestrator import providers
+
+    eliminadas = providers.get_session_manager().cleanup_expired()
+    logger.info("cleanup_expired_sessions: %d sesiones expiradas eliminadas", eliminadas)
+    return eliminadas
+
+
+def evaluate_vencimientos_job() -> dict:
+    """
+    Evalúa vencimientos administrativos (Tipo 7 — SOLO administrativos, línea
+    ABSOLUTA CLAUDE.md §11.1). Diario por default. La lógica de reglas de alerta
+    por tenant se completa con EDB/AIM; aquí queda el punto de ejecución y el FAT.
+    """
+    logger.info("evaluate_vencimientos: barrido administrativo ejecutado")
+    return {"evaluado": True, "tipo": "vencimientos_administrativos"}
+
+
+def mantenimiento_indices_job() -> dict:
+    """Mantenimiento de índices vectoriales del DKG (semanal). Placeholder B14."""
+    logger.info("mantenimiento_indices: placeholder (lógica completa en B14)")
+    return {"evaluado": True, "tipo": "mantenimiento_indices"}
+
+
+def reportes_pms_job() -> dict:
+    """Reportes periódicos a PMs (semanal). Interfaz; contenido en B13."""
+    logger.info("reportes_pms: interfaz lista (contenido en B13)")
+    return {"evaluado": True, "tipo": "reportes_pms"}
+
+
+def patrones_edb_job() -> dict:
+    """Evaluación de patrones del EDB para Nivel 3 visible (diaria). Interfaz B8."""
+    logger.info("patrones_edb: interfaz lista (contenido en B8)")
+    return {"evaluado": True, "tipo": "patrones_edb"}
+
+
+@dataclass(frozen=True)
+class JobSpec:
+    job_id: str
+    func: object
+    trigger: str
+    trigger_kwargs: dict
+
+
+# Tareas iniciales (configurables por tenant en B7+). Triggers conservadores.
+DEFAULT_JOBS: tuple[JobSpec, ...] = (
+    JobSpec("cleanup_expired_sessions", cleanup_expired_sessions_job, "interval", {"hours": 1}),
+    JobSpec("evaluate_vencimientos", evaluate_vencimientos_job, "cron", {"hour": 6}),
+    JobSpec("mantenimiento_indices", mantenimiento_indices_job, "cron", {"day_of_week": "sun", "hour": 3}),
+    JobSpec("reportes_pms", reportes_pms_job, "cron", {"day_of_week": "mon", "hour": 7}),
+    JobSpec("patrones_edb", patrones_edb_job, "cron", {"hour": 5}),
+)
+
+
+class DocyanScheduler:
+    """Ciclo de vida de APScheduler + registro de las tareas del MO."""
+
+    def __init__(self, jobstore: str = "redis", redis_url: str | None = None, scheduler=None):
+        """
+        jobstore: "redis" (producción, decisión #3) o "memory" (tests/dev).
+        """
+        self.jobstore_kind = jobstore
+        self.redis_url = redis_url or os.getenv("REDIS_URL") or "redis://localhost:6379/0"
+        self._scheduler = scheduler
+        self._funcs: dict[str, object] = {}
+
+    def _build_scheduler(self):
+        from apscheduler.schedulers.background import BackgroundScheduler
+
+        if self.jobstore_kind == "redis":
+            from urllib.parse import urlparse
+
+            from apscheduler.jobstores.redis import RedisJobStore
+
+            parsed = urlparse(self.redis_url)
+            store = RedisJobStore(
+                host=parsed.hostname or "localhost",
+                port=parsed.port or 6379,
+                db=int((parsed.path or "/0").lstrip("/") or 0),
+            )
+        else:
+            from apscheduler.jobstores.memory import MemoryJobStore
+
+            store = MemoryJobStore()
+
+        return BackgroundScheduler(jobstores={"default": store})
+
+    @property
+    def scheduler(self):
+        if self._scheduler is None:
+            self._scheduler = self._build_scheduler()
+        return self._scheduler
+
+    def register_default_jobs(self) -> list[str]:
+        """Registra las tareas iniciales. Idempotente (replace_existing)."""
+        registrados: list[str] = []
+        for spec in DEFAULT_JOBS:
+            self._funcs[spec.job_id] = spec.func
+            self.scheduler.add_job(
+                spec.func,
+                trigger=spec.trigger,
+                id=spec.job_id,
+                replace_existing=True,
+                **spec.trigger_kwargs,
+            )
+            registrados.append(spec.job_id)
+        return registrados
+
+    def trigger(self, job_id: str):
+        """
+        Ejecuta una tarea SINCRÓNICAMENTE (tiempo simulado para tests/operación
+        manual). Usa la función registrada; no espera al trigger temporal.
+        """
+        func = self._funcs.get(job_id)
+        if func is None:
+            job = self.scheduler.get_job(job_id)
+            func = job.func if job is not None else None
+        if func is None:
+            raise KeyError(f"Tarea desconocida: {job_id}")
+        return func()
+
+    def job_ids(self) -> list[str]:
+        return [j.id for j in self.scheduler.get_jobs()]
+
+    def start(self) -> None:
+        self.scheduler.start()
+
+    def shutdown(self, wait: bool = False) -> None:
+        if self._scheduler is not None and self._scheduler.running:
+            self._scheduler.shutdown(wait=wait)

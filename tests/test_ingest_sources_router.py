@@ -5,10 +5,23 @@ Verifican que el contrato HTTP del Modo conectado (adenda 6.1) responde
 transaccionales retiradas ya no existen.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.auth import verificar_credenciales
 from app.api.main import app
+
+
+@pytest.fixture(autouse=True)
+def _clear_overrides():
+    """
+    Limpia los dependency_overrides DESPUÉS de cada test (también los de métodos
+    de clase). `teardown_function` no corre para métodos de clase (pytest usa
+    `teardown_method`), por lo que el override de auth se fugaba a tests
+    posteriores. Este fixture autouse lo cierra de forma fiable.
+    """
+    yield
+    app.dependency_overrides.clear()
 
 
 def _override_roles():

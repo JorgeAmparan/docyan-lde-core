@@ -40,6 +40,8 @@ MIGRATION_FILES = [
     "008_tenant_budget.sql",
     "009_tenant_schemas.sql",
     "010_dtm_projects.sql",
+    "011_sessions_completed.sql",
+    "012_qr_tokens.sql",
 ]
 
 # (tabla, columnas clave que el código de la app referencia)
@@ -60,6 +62,10 @@ NEW_TABLES = {
                        "es_generado_dinamicamente", "uso_contador"],
     "dtm_projects": ["id", "tenant_id", "nombre", "par_linguistico", "estado",
                      "tipo_origen", "cliente_id"],
+    "sessions_completed": ["id", "tenant_id", "user_id", "session_type", "canal",
+                           "started_at", "closed_at", "state", "closed_reason"],
+    "qr_tokens": ["id", "tenant_id", "entidad_id_dkg", "nonce", "created_by",
+                  "expires_at", "revoked_at", "created_at"],
 }
 
 DEFAULT_URL = "postgresql://postgres:test@localhost:55432/docyan_test"
@@ -96,15 +102,15 @@ def clean_db():
 
 
 def test_all_migrations_apply_cleanly(clean_db):
-    """Las 7 migraciones aplican sin error sobre DB limpia (cubierto por el fixture)."""
+    """Todas las migraciones aplican sin error sobre DB limpia (cubierto por el fixture)."""
     with clean_db.cursor() as cur:
         cur.execute(
             "SELECT count(*) FROM information_schema.tables "
             "WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
         )
-        # 11 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
-        # tenant_schemas + dtm_projects.
-        assert cur.fetchone()[0] == 11
+        # 13 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
+        # tenant_schemas + dtm_projects + sessions_completed (011) + qr_tokens (012).
+        assert cur.fetchone()[0] == 13
 
 
 @pytest.mark.parametrize("table", sorted(NEW_TABLES.keys()))
