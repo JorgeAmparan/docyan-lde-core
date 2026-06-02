@@ -130,10 +130,20 @@ def test_rechazar_sugerencia_via_api(pb_client):
     assert r["estado"] == "rechazada"
 
 
-def test_seed_for_vertical_vacio_en_b8(pb_client):
+def test_seed_for_vertical_siembra_contenido_inicial(pb_client):
+    """B8 trae contenido seed inicial para los 3 verticales del mercado alfa."""
     client, _bundle = pb_client
     r = client.post("/mo/playbooks/seed_for_vertical", headers=HEADERS,
-                    json={"vertical": "laboratorio"}).json()
-    assert r["vertical"] == "laboratorio"
+                    json={"vertical": "maquiladora"}).json()
+    assert r["vertical"] == "maquiladora"
+    assert len(r["creados"]) >= 2
+    assert all(c["tipo_creacion"] == "precargado_vertical" for c in r["creados"])
+    assert r["nota"] is None
+
+
+def test_seed_for_vertical_inexistente_nota_vacia(pb_client):
+    client, _bundle = pb_client
+    r = client.post("/mo/playbooks/seed_for_vertical", headers=HEADERS,
+                    json={"vertical": "vertical_inexistente"}).json()
     assert r["creados"] == []
     assert "B13" in r["nota"]

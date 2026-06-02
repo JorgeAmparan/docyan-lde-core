@@ -3,9 +3,11 @@
 Librería de plantillas que **B13 (onboarding)** carga durante el alta de un
 cliente para sembrar Playbooks del vertical (laboratorio, maquiladora, agencia…).
 
-**Vacío en B8 a propósito** (alcance declarado): B8 expone la mecánica de seed
-(`app/playbooks/seed_vertical.py` + `POST /mo/playbooks/seed_for_vertical`); B13
-llena estos JSON con el conocimiento curado por Jorge.
+**Contenido inicial en B8** (`laboratorio.json`, `maquiladora.json`,
+`agencia.json`): 2-3 Playbooks ejemplo por vertical, suficientes para que
+`POST /mo/playbooks/seed_for_vertical` siembre algo real. B13 lo **refina y
+amplía** en onboarding con el conocimiento curado por Jorge. La mecánica de seed
+vive en `app/playbooks/seed_vertical.py`.
 
 ## Formato
 

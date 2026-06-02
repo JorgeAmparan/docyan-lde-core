@@ -1,15 +1,15 @@
 """
-Playbooks precargados por vertical — interfaz (B8 §B4, contenido en B13).
+Playbooks precargados por vertical (B8 §B4; refinado en B13).
 
 DOCYAN LDE™ by XCID.
 
-B8 expone la MECÁNICA para que B13 (onboarding) siembre los Playbooks precargados
-del vertical del cliente. B8 NO crea el contenido específico (eso es conocimiento
-curado por Jorge: laboratorio, maquiladora, agencia): expone
-`seed_for_vertical(tenant_id, vertical)` que carga una librería de plantillas JSON
-de `data/playbooks_precargados/<vertical>.json` (vacía en B8). Cada plantilla
-define las consultas guardadas (precargadas) y el orden del Playbook; la función
-las materializa como Nivel A + Nivel B con `tipo_creacion='precargado_vertical'`.
+B8 expone la MECÁNICA de seed y trae el CONTENIDO INICIAL de los 3 verticales del
+mercado alfa (laboratorio, maquiladora, agencia) en
+`data/playbooks_precargados/<vertical>.json` (2-3 Playbooks por vertical). B13 lo
+refina y amplía en onboarding con el conocimiento curado por Jorge.
+`seed_for_vertical(tenant_id, vertical)` carga la librería de plantillas; cada
+plantilla define las consultas guardadas (precargadas) y el orden del Playbook, y
+se materializa como Nivel A + Nivel B con `tipo_creacion='precargado_vertical'`.
 """
 from __future__ import annotations
 
