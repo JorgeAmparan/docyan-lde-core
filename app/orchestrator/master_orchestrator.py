@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from app.orchestrator.audit_logger import AuditLogger
 from app.orchestrator.channel_adapter import ChannelAdapter
+from app.orchestrator.chat_persistente import ChatPersistente
+from app.orchestrator.clasificador_intencion import ClasificadorIntencion
 from app.orchestrator.context_resolver import ContextResolver
 from app.orchestrator.error_handler import ErrorHandler
 from app.orchestrator.governance_gate import GovernanceGate
@@ -42,6 +44,7 @@ from app.orchestrator.models import (
 )
 from app.orchestrator.pipeline_coordinator import PipelineCoordinator
 from app.orchestrator.session_manager import SessionManager
+from app.pipelines.base import ContextoPipeline
 
 # Permiso requerido por clase de request (Governance Gate, responsabilidad 5).
 PERMISO_POR_KIND: dict[RequestKind, str] = {
@@ -73,11 +76,16 @@ class MasterOrchestrator:
         channel_adapter: ChannelAdapter | None = None,
         audit_logger: AuditLogger | None = None,
         error_handler: ErrorHandler | None = None,
+        clasificador: ClasificadorIntencion | None = None,
+        chat: ChatPersistente | None = None,
     ):
         self.context_resolver = context_resolver or ContextResolver()
         self.intent_router = intent_router or IntentRouter()
         self.pipeline_coordinator = pipeline_coordinator or PipelineCoordinator()
         self.session_manager = session_manager or SessionManager()
+        # B8: clasificador de intención (8 tipos) + chat persistente multi-turno.
+        self.clasificador = clasificador or ClasificadorIntencion()
+        self.chat = chat or ChatPersistente(self.session_manager)
         # B7: el gate por default lleva el GRG EXTENDIDO inyectado, de modo que
         # cuando un request trae `criticidad` (decisión #15) aplican los umbrales
         # F2 por criticidad del doc 07. Sin criticidad, opera el camino estático.
@@ -184,23 +192,44 @@ class MasterOrchestrator:
         return resultado
 
     def _handle_consulta(self, ctx, req: MORequest, actor: str) -> MOResponse:
-        """Compone la consulta, pasa por Governance Gate de confianza, adapta a canal."""
+        """
+        Clasifica la intención (8 tipos, B8), pasa el Governance Gate, ejecuta el
+        pipeline correspondiente y devuelve el envelope tipado. Registra la
+        clasificación (FAT F4), la cuarentena de alertas (F6) y el turno de chat.
+        """
         payload = req.payload or {}
-        contenido = self.pipeline_coordinator.componer_consulta(
-            req.texto or "", payload.get("contenido_pipeline")
+        session = (
+            self.session_manager.get_session(ctx.session_id) if ctx.session_id else None
         )
-        score = payload.get("score_confianza")
-        segmento_critico = bool(payload.get("segmento_critico", False))
-        # B7: si el request trae `criticidad` (decisión #15), el gate aplica los
-        # umbrales F2 del GRG extendido. Opcional → backward compatible con B4.
-        criticidad = payload.get("criticidad")
 
+        # 1. Clasificación de intención (heurística + LLM fallback), con contexto
+        #    de sesión para interpretar preguntas de seguimiento (chat persistente).
+        contexto_clasif = {
+            "tenant_id": ctx.tenant_id,
+            "token_qr": payload.get("token_qr"),
+            "tipo_documento": payload.get("tipo_documento"),
+            "historial_resumen": self.chat.historial_resumen(session),
+        }
+        clasificacion = self.clasificador.clasificar(req.texto or "", contexto_clasif)
+        self.audit_logger.event(
+            ctx.tenant_id, "intent_classified", actor,
+            {
+                "tipo": clasificacion.tipo.value,
+                "score": round(clasificacion.score, 4),
+                "metodo": clasificacion.metodo,
+                "ruta": clasificacion.ruta,
+            },
+        )
+
+        # 2. Governance Gate (confianza/criticidad) — semántica B4/B7 intacta. El
+        #    score del PIPELINE (calidad de la respuesta) lo trae el payload; el
+        #    score de CLASIFICACIÓN es metadato, no freno de alucinación.
         decision = self.governance_gate.evaluate(
             permiso_requerido=None,
             permisos=ctx.permisos,
-            score_confianza=score,
-            segmento_critico=segmento_critico,
-            criticidad=criticidad,
+            score_confianza=payload.get("score_confianza"),
+            segmento_critico=bool(payload.get("segmento_critico", False)),
+            criticidad=payload.get("criticidad"),
         )
         self.audit_logger.governance_decision(
             ctx.tenant_id, actor,
@@ -214,12 +243,67 @@ class MasterOrchestrator:
                 razon=decision.razon_codigo, escalar=decision.escalar_a_revisor,
             )
 
-        adaptado = self.channel_adapter.adapt(contenido, ctx.canal)
-        self.audit_logger.served(ctx.tenant_id, actor, {"kind": "consulta"})
+        # 3. Ejecución del pipeline del tipo clasificado.
+        ctx_pipe = ContextoPipeline(
+            tenant_id=ctx.tenant_id,
+            pregunta=req.texto or "",
+            entidad_id=payload.get("entidad_id"),
+            token_qr=payload.get("token_qr"),
+            tipo_documento=payload.get("tipo_documento"),
+            user_id=ctx.user_id,
+            session_id=ctx.session_id,
+            params=dict(payload.get("params") or {}),
+        )
+        envelope, extras = self.pipeline_coordinator.ejecutar_pipeline(clasificacion, ctx_pipe)
+
+        # 4. Alertas en cuarentena (Tipo 7, línea ABSOLUTA): GRG + FAT F6, JAMÁS
+        #    servidas al operador.
+        for q in extras.get("alertas_cuarentena", []):
+            self.audit_logger.event(
+                ctx.tenant_id, "alerta_cuarentena", actor,
+                {"alerta_id": q.get("alerta_id"),
+                 "motivo": q.get("motivo_cuarentena"),
+                 "patron": q.get("patron_detectado")},
+            )
+
+        # 5. Degradación graceful honesta (responsabilidad 10).
+        if extras.get("error"):
+            self.audit_logger.error(
+                ctx.tenant_id, actor, {"fase": "pipeline", "detalle": extras["error"]}
+            )
+
+        # 6. Chat persistente: anexa el turno a la sesión (refresca TTL).
+        self.chat.registrar_turno(
+            ctx.session_id, req.texto or "", clasificacion.tipo.value,
+            clasificacion.ruta, clasificacion.score,
+            resumen=getattr(envelope.payload, "titulo", ""),
+        )
+
+        # 7. Nivel 3: persiste :EventoOperativo(consulta_realizada) como sustrato
+        #    del EDB (mejor esfuerzo; el grafo puede no estar disponible).
+        self._registrar_consulta_realizada_best_effort(ctx, req.texto or "", envelope)
+
+        self.audit_logger.served(
+            ctx.tenant_id, actor, {"kind": "consulta", "tipo": clasificacion.tipo.value}
+        )
         return MOResponse(
             ok=True, kind=RequestKind.consulta, canal=ctx.canal,
-            data=adaptado, session_id=ctx.session_id, servido=True,
+            data=envelope.model_dump(), session_id=ctx.session_id, servido=True,
         )
+
+    def _registrar_consulta_realizada_best_effort(self, ctx, texto: str, envelope) -> None:
+        """Registra el evento de consulta en el DKG; nunca rompe la respuesta."""
+        try:
+            from app.eventos import registrar_consulta_realizada
+
+            registrar_consulta_realizada(
+                tenant_id=ctx.tenant_id,
+                usuario_id=ctx.user_id,
+                consulta_texto=texto,
+                respuesta_resumen=getattr(envelope.payload, "titulo", ""),
+            )
+        except Exception:  # noqa: BLE001 — Nivel 3 es best-effort, no bloquea.
+            pass
 
     # ── Sesiones (responsabilidad 4) — fachada hacia el session_manager ───────
 

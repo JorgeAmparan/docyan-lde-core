@@ -23,6 +23,73 @@ def test_client():
     return TestClient(app)
 
 
+# ── Helpers compartidos B8 (MO en memoria + reader sintético) ─────────────────
+
+
+class EmptyPipelineReader:
+    """Reader sintético vacío: los pipelines producen payloads válidos sin DKG."""
+
+    def informativa(self, t, term, e):
+        return {"especificaciones": [], "termino": None, "definicion": None}
+
+    def procedimiento(self, t, term, e):
+        return {"procedimiento_id": None, "titulo": "", "pasos": []}
+
+    def recurso_visual(self, t, term, e):
+        return {"recurso_id": None, "titulo": "", "etiquetas": [], "leyenda": []}
+
+    def video(self, t, term, e):
+        return {"recurso_id": None, "titulo": "", "capitulos": [],
+                "subtitulos": [], "transcripcion": None}
+
+    def arbol_diagnostico(self, t, term, e, n):
+        return {"arbol_id": None, "titulo": "", "nodo_actual_id": None,
+                "pregunta": None, "opciones": []}
+
+    def historial(self, t, e):
+        return {"eventos": [], "certificados": [], "observaciones": [], "mediciones": []}
+
+    def alertas(self, t, e):
+        return []
+
+    def comparar(self, t, est, i, d):
+        return {"izquierda": {}, "derecha": {}}
+
+
+def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None):
+    """Construye un MasterOrchestrator 100% en memoria (B8): clasificador real
+    (heurística pura, sin LLM), pipelines sobre un reader sintético, sesiones y
+    FAT en memoria. Devuelve (mo, audit_sink)."""
+    from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
+    from app.ingesta.cotizador import Cotizador
+    from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
+    from app.orchestrator.audit_logger import AuditLogger, InMemoryAuditSink
+    from app.orchestrator.master_orchestrator import MasterOrchestrator
+    from app.orchestrator.pipeline_coordinator import PipelineCoordinator
+    from app.orchestrator.session_manager import (
+        InMemorySessionSpillover,
+        InMemorySessionStore,
+        SessionManager,
+    )
+
+    budget_store = InMemoryBudgetStore()
+    BudgetManager(store=budget_store).ensure_budget(tenant, saldo_inicial_usd=saldo)
+    coord = PipelineCoordinator(
+        cotizador=Cotizador(budget_manager=BudgetManager(store=budget_store)),
+        dispatcher=JobDispatcher(backend=InMemoryQueueBackend()),
+        graph_reader=reader or EmptyPipelineReader(),
+    )
+    sink = InMemoryAuditSink()
+    mo = MasterOrchestrator(
+        pipeline_coordinator=coord,
+        session_manager=SessionManager(
+            store=InMemorySessionStore(), spillover=InMemorySessionSpillover()
+        ),
+        audit_logger=AuditLogger(sink=sink),
+    )
+    return mo, sink
+
+
 # ── DKG / FalkorDB (B1) ──────────────────────────────────────────────────────
 
 

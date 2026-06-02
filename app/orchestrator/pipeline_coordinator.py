@@ -54,9 +54,13 @@ class PipelineCoordinator:
         self,
         cotizador: Cotizador | None = None,
         dispatcher: JobDispatcher | None = None,
+        graph_reader=None,
     ):
         self.cotizador = cotizador or Cotizador()
         self.dispatcher = dispatcher or JobDispatcher()
+        # B8: lector del DKG para los pipelines de consulta. Lazy en producción
+        # (DKGReader sobre dkg_client); los tests inyectan un reader sintético.
+        self._graph_reader = graph_reader
 
     # ── Ingesta (gate de cotización sin bypass) ───────────────────────────────
 
@@ -115,7 +119,53 @@ class PipelineCoordinator:
         job = self.dispatcher.confirmar(job_id)
         return {"job_id": job.job_id, "status": job.status.value, "encolado": True}
 
-    # ── Consulta (interfaz; pipeline completo en B8) ──────────────────────────
+    # ── Consulta (pipelines Tipos 1-8, B8) ────────────────────────────────────
+
+    def _reader(self):
+        if self._graph_reader is None:
+            from app.pipelines.dkg_reader import DKGReader
+
+            self._graph_reader = DKGReader()
+        return self._graph_reader
+
+    def ejecutar_pipeline(self, clasificacion, ctx) -> tuple:
+        """
+        Despacha al pipeline del tipo clasificado y compone el envelope tipado.
+
+        Devuelve (ConsultaResuelta, extras). `extras` puede traer
+        `alertas_cuarentena` (Tipo 7) para que el MO las registre en GRG+FAT, o
+        `error` si hubo degradación graceful (responsabilidad 10 del MO: el grafo
+        no responde → payload vacío VÁLIDO + nota honesta, nunca contenido falso).
+        """
+        from app.pipelines.registry import payload_vacio, resolver_para
+        from app.schemas.pipeline_payloads import ConsultaResuelta
+
+        resolver = resolver_para(clasificacion.tipo)
+        try:
+            res = resolver(ctx, self._reader())
+            envelope = ConsultaResuelta(
+                tipo_intencion=clasificacion.tipo.value,
+                score=clasificacion.score,
+                ruta=clasificacion.ruta,
+                metodo=clasificacion.metodo,
+                cruces=res.cruces,
+                payload=res.payload,
+            )
+            extras = {"alertas_cuarentena": ctx.params.get("_alertas_cuarentena", [])}
+            return envelope, extras
+        except Exception as exc:  # noqa: BLE001 — degradación HONESTA, no se finge.
+            nota = "El grafo de conocimiento no respondió; respuesta degradada."
+            envelope = ConsultaResuelta(
+                tipo_intencion=clasificacion.tipo.value,
+                score=clasificacion.score,
+                ruta=clasificacion.ruta,
+                metodo=clasificacion.metodo,
+                cruces=[],
+                payload=payload_vacio(clasificacion.tipo, ctx.pregunta or "Consulta"),
+                degradado=True,
+                nota=nota,
+            )
+            return envelope, {"error": f"{type(exc).__name__}: {exc}"}
 
     def componer_consulta(self, texto: str, contenido_pipeline: dict | None = None) -> dict:
         """

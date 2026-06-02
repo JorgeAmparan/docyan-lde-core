@@ -106,3 +106,41 @@ def get_master_orchestrator():
         pipeline_coordinator=get_pipeline_coordinator(),
         audit_logger=get_audit_logger(),
     )
+
+
+# ── Playbooks (B8) ──────────────────────────────────────────────────────────
+
+
+def get_playbook_store():
+    """Almacén de Playbooks de producción (Supabase, RLS por tenant)."""
+    from app.playbooks.models import SupabasePlaybookStore
+
+    return SupabasePlaybookStore()
+
+
+def get_perfil_provider():
+    """Perfil de usuario (banderas de IA proactiva) desde la tabla users."""
+    from app.playbooks.perfil import SupabasePerfilProvider
+
+    return SupabasePerfilProvider()
+
+
+def get_playbook_services():
+    """
+    Bundle de servicios de Playbooks (Niveles A/B/C) sobre el almacén de
+    producción. Los endpoints lo inyectan vía Depends; los tests lo sustituyen por
+    un bundle con `InMemoryPlaybookStore`.
+    """
+    from app.playbooks.consultas_guardadas import ConsultasGuardadasService
+    from app.playbooks.playbooks_core import PlaybooksService
+    from app.playbooks.sugerencias import SugerenciasService
+
+    store = get_playbook_store()
+    perfil = get_perfil_provider()
+    return {
+        "store": store,
+        "perfil": perfil,
+        "consultas": ConsultasGuardadasService(store),
+        "playbooks": PlaybooksService(store),
+        "sugerencias": SugerenciasService(store, perfil),
+    }

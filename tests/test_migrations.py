@@ -43,6 +43,7 @@ MIGRATION_FILES = [
     "011_sessions_completed.sql",
     "012_qr_tokens.sql",
     "013_fat_hash_chain.sql",
+    "014_playbooks.sql",
 ]
 
 # (tabla, columnas clave que el código de la app referencia)
@@ -74,6 +75,20 @@ NEW_TABLES = {
     # B7 — FAT extendido (013): retención por familia + config GRG por tenant.
     "fat_retention_policy": ["id", "familia", "anios_retencion", "descripcion"],
     "configuracion_grg": ["id", "tenant_id", "tier", "umbrales_f2"],
+    # B8 — Playbooks (014): Niveles A/B/C + aprendizaje del rechazo.
+    "consultas_guardadas": ["id", "tenant_id", "user_id", "nombre", "consulta_original",
+                            "tipo_intencion", "tipo_documento_origen", "entidad_referenciada_id",
+                            "metadata", "disparos_totales", "ultimo_disparo_at", "deleted_at"],
+    "playbooks": ["id", "tenant_id", "creado_por_user_id", "nombre", "descripcion",
+                  "tipo_creacion", "vertical", "disparos_totales", "ultimo_disparo_at",
+                  "deleted_at"],
+    "playbook_pasos": ["id", "tenant_id", "playbook_id", "orden", "consulta_guardada_id",
+                       "nota_paso"],
+    "sugerencias_playbook": ["id", "tenant_id", "user_id", "tipo_sugerencia",
+                             "consulta_guardada_ids", "evidencia_estructural",
+                             "evidencia_conductual", "estado", "decidido_at"],
+    "patrones_rechazados_por_usuario": ["id", "tenant_id", "user_id", "firma_patron",
+                                        "conteo_rechazos", "ultimo_rechazo_at"],
 }
 
 DEFAULT_URL = "postgresql://postgres:test@localhost:55432/docyan_test"
@@ -116,10 +131,12 @@ def test_all_migrations_apply_cleanly(clean_db):
             "SELECT count(*) FROM information_schema.tables "
             "WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
         )
-        # 15 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
+        # 20 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
         # tenant_schemas + dtm_projects + sessions_completed (011) + qr_tokens (012)
-        # + fat_retention_policy + configuracion_grg (013).
-        assert cur.fetchone()[0] == 15
+        # + fat_retention_policy + configuracion_grg (013) + Playbooks (014):
+        # consultas_guardadas, playbooks, playbook_pasos, sugerencias_playbook,
+        # patrones_rechazados_por_usuario.
+        assert cur.fetchone()[0] == 20
 
 
 @pytest.mark.parametrize("table", sorted(NEW_TABLES.keys()))
