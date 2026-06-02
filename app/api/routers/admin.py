@@ -80,3 +80,28 @@ async def embedding_test(ctx: dict = Depends(requiere_rol("admin"))):
         "model": "BAAI/bge-m3",
         "sample": vector[:5],
     }
+
+
+@router.get("/fat/integrity")
+async def fat_integrity(ctx: dict = Depends(requiere_rol("admin"))):
+    """
+    Verifica la integridad de la cadena de hashes FAT del tenant del admin (B7).
+
+    Lee los eventos del FAT (Supabase + FalkorDB entrelazados por timestamp) y
+    recorre la cadena SHA-256 detectando alteraciones y huecos. NO toca datos de
+    otros tenants (multi-tenant absoluto: scope-a por el `org_id` del admin).
+    """
+    from app.audit.fat_extendido import FATExtendido
+    from app.audit.integrity_checker import verificar_tenant
+    from app.audit.stores import HybridFATStore
+
+    org_id = ctx["org_id"]
+    try:
+        fat = FATExtendido(HybridFATStore())
+        resultado = verificar_tenant(fat, org_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=503,
+            detail=f"FAT no disponible: {type(exc).__name__}: {exc}",
+        )
+    return resultado.to_dict()

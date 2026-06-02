@@ -52,6 +52,13 @@ PERMISO_POR_KIND: dict[RequestKind, str] = {
 }
 
 
+def _default_grg():
+    """GRG extendido por default para el Governance Gate (B7). Aislado para tests."""
+    from app.governance.grg_extendido import GRGExtendido
+
+    return GRGExtendido()
+
+
 class MasterOrchestrator:
     """Fachada del sistema. Orquesta el negocio; la ingesta interna la cubre el SDK."""
 
@@ -71,7 +78,10 @@ class MasterOrchestrator:
         self.intent_router = intent_router or IntentRouter()
         self.pipeline_coordinator = pipeline_coordinator or PipelineCoordinator()
         self.session_manager = session_manager or SessionManager()
-        self.governance_gate = governance_gate or GovernanceGate()
+        # B7: el gate por default lleva el GRG EXTENDIDO inyectado, de modo que
+        # cuando un request trae `criticidad` (decisión #15) aplican los umbrales
+        # F2 por criticidad del doc 07. Sin criticidad, opera el camino estático.
+        self.governance_gate = governance_gate or GovernanceGate(grg=_default_grg())
         self.localization = localization or VariantResolver()
         self.channel_adapter = channel_adapter or ChannelAdapter()
         self.audit_logger = audit_logger or AuditLogger()
@@ -181,17 +191,22 @@ class MasterOrchestrator:
         )
         score = payload.get("score_confianza")
         segmento_critico = bool(payload.get("segmento_critico", False))
+        # B7: si el request trae `criticidad` (decisión #15), el gate aplica los
+        # umbrales F2 del GRG extendido. Opcional → backward compatible con B4.
+        criticidad = payload.get("criticidad")
 
         decision = self.governance_gate.evaluate(
             permiso_requerido=None,
             permisos=ctx.permisos,
             score_confianza=score,
             segmento_critico=segmento_critico,
+            criticidad=criticidad,
         )
         self.audit_logger.governance_decision(
             ctx.tenant_id, actor,
             {"razon": decision.razon_codigo, "servir": decision.servir,
-             "escalar": decision.escalar_a_revisor},
+             "escalar": decision.escalar_a_revisor,
+             "regla_grg": decision.regla_grg, "disclaimer": bool(decision.disclaimer)},
         )
         if decision.bloqueado:
             return self._responder_bloqueo(

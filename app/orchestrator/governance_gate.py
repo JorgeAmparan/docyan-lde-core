@@ -37,6 +37,10 @@ class GateDecision:
     motivo: str
     escalar_a_revisor: bool = False
     razon_codigo: str = "ok"  # ok | sin_permiso | confianza_baja | requiere_revision
+    # B7: disclaimer crítico cuando el GRG extendido (F2/F8) lo exige; el canal lo
+    # propaga igual en PWA y WhatsApp. None = sin disclaimer.
+    disclaimer: str | None = None
+    regla_grg: str | None = None  # regla F2 aplicada (R-UC-0x), si la hubo.
 
     @property
     def bloqueado(self) -> bool:
@@ -63,6 +67,7 @@ class GovernanceGate:
         permisos: list[str],
         score_confianza: float | None = None,
         segmento_critico: bool = False,
+        criticidad: object | None = None,
     ) -> GateDecision:
         # 1. Permisos del rol (doc 09).
         if permiso_requerido is not None and permiso_requerido not in (permisos or []):
@@ -74,6 +79,16 @@ class GovernanceGate:
                 ),
                 razon_codigo="sin_permiso",
             )
+
+        # 1b. B7 — GRG extendido F2: si hay `criticidad` (decisión #15) y un GRG
+        # extendido inyectado, los umbrales por criticidad del doc 07 mandan sobre
+        # el umbral estático. El gate sigue siendo transparente al MO (misma
+        # interfaz; `criticidad` es opcional). Sin GRG inyectado, cae al camino
+        # estático de B4.
+        if criticidad is not None and self.grg is not None and score_confianza is not None:
+            decision = self._evaluar_f2(criticidad, score_confianza)
+            if decision is not None:
+                return decision
 
         # 2. Confianza vs umbral (freno de alucinación). Sin score → se asume
         # contenido determinista (no generado por LLM) y pasa.
@@ -104,3 +119,36 @@ class GovernanceGate:
                 )
 
         return GateDecision(servir=True, motivo="Aprobado por Governance Gate.")
+
+    def _evaluar_f2(self, criticidad: object, score_confianza: float) -> GateDecision | None:
+        """
+        Traduce la regla F2 del GRG extendido (umbral por criticidad) a una
+        GateDecision. Devuelve None si `criticidad` no es una Criticidad válida o
+        el GRG inyectado no soporta F2 (cae al camino estático).
+        """
+        f2 = getattr(self.grg, "f2_evaluar_umbral", None)
+        if f2 is None:
+            return None
+        try:
+            from app.governance.familias_grg import AccionGRG, Criticidad
+
+            crit = criticidad if isinstance(criticidad, Criticidad) else Criticidad(criticidad)
+        except (ValueError, ImportError):
+            return None
+
+        res = f2(crit, score_confianza)
+        if res.accion == AccionGRG.SERVIR:
+            return GateDecision(
+                servir=True, motivo=res.razon, razon_codigo="ok", regla_grg=res.regla_id
+            )
+        if res.accion == AccionGRG.ESCALAR_REVISOR:
+            return GateDecision(
+                servir=False, motivo=res.razon, escalar_a_revisor=True,
+                razon_codigo="requiere_revision", disclaimer=res.disclaimer,
+                regla_grg=res.regla_id,
+            )
+        # FLAG_DISCLAIMER: sirve con disclaimer crítico (no bloquea).
+        return GateDecision(
+            servir=True, motivo=res.razon, razon_codigo="ok",
+            disclaimer=res.disclaimer, regla_grg=res.regla_id,
+        )
