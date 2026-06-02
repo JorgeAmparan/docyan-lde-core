@@ -115,6 +115,19 @@ el `embedder_adapter` de B1; NO OpenAI/Gemini para embeddings (decisión #1).
 Secrets del worker: `GEMINI_API_KEY` (NO `GOOGLE_API_KEY`), `OPENAI_API_KEY`,
 `FALKOR_HOST/PORT`, `EMBEDDER_URL`, `REDIS_QUEUE_URL`.
 
+### Extracción LLM-only — el híbrido GLiNER NO está activo (B3.6)
+
+`GraphExtraction` del SDK usa `GLiNERExtractor()` por DEFAULT como step-1 NER.
+**No lo usamos en MVP.** `build_extractor_and_resolver` pasa
+`entity_extractor=LLMExtractor(llm)` explícito → extracción **LLM-only**, el
+estado que B2 validó (≈12 nodos / ≈19 relaciones). El modo híbrido, activado por
+error en B3.5, degradó la extracción sobre documento técnico en español (8 nodos
+/ 0 relaciones) porque `gliner_medium-v2.1` es anglocéntrico y no infiere sujetos
+implícitos en voz pasiva regulatoria. El cache de GLiNER en `worker/Dockerfile`
+**se conserva pero queda inerte**: deja la imagen lista para experimentación
+post-MVP con `gliner_multi-v2.1` (versión multilingüe) si en algún momento se
+quiere reevaluar el híbrido. Decisión cerrada en `docs/decisiones_extraccion.md`.
+
 ## Perfil de recursos y deploy
 
 `fly.toml`: `docyan-lde-ingest`, región `dfw`, `shared-cpu-4x` / 4 GB, **sin
