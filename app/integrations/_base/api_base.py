@@ -14,8 +14,10 @@ load_dotenv()
 # ─── API CONNECTOR BASE | DOCYAN™ ────────────────────────────────────────
 #
 # Clase base para conectores que extraen datos via REST API.
-# Patrón: autenticarse → listar/extraer → texto estructurado → DII pipeline.
-# Usado por: app.ingest_sources.notion (y clientes HTTP salientes del MO a futuro).
+# Patrón: autenticarse → listar/extraer → texto estructurado → ingesta.
+# Base reutilizable para clientes HTTP salientes del MO. (El cliente Notion
+# pre-GraphRAG que la usaba se eliminó en B3.5; se rehará sobre GraphRAG-SDK
+# en B12 — ver app/ingest_sources/__init__.py.)
 # ─────────────────────────────────────────────────────────────────────────────
 
 

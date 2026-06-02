@@ -44,7 +44,7 @@ def _default_llm_caller(prompt: str) -> str:
         temperature=0.0,
         response_format={"type": "json_object"},
     )
-    return resp["choices"][0]["message"]["content"]
+    return str(resp["choices"][0]["message"]["content"])
 
 
 def _build_prompt(muestra: str, contexto: dict) -> str:

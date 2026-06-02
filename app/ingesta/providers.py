@@ -34,5 +34,5 @@ def get_selector() -> SchemaSelector:
     return SchemaSelector(registry=SchemaRegistry())
 
 
-def get_document_store():
+def get_document_store() -> SupabaseStorageDocumentStore:
     return SupabaseStorageDocumentStore()

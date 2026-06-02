@@ -79,6 +79,39 @@ jobs:
       - name: Run backend tests (core + migraciones)
         run: pytest tests/ -v --tb=short
 
+  # ── Type-check (mypy) del camino crítico MVP (B3.5 item 1) ──────────────────
+  # Job propio, paralelo a backend/gen-types/frontend. mypy hace análisis ESTÁTICO
+  # (no ejecuta código), así que no necesita servicios ni secrets de runtime. La
+  # config por capas vive en pyproject.toml [tool.mypy]: strict en el camino crítico
+  # (app.graph/app.ingesta/app.schemas_documentales/supabase_client/app.jobs),
+  # ignore_errors en la cohorte legacy DII. `follow_imports = silent` asegura que
+  # solo las rutas pasadas aquí reporten errores.
+  mypy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.test.txt
+
+      - name: Type-check critical-path modules (mypy)
+        run: >-
+          mypy
+          app/graph/
+          app/ingesta/
+          app/schemas_documentales/
+          app/core/supabase_client.py
+          app/jobs/
+
   # ── Contrato OpenAPI → TS: regenerar tipos ANTES del build del frontend ──
   gen-types:
     runs-on: ubuntu-latest

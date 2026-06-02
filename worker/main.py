@@ -83,6 +83,8 @@ async def _procesar_un_job(dispatcher: JobDispatcher, pipeline: IngestPipeline, 
 
 async def _consumer_loop():
     """Loop principal del worker: BLPOP de la cola → procesar."""
+    import redis  # cliente ya en el runtime del worker
+
     backend = RedisQueueBackend()
     dispatcher = JobDispatcher(backend=backend)
     pipeline = IngestPipeline(
@@ -97,7 +99,12 @@ async def _consumer_loop():
                 await _procesar_un_job(dispatcher, pipeline, job_id)
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001
+        except (redis.exceptions.TimeoutError, TimeoutError) as exc:
+            # Timeout ESPERADO del BLPOP en idle (socket_timeout ≤ POP_TIMEOUT):
+            # no es un error, es el latido normal del loop que permite shutdown
+            # grácil. No debe ensuciar los logs a WARNING/ERROR (B3.5 item 4).
+            logger.debug("BLPOP idle timeout (esperado), reintentando: %s", exc)
+        except Exception:  # noqa: BLE001 — errores reales SÍ se loggean
             logger.exception("error en el loop del consumidor; reintentando")
             await asyncio.sleep(2)
 

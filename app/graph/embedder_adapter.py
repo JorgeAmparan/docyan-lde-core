@@ -44,7 +44,7 @@ def make_bge_m3_adapter(bge_client=None):
     Embedder = _embedder_base()
     client = bge_client or default_bge_client
 
-    class BGE_M3_Adapter(Embedder):
+    class BGE_M3_Adapter(Embedder):  # type: ignore[valid-type,misc]  # base dinámica del SDK (solo existe si graphrag_sdk está instalado)
         """Adaptador que envuelve `bge_client` para la interfaz del SDK."""
 
         def __init__(self, bge):

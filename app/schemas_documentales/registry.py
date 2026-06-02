@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.schemas_documentales.base import DocumentSchema
 from app.schemas_documentales.catalogo import CATALOGO
@@ -69,10 +70,10 @@ class InMemorySchemaStore:
 class SupabaseSchemaStore:
     TABLE = "tenant_schemas"
 
-    def __init__(self, client=None):
+    def __init__(self, client: Any = None) -> None:
         self._client = client
 
-    def _sb(self):
+    def _sb(self) -> Any:
         if self._client is None:
             from supabase import create_client
 
