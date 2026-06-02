@@ -61,9 +61,35 @@ def reportes_pms_job() -> dict:
 
 
 def patrones_edb_job() -> dict:
-    """Evaluación de patrones del EDB para Nivel 3 visible (diaria). Interfaz B8."""
-    logger.info("patrones_edb: interfaz lista (contenido en B8)")
-    return {"evaluado": True, "tipo": "patrones_edb"}
+    """
+    `evaluacion_patrones_edb_para_n3` (diaria) — Nivel C de Playbooks (B8 §B3).
+
+    Recorre los tenants vivos y, por usuario, evalúa la COMPUERTA DE TRES SEÑALES
+    (estructural + conductual + permiso) sobre sus consultas guardadas + disparos,
+    emitiendo `sugerencias_playbook` cuando se cumple. La interfaz la dejó B4; B8
+    le pone contenido real (no stub). Los tenants sin patrones no generan nada.
+    """
+    from app.orchestrator import providers
+
+    servicios = providers.get_playbook_services()
+    sugerencias = servicios["sugerencias"]
+    tenants = providers.tenants_vivos()
+    total = 0
+    for tenant_id in tenants:
+        try:
+            total += len(sugerencias.evaluar_tenant(tenant_id))
+        except Exception as exc:  # noqa: BLE001 — un tenant no debe tumbar el barrido.
+            logger.warning("patrones_edb: tenant %s falló: %s", tenant_id, type(exc).__name__)
+    logger.info(
+        "patrones_edb: %d tenant(s) evaluados, %d sugerencia(s) generadas", len(tenants), total
+    )
+    return {
+        "evaluado": True,
+        "tipo": "patrones_edb",
+        "tarea": "evaluacion_patrones_edb_para_n3",
+        "tenants": len(tenants),
+        "sugerencias_generadas": total,
+    }
 
 
 def fat_retention_job() -> dict:

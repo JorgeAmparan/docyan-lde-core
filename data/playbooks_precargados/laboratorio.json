@@ -1,0 +1,84 @@
+[
+  {
+    "nombre": "Apertura de turno — Laboratorio ISO 17025",
+    "descripcion": "Recorrido de verificación al iniciar el turno en un laboratorio de pruebas y mediciones acreditado ISO/IEC 17025.",
+    "pasos": [
+      {
+        "nombre": "Calibraciones por vencer",
+        "consulta_original": "¿Qué equipos tienen la calibración por vencer este mes?",
+        "tipo_intencion": "ALERTAS",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "calibracion",
+        "nota_paso": "Revisar antes de operar; ninguna medición con equipo fuera de vigencia."
+      },
+      {
+        "nombre": "Historial de calibración del equipo",
+        "consulta_original": "Dame el historial de calibración y verificación del equipo.",
+        "tipo_intencion": "HISTORIAL",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "calibracion",
+        "nota_paso": "Confirmar trazabilidad metrológica continua."
+      },
+      {
+        "nombre": "Procedimiento de verificación inicial",
+        "consulta_original": "¿Cuál es el procedimiento de verificación inicial del equipo?",
+        "tipo_intencion": "GUIA_PASO_A_PASO",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": "Ejecutar paso a paso; registrar la confirmación."
+      }
+    ]
+  },
+  {
+    "nombre": "Verificación de equipo de medición",
+    "descripcion": "Consulta completa de un instrumento antes de usarlo en una prueba.",
+    "pasos": [
+      {
+        "nombre": "Ficha técnica del equipo",
+        "consulta_original": "¿Cuáles son las especificaciones y el rango de medición del equipo?",
+        "tipo_intencion": "INFORMATIVA",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "ficha_tecnica",
+        "nota_paso": "Validar que el rango cubre el mensurando."
+      },
+      {
+        "nombre": "Procedimiento de calibración",
+        "consulta_original": "¿Cómo se calibra el equipo paso a paso?",
+        "tipo_intencion": "GUIA_PASO_A_PASO",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "calibracion",
+        "nota_paso": null
+      },
+      {
+        "nombre": "Diagrama de conexión",
+        "consulta_original": "Muéstrame el diagrama de conexión del equipo.",
+        "tipo_intencion": "GRAFICOS_DIAGRAMAS",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": null
+      }
+    ]
+  },
+  {
+    "nombre": "Auditoría de trazabilidad",
+    "descripcion": "Soporte para una auditoría de trazabilidad metrológica.",
+    "pasos": [
+      {
+        "nombre": "Historial de mediciones",
+        "consulta_original": "Dame el historial de mediciones registradas del equipo.",
+        "tipo_intencion": "HISTORIAL",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "calibracion",
+        "nota_paso": "Verificar continuidad de registros."
+      },
+      {
+        "nombre": "Certificados de vigencia por vencer",
+        "consulta_original": "¿Qué certificados de vigencia están por caducar?",
+        "tipo_intencion": "ALERTAS",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "calibracion",
+        "nota_paso": "Solo administrativo: vencimientos, nunca decisión técnica."
+      }
+    ]
+  }
+]

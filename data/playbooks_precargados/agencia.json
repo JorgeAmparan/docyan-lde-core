@@ -1,0 +1,68 @@
+[
+  {
+    "nombre": "Onboarding de proyecto bilingüe",
+    "descripcion": "Recorrido inicial al abrir un proyecto en una agencia de traducción profesional (Pista B).",
+    "pasos": [
+      {
+        "nombre": "Expediente del cliente",
+        "consulta_original": "¿Cuál es la información del expediente del cliente y sus preferencias?",
+        "tipo_intencion": "INFORMATIVA",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "expediente_cliente",
+        "nota_paso": "Confirmar par lingüístico y tier de servicio."
+      },
+      {
+        "nombre": "Historial de proyectos del cliente",
+        "consulta_original": "Dame el historial de proyectos previos de este cliente.",
+        "tipo_intencion": "HISTORIAL",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "expediente_cliente",
+        "nota_paso": "Reusar terminología y memorias previas."
+      }
+    ]
+  },
+  {
+    "nombre": "Consulta terminológica",
+    "descripcion": "Resolución de un término técnico y verificación de consistencia con la memoria.",
+    "pasos": [
+      {
+        "nombre": "Término técnico y especificación",
+        "consulta_original": "¿Cuál es la definición y forma aprobada de este término técnico?",
+        "tipo_intencion": "INFORMATIVA",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "memoria_traduccion",
+        "nota_paso": "Respetar el lock terminológico."
+      },
+      {
+        "nombre": "Comparativa entre versiones de glosario",
+        "consulta_original": "¿Qué cambió entre las dos versiones del glosario del cliente?",
+        "tipo_intencion": "COMPARATIVA",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "memoria_traduccion",
+        "nota_paso": null
+      }
+    ]
+  },
+  {
+    "nombre": "Revisión de entrega",
+    "descripcion": "Verificación antes de entregar un proyecto al cliente.",
+    "pasos": [
+      {
+        "nombre": "Historial de revisiones",
+        "consulta_original": "Dame el historial de revisiones lingüísticas del proyecto.",
+        "tipo_intencion": "HISTORIAL",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "expediente_cliente",
+        "nota_paso": null
+      },
+      {
+        "nombre": "Vencimiento de entrega",
+        "consulta_original": "¿Qué entregas están próximas a vencer?",
+        "tipo_intencion": "ALERTAS",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "expediente_cliente",
+        "nota_paso": "Solo administrativo: fechas límite."
+      }
+    ]
+  }
+]

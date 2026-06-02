@@ -1,0 +1,84 @@
+[
+  {
+    "nombre": "Arranque de línea — Maquiladora IMMEX",
+    "descripcion": "Recorrido de verificación al arrancar una línea de manufactura en el corredor T-MEC.",
+    "pasos": [
+      {
+        "nombre": "Procedimiento de arranque",
+        "consulta_original": "¿Cuál es el procedimiento de arranque de la línea paso a paso?",
+        "tipo_intencion": "GUIA_PASO_A_PASO",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": "Confirmar cada paso antes de energizar."
+      },
+      {
+        "nombre": "EPP y advertencias",
+        "consulta_original": "¿Qué equipo de protección personal y advertencias aplican en esta estación?",
+        "tipo_intencion": "INFORMATIVA",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": "NOM-018-STPS / NOM-026-STPS."
+      },
+      {
+        "nombre": "Troubleshooting de paro de línea",
+        "consulta_original": "La línea no arranca, ¿qué hago para diagnosticar la falla?",
+        "tipo_intencion": "TROUBLESHOOTING",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": "Árbol de diagnóstico; escalar si no resuelve."
+      }
+    ]
+  },
+  {
+    "nombre": "Cambio de modelo / setup",
+    "descripcion": "Apoyo para un cambio de modelo o setup de la estación.",
+    "pasos": [
+      {
+        "nombre": "Procedimiento de cambio de modelo",
+        "consulta_original": "¿Cuáles son los pasos para el cambio de modelo de la máquina?",
+        "tipo_intencion": "GUIA_PASO_A_PASO",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": null
+      },
+      {
+        "nombre": "Especificación de parámetros",
+        "consulta_original": "¿Cuáles son los parámetros y valores nominales de proceso para este modelo?",
+        "tipo_intencion": "INFORMATIVA",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "especificacion",
+        "nota_paso": "IATF 16949: respetar valores controlados."
+      },
+      {
+        "nombre": "Video de montaje",
+        "consulta_original": "¿Hay un video del montaje de esta estación?",
+        "tipo_intencion": "VIDEO",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": null
+      }
+    ]
+  },
+  {
+    "nombre": "Cierre de turno",
+    "descripcion": "Verificación administrativa al cerrar el turno de producción.",
+    "pasos": [
+      {
+        "nombre": "Historial de eventos del turno",
+        "consulta_original": "Dame el historial de eventos operativos registrados en el turno.",
+        "tipo_intencion": "HISTORIAL",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": null
+      },
+      {
+        "nombre": "Mantenimientos por vencer",
+        "consulta_original": "¿Qué mantenimientos preventivos están por vencer?",
+        "tipo_intencion": "ALERTAS",
+        "entidad_referenciada_id": null,
+        "tipo_documento_origen": "manual_tecnico",
+        "nota_paso": "Solo administrativo: fechas y faltantes."
+      }
+    ]
+  }
+]

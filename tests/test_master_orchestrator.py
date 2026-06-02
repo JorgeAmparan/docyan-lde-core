@@ -20,13 +20,45 @@ from app.orchestrator.session_manager import (
 )
 
 
+class _EmptyReader:
+    """Reader sintético vacío (B8): pipelines producen payloads válidos sin DKG."""
+
+    def informativa(self, t, term, e):
+        return {"especificaciones": [], "termino": None, "definicion": None}
+
+    def procedimiento(self, t, term, e):
+        return {"procedimiento_id": None, "titulo": "", "pasos": []}
+
+    def recurso_visual(self, t, term, e):
+        return {"recurso_id": None, "titulo": "", "etiquetas": [], "leyenda": []}
+
+    def video(self, t, term, e):
+        return {"recurso_id": None, "titulo": "", "capitulos": [],
+                "subtitulos": [], "transcripcion": None}
+
+    def arbol_diagnostico(self, t, term, e, n):
+        return {"arbol_id": None, "titulo": "", "nodo_actual_id": None,
+                "pregunta": None, "opciones": []}
+
+    def historial(self, t, e):
+        return {"eventos": [], "certificados": [], "observaciones": [], "mediciones": []}
+
+    def alertas(self, t, e):
+        return []
+
+    def comparar(self, t, est, i, d):
+        return {"izquierda": {}, "derecha": {}}
+
+
 def build_mo(saldo: float = 100.0):
     budget_store = InMemoryBudgetStore()
     BudgetManager(store=budget_store).ensure_budget("t1", saldo_inicial_usd=saldo)
     cotizador = Cotizador(budget_manager=BudgetManager(store=budget_store))
     queue = InMemoryQueueBackend()
     dispatcher = JobDispatcher(backend=queue)
-    coord = PipelineCoordinator(cotizador=cotizador, dispatcher=dispatcher)
+    coord = PipelineCoordinator(
+        cotizador=cotizador, dispatcher=dispatcher, graph_reader=_EmptyReader()
+    )
     sink = InMemoryAuditSink()
     sessions = SessionManager(
         store=InMemorySessionStore(),
@@ -118,19 +150,19 @@ def test_consulta_confianza_baja_bloqueada():
     assert "alucinación" in resp.motivo_bloqueo.lower() or "confianza" in resp.motivo_bloqueo.lower()
 
 
-def test_consulta_limpia_servida_y_adaptada_a_canal():
+def test_consulta_limpia_servida_y_clasificada():
+    """B8: una consulta servida devuelve el envelope tipado con clasificación."""
     mo, sink, _ = build_mo()
-    contenido = {
-        "titulo": "Ficha",
-        "secciones": [{"titulo": "Dato", "cuerpo": "Vence 2026-09-01."}],
-    }
     resp = mo.handle_request(
-        MORequest(auth=AUTH_ADMIN, accion="consulta", texto="x", canal=Canal.whatsapp,
-                  payload={"score_confianza": 0.95, "contenido_pipeline": contenido})
+        MORequest(auth=AUTH_ADMIN, accion="consulta",
+                  texto="cuál es el valor de presión nominal", canal=Canal.pwa,
+                  payload={"score_confianza": 0.95})
     )
     assert resp.servido is True
-    assert resp.data["formato"] == "plain_text"
-    assert "Vence 2026-09-01." in resp.data["texto"]
+    assert resp.data["tipo_intencion"] == "INFORMATIVA"
+    assert resp.data["payload"]["kind"] == "info_card"
+    # La clasificación dejó traza en el FAT (familia F4).
+    assert any(e["action"] == "intent_classified" for e in sink.entries)
 
 
 def test_sesion_completa_con_transicion_de_canal():
