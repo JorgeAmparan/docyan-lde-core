@@ -64,26 +64,40 @@ def main() -> int:
     H = {"Authorization": f"Bearer {token}"}
 
     # ── B4: QR persistido (tabla 012) ────────────────────────────────────────
+    # El nonce no es un campo de la respuesta: va codificado dentro del token
+    # (`base64url(tenant|entidad|nonce).firma`). Lo decodificamos para revocar.
+    import base64
+
     entidad = f"smoke-entidad-{suffix}"
     r = c.post("/qr/generate", json={"entidad_id": entidad, "render": False}, headers=H)
-    check("qr/generate", r.status_code == 200, f"HTTP {r.status_code}")
+    check("qr/generate persiste token", r.status_code == 200, f"HTTP {r.status_code}")
     qr = r.json() if r.status_code == 200 else {}
     token_qr = qr.get("token")
-    nonce = qr.get("nonce")
-    check("qr token + nonce persistidos", bool(token_qr and nonce))
+    nonce = None
+    if token_qr:
+        try:
+            b64 = token_qr.split(".")[0]
+            b64 += "=" * (-len(b64) % 4)
+            partes = base64.urlsafe_b64decode(b64).decode().split("|")
+            nonce = partes[2] if len(partes) >= 3 else None
+        except Exception:
+            nonce = None
+    check("token QR válido (tenant+entidad+nonce)", bool(token_qr and nonce),
+          f"tenant_id={qr.get('tenant_id')}")
 
     if token_qr:
         r = c.get(f"/qr/{token_qr}")
-        # Resuelve el token persistido (lee qr_tokens). 200 = resuelve; el contenido
-        # de contexto depende del DKG, pero la RESOLUCIÓN del token persistido es
-        # lo que valida la tabla 012.
-        check("qr/{token} resuelve token persistido", r.status_code in (200, 404),
+        # Resuelve el token persistido (lee qr_tokens). 200 = contexto completo;
+        # 404 = entidad aún no existe en el DKG (el resolver no filtra existencia).
+        # En ambos casos el token persistido fue consultado en qr_tokens.
+        check("qr/{token} consulta token persistido", r.status_code in (200, 404),
               f"HTTP {r.status_code}")
-        resolvio = r.status_code == 200
 
     if nonce:
+        # revoke=200 prueba que la fila existía en qr_tokens (UPDATE revoked_at).
         r = c.post("/qr/revoke", json={"nonce": nonce}, headers=H)
-        check("qr/revoke", r.status_code == 200, f"HTTP {r.status_code}")
+        check("qr/revoke (UPDATE sobre fila persistida)", r.status_code == 200,
+              f"HTTP {r.status_code}")
         if token_qr:
             r = c.get(f"/qr/{token_qr}")
             check("qr revocado ya no resuelve (404)", r.status_code == 404,
@@ -106,12 +120,18 @@ def main() -> int:
         check("mo/sessions close (spillover a sessions_completed)",
               r.status_code == 200, f"HTTP {r.status_code}")
 
-    # ── B7: consulta crítica → FAT extendido híbrido ─────────────────────────
+    # ── B7: consulta → FAT extendido híbrido ─────────────────────────────────
+    # 1) consulta normal servida (200): genera request_received/routed/served (F4).
+    r = c.post("/mo/query", json={"texto": "consulta operativa", "canal": "pwa"}, headers=H)
+    check("mo/query servida (eventos F4)", r.status_code == 200, f"HTTP {r.status_code}")
+    # 2) consulta de segmento CRÍTICO con confianza media: el Governance Gate la
+    #    escala/bloquea (403 = decisión de gobernanza, F7) — y la registra igual.
     r = c.post("/mo/query", json={
         "texto": "procedimiento de seguridad",
         "canal": "pwa", "score_confianza": 0.80, "segmento_critico": True,
     }, headers=H)
-    check("mo/query (genera eventos FAT)", r.status_code == 200, f"HTTP {r.status_code}")
+    check("mo/query crítica procesada (servida o escalada por GRG)",
+          r.status_code in (200, 403), f"HTTP {r.status_code}")
 
     # Dar un instante a la escritura del FAT (Supabase + FalkorDB).
     time.sleep(1.5)

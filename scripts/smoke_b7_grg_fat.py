@@ -118,5 +118,50 @@ def main() -> int:
     return 0
 
 
+def main_hybrid() -> int:
+    """
+    Modo `--hybrid`: ejercita el FAT extendido con el STORE HÍBRIDO REAL
+    (Supabase + FalkorDB). Pensado para correr DENTRO de la máquina Fly
+    (docyan-lde-api), donde FalkorDB (.internal) y Supabase son alcanzables.
+
+    Registra eventos de familias activas que tocan AMBOS almacenes (F4 → Supabase,
+    F7 gobernanza → FalkorDB), verifica la integridad de la cadena global por
+    tenant y exporta un reporte con los hashes.
+    """
+    import uuid
+
+    from app.audit.familias import FamiliaFAT
+    from app.audit.stores import HybridFATStore
+
+    tenant = "b7-hybrid-smoke-" + uuid.uuid4().hex[:10]
+    print(f"== B7 smoke HÍBRIDO (Supabase + FalkorDB) — tenant={tenant} ==")
+    fat = FATExtendido(HybridFATStore())
+
+    # F4 (alta frecuencia → Supabase) y F7 (gobernanza → FalkorDB) en una cadena.
+    fat.registrar(tipo_evento="request_received", familia=FamiliaFAT.F4_CONSULTA,
+                  tenant_id=tenant, actor_tipo="mo", actor_id="smoke",
+                  payload={"canal": "pwa"})
+    fat.registrar(tipo_evento="governance_decision", familia=FamiliaFAT.F7_GOBERNANZA,
+                  tenant_id=tenant, actor_tipo="mo", actor_id="smoke",
+                  payload={"regla_grg": "R-UC-01", "servir": False})
+    fat.registrar(tipo_evento="output_served", familia=FamiliaFAT.F4_CONSULTA,
+                  tenant_id=tenant, actor_tipo="mo", actor_id="smoke",
+                  payload={"kind": "consulta"})
+
+    eventos = fat.eventos(tenant)
+    print(f"  [FAT] {len(eventos)} eventos en cadena híbrida")
+    res = verificar_tenant(fat, tenant)
+    assert res.integra, f"cadena híbrida debería ser íntegra: {res.detalle}"
+    print(f"  [OK] integridad cadena híbrida: integra={res.integra} ({res.total_eventos} eventos)")
+
+    pdf = export_pdf(eventos)
+    assert pdf.startswith(b"%PDF") and all(e.hash_evento in pdf.decode("latin-1") for e in eventos)
+    print(f"  [OK] reporte PDF híbrido ({len(pdf)} bytes) con todos los hashes")
+    print("== B7 smoke HÍBRIDO OK ==")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--hybrid" in sys.argv:
+        sys.exit(main_hybrid())
     sys.exit(main())
