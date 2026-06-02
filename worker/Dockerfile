@@ -47,15 +47,20 @@ RUN docling-tools models download layout tableformer
 # y con HF_HUB_OFFLINE=1 falla — verificado en B2.2).
 ENV DOCLING_ARTIFACTS_PATH=/root/.cache/docling/models
 
-# 4) Precarga del modelo GLiNER NER EN BUILD (B3.5 item 3). graphrag-sdk 1.1.1 usa
-#    `GraphExtraction` con `GLiNERExtractor()` por DEFAULT como Step-1 NER (NER local
-#    híbrido: GLiNER extrae entidades, el LLM verifica + extrae relaciones). El worker
-#    construye `GraphExtraction(llm=...)` sin pasar entity_extractor, así que entra el
-#    default. `GLiNERExtractor` carga `urchade/gliner_medium-v2.1` vía
-#    `GLiNER.from_pretrained()`; con `HF_HUB_OFFLINE=1` (runtime) y SIN el modelo en
-#    la imagen, `from_pretrained` falla y la ingesta pierde el NER híbrido (deuda B2).
-#    Cachearlo aquí (con red, antes de activar el modo offline) lo deja en la caché HF
-#    de la imagen para que el NER híbrido funcione offline como se diseñó.
+# 4) Precarga del modelo GLiNER NER EN BUILD (B3.5 item 3). CACHE INERTE (B3.6).
+#    graphrag-sdk 1.1.1 usa `GraphExtraction` con `GLiNERExtractor()` por DEFAULT como
+#    Step-1 NER (NER local híbrido: GLiNER extrae entidades, el LLM verifica + extrae
+#    relaciones). El modo híbrido se ACTIVÓ en B3.5 y EMPEORÓ la extracción sobre
+#    documento técnico en español (8 nodos / 0 relaciones vs 12 / 19 de B2): GLiNER
+#    `gliner_medium-v2.1` es anglocéntrico y no infiere sujetos implícitos en voz
+#    pasiva regulatoria. B3.6 REVIRTIÓ a LLM-only: el worker construye
+#    `GraphExtraction(llm=..., entity_extractor=LLMExtractor(llm))` EXPLÍCITO, así que
+#    el default GLiNER NO se invoca (ver worker/llm_config.build_extractor_and_resolver
+#    y docs/decisiones_extraccion.md). Este prefetch SE CONSERVA pero queda INERTE: no
+#    estorba al runtime LLM-only y deja la imagen lista para reactivar el híbrido
+#    post-MVP con `gliner_multi-v2.1` (versión multilingüe) si se quiere reevaluar
+#    — bastaría volver a pasar `GLiNERExtractor()` como entity_extractor. No se borra
+#    para no re-construir la imagen ni perder el trabajo de cache ya hecho.
 ARG GLINER_MODEL=urchade/gliner_medium-v2.1
 ENV GLINER_MODEL=${GLINER_MODEL}
 RUN python -c "from gliner import GLiNER; GLiNER.from_pretrained('${GLINER_MODEL}')"

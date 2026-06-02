@@ -118,19 +118,37 @@ def build_resolution(embedder=None):
 def build_extractor_and_resolver(embedder=None, model: str | None = None):
     """
     Construye (extractor, resolver) para `GraphRAG.ingest()`, con el wiring exacto
-    validado en el PoC (poc_v111_gemini_flash.py):
-      extractor = GraphExtraction(llm = modelo de extracción)
+    validado en el PoC (poc_v111_gemini_flash.py) — extracción LLM-only (estado B2):
+      extractor = GraphExtraction(llm = modelo de extracción,
+                                  entity_extractor = LLMExtractor(mismo LLM))
       resolver  = LLMVerifiedResolution(llm = mismo LLM, embedder = BGE-M3)
     Pasarlos explícitamente a ingest() evita que el SDK use estrategias por defecto.
+
+    IMPORTANTE (B3.6): `GraphExtraction` usa `GLiNERExtractor()` por DEFAULT como
+    step-1 NER (NER local híbrido). Pasamos `entity_extractor=LLMExtractor(llm)`
+    EXPLÍCITO para forzar LLM-only y NO entrar al híbrido GLiNER: en español
+    técnico el híbrido sub-extrae (8 nodos / 0 relaciones vs 12 / 19 de B2),
+    porque `gliner_medium-v2.1` es anglocéntrico y GLiNER no infiere sujetos
+    implícitos en voz pasiva regulatoria — la capacidad clave del motor de
+    extracción (decisión #1 Paso C; PoC 28 mayo 2026). El cache de GLiNER en la
+    imagen queda inerte. Ver docs/decisiones_extraccion.md.
 
     `model` permite forzar un modelo concreto del chain (para el fallback del
     worker); si es None usa el primario (`extraction_model()`).
     """
-    from graphrag_sdk import GraphExtraction, LiteLLM, LLMVerifiedResolution
+    from graphrag_sdk import (
+        GraphExtraction,
+        LiteLLM,
+        LLMExtractor,
+        LLMVerifiedResolution,
+    )
 
     model = model or extraction_model()
     _require_key_for_model(model)
     llm_extraction = LiteLLM(model=model, temperature=0.0)
-    extractor = GraphExtraction(llm=llm_extraction)
+    extractor = GraphExtraction(
+        llm=llm_extraction,
+        entity_extractor=LLMExtractor(llm_extraction),  # LLM-only (no GLiNER)
+    )
     resolver = LLMVerifiedResolution(llm=llm_extraction, embedder=embedder)
     return extractor, resolver
