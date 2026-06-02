@@ -45,13 +45,25 @@ except ImportError:
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIGRATIONS_DIR = os.path.join(REPO, "migrations")
 
-# Tablas esperadas tras aplicar (para verificación).
+# Tablas esperadas tras aplicar (para verificación). Las 15 del MVP (001→013).
+# 001 crea 2 (users, refresh_tokens); 013 crea 2 (fat_retention_policy,
+# configuracion_grg) además de extender audit_trail (004) de forma aditiva.
 EXPECTED_TABLES = {
+    "001a": "users",
+    "001b": "refresh_tokens",
+    "002": "documents",
+    "003": "entities",
+    "004": "audit_trail",
+    "005": "governance_rules",
+    "006": "quarantine",
+    "007": "api_keys",
     "008": "tenant_budget",
     "009": "tenant_schemas",
     "010": "dtm_projects",
     "011": "sessions_completed",
     "012": "qr_tokens",
+    "013a": "fat_retention_policy",
+    "013b": "configuracion_grg",
 }
 
 # Errores de "ya existe" que tratamos como idempotentes.
