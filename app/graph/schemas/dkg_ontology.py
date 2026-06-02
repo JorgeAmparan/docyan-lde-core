@@ -123,6 +123,31 @@ class EdgeType(str, Enum):
     DOCUMENTADA_POR = "DOCUMENTADA_POR"
     TIENE_TRADUCCION = "TIENE_TRADUCCION"
     VERSION_HISTORICA = "VERSION_HISTORICA"
+    # Aristas puente DKG↔DTM (ajuste mínimo B3 §6 — el DKG declara que sus nodos
+    # de contenido pueden vincularse a un `:SegmentoTraduccion` del DTM). El
+    # vínculo físico lo materializa app/graph/dkg_dtm_bridge.py (las aristas no
+    # cruzan graph_name en FalkorDB). Aquí solo se registra el TIPO en el schema.
+    TRADUCIDA_VIA = "TRADUCIDA_VIA"
+    TRADUCIDO_DESDE = "TRADUCIDO_DESDE"
+
+
+# Etiquetas de nodo del DKG que admiten versión bilingüe — origen de las aristas
+# cross hacia el DTM (B3 §6). Verificado en B3: ninguna requiere migración para
+# soportar el vínculo (el bridge lo realiza con nodo puente en el grafo DTM).
+DKG_TRANSLATABLE_LABELS: tuple[str, ...] = (
+    NodeLabel.ESPECIFICACION.value,
+    NodeLabel.PASO.value,
+    NodeLabel.ADVERTENCIA.value,
+    NodeLabel.SUBTITULO.value,
+    NodeLabel.TRANSCRIPCION.value,
+    NodeLabel.LEYENDA_SIMBOLICA.value,
+    NodeLabel.ETIQUETA.value,
+    NodeLabel.CAUSA_PROBABLE.value,
+    NodeLabel.ACCION_RESOLUTORIA.value,
+    NodeLabel.OBSERVACION.value,
+    NodeLabel.REQUISITO_NORMATIVO.value,
+    NodeLabel.TERMINO_TECNICO.value,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
