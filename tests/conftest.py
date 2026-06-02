@@ -78,3 +78,42 @@ def dkg():
                 client.drop_tenant_graph(tid)
             except Exception:
                 pass
+
+
+# ── DTM / FalkorDB (B3) ──────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def dtm():
+    """
+    Cliente DTM contra el FalkorDB del entorno, con limpieza automática de los
+    grafos DTM que el test toque. Cualquier grafo DTM creado vía el cliente se
+    rastrea para borrarse al final; usar `dtm.track_graph(name)` para grafos
+    creados por otra vía (p. ej. el provisioning o el bridge).
+    """
+    from app.graph.dtm_client import DTMClient
+
+    client = DTMClient()
+    touched: set[str] = set()
+
+    _orig_create_in_graph = client.create_node_in_graph
+
+    def _tracked_create_in_graph(graph_name, label, props):
+        touched.add(graph_name)
+        return _orig_create_in_graph(graph_name, label, props)
+
+    client.create_node_in_graph = _tracked_create_in_graph  # type: ignore[method-assign]
+    client.track_graph = lambda name: touched.add(name)  # type: ignore[attr-defined]
+    client.track_tenant = lambda tid: touched.update(  # type: ignore[attr-defined]
+        client.list_dtm_graphs(tid)
+    )
+
+    try:
+        yield client
+    finally:
+        # Re-escanea por si el provisioning creó grafos no tocados directamente.
+        for name in list(touched):
+            try:
+                client.drop_graph_named(name)
+            except Exception:
+                pass

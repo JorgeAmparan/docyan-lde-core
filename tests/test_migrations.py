@@ -39,6 +39,7 @@ MIGRATION_FILES = [
     "007_api_keys.sql",
     "008_tenant_budget.sql",
     "009_tenant_schemas.sql",
+    "010_dtm_projects.sql",
 ]
 
 # (tabla, columnas clave que el código de la app referencia)
@@ -57,6 +58,8 @@ NEW_TABLES = {
                       "hard_cap_por_documento", "hard_cap_por_sesion"],
     "tenant_schemas": ["id", "tenant_id", "tipo_documento", "schema_def",
                        "es_generado_dinamicamente", "uso_contador"],
+    "dtm_projects": ["id", "tenant_id", "nombre", "par_linguistico", "estado",
+                     "tipo_origen", "cliente_id"],
 }
 
 DEFAULT_URL = "postgresql://postgres:test@localhost:55432/docyan_test"
@@ -99,8 +102,9 @@ def test_all_migrations_apply_cleanly(clean_db):
             "SELECT count(*) FROM information_schema.tables "
             "WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
         )
-        # 10 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget + tenant_schemas.
-        assert cur.fetchone()[0] == 10
+        # 11 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
+        # tenant_schemas + dtm_projects.
+        assert cur.fetchone()[0] == 11
 
 
 @pytest.mark.parametrize("table", sorted(NEW_TABLES.keys()))
