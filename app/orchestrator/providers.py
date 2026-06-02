@@ -10,7 +10,7 @@ ni el cuerpo del scheduler. Mismo patrón que `app/ingesta/providers.py`.
 """
 from __future__ import annotations
 
-from app.orchestrator.audit_logger import AuditLogger
+from app.orchestrator.audit_logger import AuditLogger, FATAuditSink
 from app.orchestrator.pipeline_coordinator import PipelineCoordinator
 from app.orchestrator.session_manager import SessionManager
 from app.qr.qr_generator import QrGenerator
@@ -22,7 +22,9 @@ def get_session_manager() -> SessionManager:
 
 
 def get_audit_logger() -> AuditLogger:
-    return AuditLogger()
+    # B7: el MO loggea al FAT EXTENDIDO con hash chain SHA-256 (no logging plano).
+    # El sink híbrido (Supabase alta frecuencia + FalkorDB gobernanza) es lazy.
+    return AuditLogger(sink=FATAuditSink())
 
 
 def get_pipeline_coordinator() -> PipelineCoordinator:
@@ -35,6 +37,26 @@ def get_qr_generator() -> QrGenerator:
 
 def get_qr_resolver() -> QrResolver:
     return QrResolver()
+
+
+def get_retention_plan():
+    """
+    Plan de retención del FAT (B7): (FATExtendido, BackupSink, tenants).
+
+    Seam de integración con la infraestructura: en MVP devuelve el FAT híbrido, un
+    backup en memoria y una lista de tenants VACÍA (sin barrido hasta cablear el
+    registro de tenants + Supabase Storage en su runbook). La LÓGICA de retención
+    (backup verificado antes de eliminar) es real y vive en app/audit/retention.py.
+    Los tests sustituyen este provider para ejercitar el barrido completo.
+    """
+    from app.audit.fat_extendido import FATExtendido
+    from app.audit.retention import InMemoryBackupSink
+    from app.audit.stores import HybridFATStore
+
+    fat = FATExtendido(HybridFATStore())
+    backup = InMemoryBackupSink()
+    tenants: list[str] = []
+    return fat, backup, tenants
 
 
 def get_master_orchestrator():

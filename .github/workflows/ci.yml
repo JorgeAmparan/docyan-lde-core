@@ -111,6 +111,31 @@ jobs:
           app/schemas_documentales/
           app/core/supabase_client.py
           app/jobs/
+          app/governance/
+          app/audit/
+
+  # ── FAT integrity check sobre dataset sintético (B7) ────────────────────────
+  # Smoke sub-segundo: construye una cadena SHA-256 sintética (sin red), verifica
+  # que es íntegra y que una intrusión simulada se detecta. exit!=0 si algo falla.
+  # No costoso, no toca datos productivos (CLAUDE.md §2.3 / contrato B7 §D).
+  fat-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.test.txt
+
+      - name: FAT integrity check on synthetic dataset
+        run: python -m app.audit.integrity_checker
 
   # ── Contrato OpenAPI → TS: regenerar tipos ANTES del build del frontend ──
   gen-types:

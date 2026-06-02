@@ -124,6 +124,10 @@ module = [
     "app.ingesta.*",
     "app.schemas_documentales.*",
     "app.core.supabase_client",
+    # B7 — gobernanza crítica: GRG extendido + FAT extendido (hash chain SHA-256).
+    # Pura lógica sin dependencia de tipos de terceros ausentes → strict real.
+    "app.governance.*",
+    "app.audit.*",
 ]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true

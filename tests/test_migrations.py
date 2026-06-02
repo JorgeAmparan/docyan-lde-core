@@ -42,6 +42,7 @@ MIGRATION_FILES = [
     "010_dtm_projects.sql",
     "011_sessions_completed.sql",
     "012_qr_tokens.sql",
+    "013_fat_hash_chain.sql",
 ]
 
 # (tabla, columnas clave que el código de la app referencia)
@@ -50,7 +51,11 @@ NEW_TABLES = {
     "entities": ["id", "org_id", "document_id", "entity_class",
                  "entity_value", "data_text", "knowledge_triple", "embedding", "status"],
     "audit_trail": ["id", "org_id", "document_id", "entity_id", "component",
-                    "action", "actor", "before_value", "after_value", "detail"],
+                    "action", "actor", "before_value", "after_value", "detail",
+                    # B7 — columnas del :EventoFAT + hash chain (013, aditivas).
+                    "tipo_evento", "familia", "actor_tipo", "entidad_afectada_tipo",
+                    "entidad_afectada_id", "payload", "metadata",
+                    "hash_evento", "hash_evento_anterior", "corrige_evento_id"],
     "governance_rules": ["id", "org_id", "entity_class", "rule_type",
                          "condition", "action", "is_active"],
     "quarantine": ["id", "org_id", "entity_id", "rule_id", "reason", "resolved"],
@@ -66,6 +71,9 @@ NEW_TABLES = {
                            "started_at", "closed_at", "state", "closed_reason"],
     "qr_tokens": ["id", "tenant_id", "entidad_id_dkg", "nonce", "created_by",
                   "expires_at", "revoked_at", "created_at"],
+    # B7 — FAT extendido (013): retención por familia + config GRG por tenant.
+    "fat_retention_policy": ["id", "familia", "anios_retencion", "descripcion"],
+    "configuracion_grg": ["id", "tenant_id", "tier", "umbrales_f2"],
 }
 
 DEFAULT_URL = "postgresql://postgres:test@localhost:55432/docyan_test"
@@ -108,9 +116,10 @@ def test_all_migrations_apply_cleanly(clean_db):
             "SELECT count(*) FROM information_schema.tables "
             "WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
         )
-        # 13 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
-        # tenant_schemas + dtm_projects + sessions_completed (011) + qr_tokens (012).
-        assert cur.fetchone()[0] == 13
+        # 15 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
+        # tenant_schemas + dtm_projects + sessions_completed (011) + qr_tokens (012)
+        # + fat_retention_policy + configuracion_grg (013).
+        assert cur.fetchone()[0] == 15
 
 
 @pytest.mark.parametrize("table", sorted(NEW_TABLES.keys()))

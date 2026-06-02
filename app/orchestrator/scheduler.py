@@ -66,6 +66,29 @@ def patrones_edb_job() -> dict:
     return {"evaluado": True, "tipo": "patrones_edb"}
 
 
+def fat_retention_job() -> dict:
+    """
+    Rutina de retención del FAT por familia (decisión #12 / doc 08, B7).
+
+    Punto de EJECUCIÓN programada (semanal). La lógica de retención es real y
+    está en `app/audit/retention.py` (backup verificado ANTES de eliminar). Los
+    tenants a barrer y el destino de backup los provee
+    `providers.get_retention_plan()` — seam de integración con la infraestructura
+    (igual que `evaluate_vencimientos` obtiene sus reglas de EDB/AIM). Sin tenants
+    configurados, no elimina nada.
+    """
+    from app.audit.retention import aplicar_retencion
+    from app.orchestrator import providers
+
+    fat, backup, tenants = providers.get_retention_plan()
+    resultados = []
+    for tenant_id in tenants:
+        res = aplicar_retencion(fat, tenant_id, backup=backup)
+        resultados.append(res.to_dict())
+    logger.info("fat_retention: %d tenant(s) barridos", len(resultados))
+    return {"evaluado": True, "tipo": "fat_retention", "resultados": resultados}
+
+
 @dataclass(frozen=True)
 class JobSpec:
     job_id: str
@@ -81,6 +104,7 @@ DEFAULT_JOBS: tuple[JobSpec, ...] = (
     JobSpec("mantenimiento_indices", mantenimiento_indices_job, "cron", {"day_of_week": "sun", "hour": 3}),
     JobSpec("reportes_pms", reportes_pms_job, "cron", {"day_of_week": "mon", "hour": 7}),
     JobSpec("patrones_edb", patrones_edb_job, "cron", {"hour": 5}),
+    JobSpec("fat_retention", fat_retention_job, "cron", {"day_of_week": "sun", "hour": 4}),
 )
 
 
