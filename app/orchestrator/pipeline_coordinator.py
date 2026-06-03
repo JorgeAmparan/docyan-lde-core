@@ -55,12 +55,17 @@ class PipelineCoordinator:
         cotizador: Cotizador | None = None,
         dispatcher: JobDispatcher | None = None,
         graph_reader=None,
+        pcl=None,
     ):
         self.cotizador = cotizador or Cotizador()
         self.dispatcher = dispatcher or JobDispatcher()
         # B8: lector del DKG para los pipelines de consulta. Lazy en producción
         # (DKGReader sobre dkg_client); los tests inyectan un reader sintético.
         self._graph_reader = graph_reader
+        # B8.5: fachada PCL (caché semántico + modo + métricas). Lazy en producción;
+        # los tests la inyectan con backends en memoria. El coordinator NO decide
+        # modo ni cachea por su cuenta: DELEGA en la fachada (contrato §2).
+        self.pcl = pcl
 
     # ── Ingesta (gate de cotización sin bypass) ───────────────────────────────
 
@@ -127,6 +132,44 @@ class PipelineCoordinator:
 
             self._graph_reader = DKGReader()
         return self._graph_reader
+
+    def _get_pcl(self):
+        """Fachada PCL de producción (lazy). Los tests inyectan una en memoria."""
+        if self.pcl is None:
+            from app.pcl.pcl_facade import PCL
+
+            self.pcl = PCL()
+        return self.pcl
+
+    def consultar_o_cachear(
+        self,
+        *,
+        clasificacion,
+        ctx,
+        tenant_id: str,
+        user_id: str | None,
+        contexto: dict,
+        gobernanza=None,
+        actor: str = "system",
+    ) -> tuple:
+        """
+        Entrada de consulta a través de la CCP/PCL (contrato §2): lookup en caché →
+        hit válido re-evalúa gobernanza y sirve; miss ejecuta el pipeline existente,
+        elige modo (delegado a `app/pcl/modes.py`), cachea y registra FAT F4.
+
+        Devuelve `(RespuestaCCP, extras)`. El coordinator NO decide modo: delega en
+        la fachada, preservando los 8 pipelines de B8 (solo cambia su invocación).
+        """
+        return self._get_pcl().consultar_o_cachear(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            pregunta=ctx.pregunta or "",
+            contexto=contexto,
+            clasificacion=clasificacion,
+            ejecutar=lambda: self.ejecutar_pipeline(clasificacion, ctx),
+            gobernanza=gobernanza,
+            actor=actor,
+        )
 
     def ejecutar_pipeline(self, clasificacion, ctx) -> tuple:
         """

@@ -243,7 +243,10 @@ class MasterOrchestrator:
                 razon=decision.razon_codigo, escalar=decision.escalar_a_revisor,
             )
 
-        # 3. Ejecución del pipeline del tipo clasificado.
+        # 3. Ejecución del pipeline del tipo clasificado, A TRAVÉS de la CCP/PCL:
+        #    el coordinator delega en la fachada (caché semántico + retrieval-first
+        #    vs synthesis-first + instrumentación FAT F4). El cache hit NO bypasea
+        #    gobernanza: se re-evalúa el gate antes de servir (doc CCP §5.4).
         ctx_pipe = ContextoPipeline(
             tenant_id=ctx.tenant_id,
             pregunta=req.texto or "",
@@ -254,7 +257,32 @@ class MasterOrchestrator:
             session_id=ctx.session_id,
             params=dict(payload.get("params") or {}),
         )
-        envelope, extras = self.pipeline_coordinator.ejecutar_pipeline(clasificacion, ctx_pipe)
+        contexto_cache = {
+            "token_qr": payload.get("token_qr"),
+            "entidad_id": payload.get("entidad_id"),
+            "tipo_documento": payload.get("tipo_documento"),
+            "par_linguistico": ctx.par_linguistico,
+        }
+
+        def _reevaluar_gobernanza():
+            return self.governance_gate.evaluate(
+                permiso_requerido=None,
+                permisos=ctx.permisos,
+                score_confianza=payload.get("score_confianza"),
+                segmento_critico=bool(payload.get("segmento_critico", False)),
+                criticidad=payload.get("criticidad"),
+            )
+
+        respuesta_ccp, extras = self.pipeline_coordinator.consultar_o_cachear(
+            clasificacion=clasificacion,
+            ctx=ctx_pipe,
+            tenant_id=ctx.tenant_id,
+            user_id=ctx.user_id,
+            contexto=contexto_cache,
+            gobernanza=_reevaluar_gobernanza,
+            actor=actor,
+        )
+        envelope = respuesta_ccp.payload
 
         # 4. Alertas en cuarentena (Tipo 7, línea ABSOLUTA): GRG + FAT F6, JAMÁS
         #    servidas al operador.

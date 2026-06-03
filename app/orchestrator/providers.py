@@ -125,6 +125,35 @@ def get_perfil_provider():
     return SupabasePerfilProvider()
 
 
+def get_pcl_metrics():
+    """
+    Instrumentación PCL de producción (B8.5): agregados en `pcl_metrics_daily` y
+    lectura de eventos FAT F4 desde el store híbrido. Los tests la sustituyen por
+    backends en memoria.
+    """
+    from app.audit.fat_extendido import FATExtendido
+    from app.audit.stores import HybridFATStore
+    from app.pcl.pcl_metrics import PCLMetrics, SupabasePCLMetricsStore
+
+    return PCLMetrics(store=SupabasePCLMetricsStore(), fat=FATExtendido(HybridFATStore()))
+
+
+def get_pcl():
+    """
+    Fachada PCL de producción (B8.5): caché semántico (Redis + BGE-M3),
+    instrumentación (FAT F4 + `pcl_metrics_daily`) y orquestación de Playbooks. Los
+    endpoints la inyectan vía Depends; los tests la sustituyen.
+    """
+    from app.pcl.pcl_cache import PCLCache, SupabaseCacheConfigProvider
+    from app.pcl.pcl_facade import PCL
+
+    return PCL(
+        cache=PCLCache(config_provider=SupabaseCacheConfigProvider()),
+        metrics=get_pcl_metrics(),
+        playbook_services=get_playbook_services(),
+    )
+
+
 def get_playbook_services():
     """
     Bundle de servicios de Playbooks (Niveles A/B/C) sobre el almacén de

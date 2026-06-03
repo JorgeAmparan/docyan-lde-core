@@ -92,6 +92,44 @@ def patrones_edb_job() -> dict:
     }
 
 
+def pcl_metrics_aggregation_job() -> dict:
+    """
+    `pcl_metrics_aggregation` (diaria, 03:00h) — agrega las métricas CCP/PCL del
+    día anterior por DoCo (B8.5 §6, doc §7.2). Lee eventos FAT F4 `consulta_servida`
+    y materializa `pcl_metrics_daily`. Un DoCo que falla no tumba el barrido.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.orchestrator import providers
+
+    metrics = providers.get_pcl_metrics()
+    playbooks = providers.get_playbook_store()
+    tenants = providers.tenants_vivos()
+    # UTC: los timestamps del FAT son UTC; el "día anterior" debe medirse en UTC
+    # para no perder/duplicar eventos en el cruce de medianoche local.
+    fecha_ayer = datetime.now(timezone.utc).date() - timedelta(days=1)
+    procesados = 0
+    for tenant_id in tenants:
+        try:
+            metrics.agregar_diario(tenant_id, fecha_ayer, sugerencias_store=playbooks)
+            procesados += 1
+        except Exception as exc:  # noqa: BLE001 — un DoCo no debe tumbar el barrido.
+            logger.warning(
+                "pcl_metrics_aggregation: tenant %s falló: %s", tenant_id, type(exc).__name__
+            )
+    logger.info(
+        "pcl_metrics_aggregation: %d/%d DoCo(s) agregados para %s",
+        procesados, len(tenants), fecha_ayer,
+    )
+    return {
+        "evaluado": True,
+        "tipo": "pcl_metrics_aggregation",
+        "fecha": fecha_ayer.isoformat(),
+        "tenants": len(tenants),
+        "procesados": procesados,
+    }
+
+
 def fat_retention_job() -> dict:
     """
     Rutina de retención del FAT por familia (decisión #12 / doc 08, B7).
@@ -131,6 +169,7 @@ DEFAULT_JOBS: tuple[JobSpec, ...] = (
     JobSpec("reportes_pms", reportes_pms_job, "cron", {"day_of_week": "mon", "hour": 7}),
     JobSpec("patrones_edb", patrones_edb_job, "cron", {"hour": 5}),
     JobSpec("fat_retention", fat_retention_job, "cron", {"day_of_week": "sun", "hour": 4}),
+    JobSpec("pcl_metrics_aggregation", pcl_metrics_aggregation_job, "cron", {"hour": 3}),
 )
 
 

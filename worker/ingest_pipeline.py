@@ -222,6 +222,12 @@ class IngestPipeline:
             except Exception:  # noqa: BLE001 — el conteo de uso no debe tumbar la ingesta
                 logger.warning("no se pudo marcar uso del schema %s", schema.tipo_documento)
 
+        # B8.5 — invalidación viva del caché semántico (doc CCP §5.3): al cerrar una
+        # ingesta exitosa, las entradas del caché atadas a las entidades modificadas
+        # (incluido el documento recién ingestado) se invalidan. NO se borra el caché
+        # entero: solo lo afectado. Best-effort: el caché es optimización, no gate.
+        invalidadas = self._invalidar_cache(job.tenant_id, ingest_result, job.job_id)
+
         # Campos del IngestionResult del SDK (como reporta el PoC).
         return {
             "tipo_documento": schema.tipo_documento if schema else None,
@@ -231,5 +237,31 @@ class IngestPipeline:
             "chunks_indexados": getattr(ingest_result, "chunks_indexed", None),
             "duplicados_resueltos": duplicados_resueltos,
             "modelo_extraccion": modelo_usado,
+            "cache_invalidadas": invalidadas,
             "metadata": getattr(ingest_result, "metadata", {}),
         }
+
+    @staticmethod
+    def _entidades_modificadas(ingest_result, document_id: str) -> list[str]:
+        """
+        IDs de entidades cuyo estado en el DKG cambió con esta ingesta. El documento
+        recién ingestado (`document_id`) siempre cuenta; el SDK puede reportar más en
+        `entity_ids`/`affected_entities` (se incluyen si los expone).
+        """
+        ids = {document_id}
+        for attr in ("entity_ids", "affected_entities", "updated_entities"):
+            extra = getattr(ingest_result, attr, None)
+            if extra:
+                ids.update(str(e) for e in extra)
+        return sorted(ids)
+
+    def _invalidar_cache(self, tenant_id: str, ingest_result, document_id: str) -> int:
+        """Invalida las entradas del caché PCL afectadas. Best-effort (doc §5.3)."""
+        try:
+            from app.pcl.pcl_cache import PCLCache
+
+            entidades = self._entidades_modificadas(ingest_result, document_id)
+            return PCLCache().invalidate_by_entities(tenant_id, entidades)
+        except Exception as exc:  # noqa: BLE001 — el caché no es gate de la ingesta
+            logger.warning("no se pudo invalidar el caché PCL: %s", type(exc).__name__)
+            return 0

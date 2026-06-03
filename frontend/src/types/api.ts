@@ -600,6 +600,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/pcl/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pcl Metrics
+         * @description Métricas agregadas de la CCP/PCL del DoCo del admin (B8.5, doc §7.3): hit rate
+         *     del caché, costo por consulta, distribución de modos, latencias.
+         *
+         *     Multi-tenant ABSOLUTO: scope-a por el `org_id` del admin logueado (mismo patrón
+         *     que `/admin/fat/integrity`); NO acepta un `tenant_id` arbitrario por query.
+         */
+        get: operations["pcl_metrics_admin_pcl_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/qr/generate": {
         parameters: {
             query?: never;
@@ -1300,6 +1324,7 @@ export interface components {
             degradado: boolean;
             /** Nota */
             nota?: string | null;
+            contexto_ccp?: components["schemas"]["ContextoRespuestaCCP"] | null;
         };
         /** ConsultasGuardadasList */
         ConsultasGuardadasList: {
@@ -1310,6 +1335,36 @@ export interface components {
              * @default false
              */
             termino_playbook_disponible: boolean;
+        };
+        /**
+         * ContextoRespuestaCCP
+         * @description Metadatos de la Capa de Contexto Persistente (CCP/PCL) para una respuesta de
+         *     consulta (B8.5). Surface del modo de respuesta + economía hacia el frontend
+         *     (B9 los muestra; el endpoint admin los agrega). NO duplica el payload: lo
+         *     acompaña. Doc CCP §4.3 / §7.1.
+         */
+        ContextoRespuestaCCP: {
+            /** Modo Respuesta */
+            modo_respuesta: string;
+            /**
+             * Costo Estimado Centavos
+             * @default 0
+             */
+            costo_estimado_centavos: number;
+            /**
+             * Latencia Ms
+             * @default 0
+             */
+            latencia_ms: number;
+            /**
+             * Cache Hit
+             * @default false
+             */
+            cache_hit: boolean;
+            /** Similitud Cache */
+            similitud_cache?: number | null;
+            /** Dkg State Hash */
+            dkg_state_hash?: string | null;
         };
         /** CrearPlaybookRequest */
         CrearPlaybookRequest: {
@@ -1601,6 +1656,148 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * MetricasCCP
+         * @description Respuesta de `GET /admin/pcl/metrics` (doc §7.3).
+         */
+        MetricasCCP: {
+            /** Tenant Id */
+            tenant_id: string;
+            /** Ventana */
+            ventana: [
+                string,
+                string
+            ];
+            /** Dias */
+            dias?: components["schemas"]["MetricasDiaCCP"][];
+            totales?: components["schemas"]["MetricasCCPTotales"];
+        };
+        /**
+         * MetricasCCPTotales
+         * @description Agregado de toda la ventana (suma/promedio sobre los días). Para pricing.
+         */
+        MetricasCCPTotales: {
+            /**
+             * Consultas Totales
+             * @default 0
+             */
+            consultas_totales: number;
+            /**
+             * Consultas Cache Hit
+             * @default 0
+             */
+            consultas_cache_hit: number;
+            /**
+             * Consultas Retrieval First
+             * @default 0
+             */
+            consultas_retrieval_first: number;
+            /**
+             * Consultas Synthesis First
+             * @default 0
+             */
+            consultas_synthesis_first: number;
+            /**
+             * Costo Total Centavos
+             * @default 0
+             */
+            costo_total_centavos: number;
+            /**
+             * Costo Promedio Por Consulta
+             * @default 0
+             */
+            costo_promedio_por_consulta: number;
+            /**
+             * Cache Hit Ratio
+             * @default 0
+             */
+            cache_hit_ratio: number;
+            /**
+             * Retrieval First Ratio
+             * @default 0
+             */
+            retrieval_first_ratio: number;
+            /**
+             * Synthesis First Ratio
+             * @default 0
+             */
+            synthesis_first_ratio: number;
+        };
+        /**
+         * MetricasDiaCCP
+         * @description Una fila de `pcl_metrics_daily` (un DoCo, un día). Doc §7.2.
+         */
+        MetricasDiaCCP: {
+            /**
+             * Fecha
+             * Format: date
+             */
+            fecha: string;
+            /**
+             * Consultas Totales
+             * @default 0
+             */
+            consultas_totales: number;
+            /**
+             * Consultas Cache Hit
+             * @default 0
+             */
+            consultas_cache_hit: number;
+            /**
+             * Consultas Retrieval First
+             * @default 0
+             */
+            consultas_retrieval_first: number;
+            /**
+             * Consultas Synthesis First
+             * @default 0
+             */
+            consultas_synthesis_first: number;
+            /**
+             * Costo Total Centavos
+             * @default 0
+             */
+            costo_total_centavos: number;
+            /**
+             * Costo Promedio Por Consulta
+             * @default 0
+             */
+            costo_promedio_por_consulta: number;
+            /**
+             * Costo Promedio Por Consulta Unica
+             * @default 0
+             */
+            costo_promedio_por_consulta_unica: number;
+            /**
+             * Latencia P50 Ms
+             * @default 0
+             */
+            latencia_p50_ms: number;
+            /**
+             * Latencia P95 Ms
+             * @default 0
+             */
+            latencia_p95_ms: number;
+            /** Top Patrones Detectados */
+            top_patrones_detectados?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Sugerencias Emitidas
+             * @default 0
+             */
+            sugerencias_emitidas: number;
+            /**
+             * Sugerencias Aceptadas
+             * @default 0
+             */
+            sugerencias_aceptadas: number;
+            /**
+             * Sugerencias Rechazadas
+             * @default 0
+             */
+            sugerencias_rechazadas: number;
         };
         /** ObservacionRequest */
         ObservacionRequest: {
@@ -2881,6 +3078,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    pcl_metrics_admin_pcl_metrics_get: {
+        parameters: {
+            query?: {
+                /** @description Inicio de la ventana (default: hace 30 días). */
+                desde?: string | null;
+                /** @description Fin de la ventana (default: hoy). */
+                hasta?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricasCCP"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
