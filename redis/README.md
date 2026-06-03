@@ -52,7 +52,11 @@ cd ..
 # Apuntar backend y worker a este Redis (red privada Fly):
 flyctl secrets set REDIS_URL="redis://docyan-lde-redis.internal:6379/1" \
   REDIS_QUEUE_URL="redis://docyan-lde-redis.internal:6379/0" --app docyan-lde-api
+# B8.5: el worker NECESITA REDIS_URL (db 1) además de la cola (db 0) para la
+# invalidación viva del caché PCL (doc CCP §5.3): al terminar una ingesta invalida
+# las entradas de caché afectadas en el MISMO Redis/db que escribe el backend.
 flyctl secrets set REDIS_QUEUE_URL="redis://docyan-lde-redis.internal:6379/0" \
+  REDIS_URL="redis://docyan-lde-redis.internal:6379/1" \
   --app docyan-lde-ingest
 ```
 

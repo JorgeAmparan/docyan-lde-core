@@ -73,6 +73,7 @@ flyctl secrets set \
   FALKOR_PORT="6379" \
   EMBEDDER_URL="http://docyan-lde-embedder.internal:8000" \
   REDIS_QUEUE_URL="redis://docyan-lde-redis.internal:6379/0" \
+  REDIS_URL="redis://docyan-lde-redis.internal:6379/1" \
   SUPABASE_URL="<tu-supabase-url>" \
   SUPABASE_SERVICE_KEY="<tu-supabase-service-key>" \
   INGEST_STORAGE_BUCKET="ingest-tmp" \
