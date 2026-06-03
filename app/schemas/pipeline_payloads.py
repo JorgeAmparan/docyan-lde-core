@@ -261,6 +261,22 @@ PipelinePayload = Annotated[
 ]
 
 
+class ContextoRespuestaCCP(_Base):
+    """
+    Metadatos de la Capa de Contexto Persistente (CCP/PCL) para una respuesta de
+    consulta (B8.5). Surface del modo de respuesta + economía hacia el frontend
+    (B9 los muestra; el endpoint admin los agrega). NO duplica el payload: lo
+    acompaña. Doc CCP §4.3 / §7.1.
+    """
+
+    modo_respuesta: str  # retrieval_first | synthesis_first | cache_hit
+    costo_estimado_centavos: float = 0.0
+    latencia_ms: int = 0
+    cache_hit: bool = False
+    similitud_cache: float | None = None
+    dkg_state_hash: str | None = None
+
+
 class ConsultaResuelta(_Base):
     """
     Envelope que el MO devuelve para una consulta clasificada (`POST /mo/query`).
@@ -280,3 +296,6 @@ class ConsultaResuelta(_Base):
     # vez de fingir contenido o romper el contrato (CLAUDE.md §2.2).
     degradado: bool = False
     nota: str | None = None
+    # B8.5 — metadatos CCP/PCL (modo, costo, caché). La fachada PCL los adjunta;
+    # opcional para no romper a quien componga el envelope sin pasar por la CCP.
+    contexto_ccp: ContextoRespuestaCCP | None = None

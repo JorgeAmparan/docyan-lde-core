@@ -44,6 +44,7 @@ MIGRATION_FILES = [
     "012_qr_tokens.sql",
     "013_fat_hash_chain.sql",
     "014_playbooks.sql",
+    "015_pcl_metrics.sql",
 ]
 
 # (tabla, columnas clave que el código de la app referencia)
@@ -89,6 +90,15 @@ NEW_TABLES = {
                              "evidencia_conductual", "estado", "decidido_at"],
     "patrones_rechazados_por_usuario": ["id", "tenant_id", "user_id", "firma_patron",
                                         "conteo_rechazos", "ultimo_rechazo_at"],
+    # B8.5 — CCP/PCL (015): métricas agregadas + configuración del caché por DoCo.
+    "pcl_metrics_daily": ["id", "tenant_id", "fecha", "consultas_totales",
+                          "consultas_cache_hit", "consultas_retrieval_first",
+                          "consultas_synthesis_first", "costo_total_centavos",
+                          "costo_promedio_por_consulta", "costo_promedio_por_consulta_unica",
+                          "latencia_p50_ms", "latencia_p95_ms", "top_patrones_detectados",
+                          "sugerencias_emitidas", "sugerencias_aceptadas",
+                          "sugerencias_rechazadas"],
+    "pcl_cache_config": ["tenant_id", "umbral_similitud", "ttl_segundos", "updated_at"],
 }
 
 DEFAULT_URL = "postgresql://postgres:test@localhost:55432/docyan_test"
@@ -131,12 +141,13 @@ def test_all_migrations_apply_cleanly(clean_db):
             "SELECT count(*) FROM information_schema.tables "
             "WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
         )
-        # 20 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
+        # 22 tablas: users, refresh_tokens + 6 (002-007) + tenant_budget +
         # tenant_schemas + dtm_projects + sessions_completed (011) + qr_tokens (012)
         # + fat_retention_policy + configuracion_grg (013) + Playbooks (014):
         # consultas_guardadas, playbooks, playbook_pasos, sugerencias_playbook,
-        # patrones_rechazados_por_usuario.
-        assert cur.fetchone()[0] == 20
+        # patrones_rechazados_por_usuario + CCP/PCL (015): pcl_metrics_daily,
+        # pcl_cache_config.
+        assert cur.fetchone()[0] == 22
 
 
 @pytest.mark.parametrize("table", sorted(NEW_TABLES.keys()))

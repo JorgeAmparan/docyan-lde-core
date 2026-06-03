@@ -56,10 +56,57 @@ class EmptyPipelineReader:
         return {"izquierda": {}, "derecha": {}}
 
 
+class FakeEmbedder:
+    """Embedder determinista para tests (sin BGE-M3): texto normalizado → vector.
+
+    Mismo texto → mismo vector (coseno 1.0 ≥ umbral → hit); textos distintos →
+    vectores distintos. No imita la semántica de BGE-M3, solo su contrato `embed`.
+    """
+
+    DIMS = 16
+
+    def embed(self, text: str) -> list[float]:
+        import hashlib
+
+        h = hashlib.sha256((text or "").encode("utf-8")).digest()
+        return [b / 255.0 for b in h[: self.DIMS]]
+
+
+def make_inmemory_pcl(state_hasher=None):
+    """Construye una fachada PCL 100% en memoria (B8.5) + el FAT que la respalda.
+
+    Devuelve (pcl, fat): `fat` es un FATExtendido(InMemoryFATStore) compartido por
+    la instrumentación de la fachada y por las métricas, de modo que `agregar_diario`
+    relea los eventos `consulta_servida` que la fachada escribe. `state_hasher`
+    (default constante) controla la validez del caché vivo: pásalo derivado del
+    estado del grafo para verificar invalidación viva."""
+    from app.audit.fat_extendido import FATExtendido, InMemoryFATStore
+    from app.orchestrator.audit_logger import AuditLogger, FATAuditSink
+    from app.pcl.pcl_cache import InMemoryCacheBackend, PCLCache
+    from app.pcl.pcl_facade import PCL
+    from app.pcl.pcl_metrics import InMemoryPCLMetricsStore, PCLMetrics
+
+    fat = FATExtendido(InMemoryFATStore())
+    cache = PCLCache(
+        backend=InMemoryCacheBackend(),
+        embedder=FakeEmbedder(),
+        state_hasher=state_hasher or (lambda tenant_id, entidades: "stable"),
+    )
+    metrics = PCLMetrics(store=InMemoryPCLMetricsStore(), fat=fat)
+    pcl = PCL(
+        cache=cache, metrics=metrics, fat=fat,
+        audit=AuditLogger(sink=FATAuditSink(fat=fat)),
+    )
+    return pcl, fat
+
+
 def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None):
     """Construye un MasterOrchestrator 100% en memoria (B8): clasificador real
     (heurística pura, sin LLM), pipelines sobre un reader sintético, sesiones y
-    FAT en memoria. Devuelve (mo, audit_sink)."""
+    FAT en memoria. La consulta pasa por la fachada PCL en memoria (B8.5: caché +
+    modo + instrumentación). Devuelve (mo, audit_sink)."""
+    import hashlib
+
     from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
     from app.ingesta.cotizador import Cotizador
     from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
@@ -74,10 +121,23 @@ def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None
 
     budget_store = InMemoryBudgetStore()
     BudgetManager(store=budget_store).ensure_budget(tenant, saldo_inicial_usd=saldo)
+    the_reader = reader or EmptyPipelineReader()
+
+    # State hasher derivado del estado mutable del reader: garantiza la "consulta
+    # viva" en tests sin DKG (cuando el reader cambia, el state hash cambia → el
+    # caché se invalida y se re-evalúa). En producción el state hash lo da el DKG
+    # (dkg_state_hash por entidad). Un reader sin estado (EmptyPipelineReader) da
+    # un hash constante → el caché funciona normal para los tests de cache hit.
+    def _reader_state(tenant_id, entidades):
+        estado = repr(sorted(getattr(the_reader, "__dict__", {}).items()))
+        return hashlib.sha256(estado.encode("utf-8")).hexdigest()
+
+    pcl, _ = make_inmemory_pcl(state_hasher=_reader_state)
     coord = PipelineCoordinator(
         cotizador=Cotizador(budget_manager=BudgetManager(store=budget_store)),
         dispatcher=JobDispatcher(backend=InMemoryQueueBackend()),
-        graph_reader=reader or EmptyPipelineReader(),
+        graph_reader=the_reader,
+        pcl=pcl,
     )
     sink = InMemoryAuditSink()
     mo = MasterOrchestrator(
