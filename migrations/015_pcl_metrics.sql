@@ -17,7 +17,10 @@
 
 -- ── Métricas agregadas por DoCo/día ─────────────────────────────────────────
 CREATE TABLE pcl_metrics_daily (
-    id TEXT PRIMARY KEY,
+    -- id con default en DB: la fila se hace UPSERT por (tenant_id, fecha) desde el
+    -- agregador (no se provee id); el default lo genera en el INSERT y permanece
+    -- estable en el UPDATE. gen_random_uuid() es nativo en PG13+ (Supabase = PG15).
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     tenant_id TEXT NOT NULL,
     fecha DATE NOT NULL,
     consultas_totales INTEGER NOT NULL DEFAULT 0,
