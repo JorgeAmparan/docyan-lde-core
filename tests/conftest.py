@@ -105,6 +105,8 @@ def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None
     (heurística pura, sin LLM), pipelines sobre un reader sintético, sesiones y
     FAT en memoria. La consulta pasa por la fachada PCL en memoria (B8.5: caché +
     modo + instrumentación). Devuelve (mo, audit_sink)."""
+    import hashlib
+
     from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
     from app.ingesta.cotizador import Cotizador
     from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
@@ -116,8 +118,6 @@ def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None
         InMemorySessionStore,
         SessionManager,
     )
-
-    import hashlib
 
     budget_store = InMemoryBudgetStore()
     BudgetManager(store=budget_store).ensure_budget(tenant, saldo_inicial_usd=saldo)
