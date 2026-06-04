@@ -1,0 +1,11 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DOCYAN mark">
+  
+  <g stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M13 23 V13 H23"></path>
+    <path d="M41 13 H51 V23"></path>
+    <path d="M51 41 V51 H41"></path>
+    <path d="M23 51 H13 V41"></path>
+  </g>
+  
+  <rect x="25.5" y="25.5" width="13" height="13" rx="3" fill="#CF4124"></rect>
+</svg>

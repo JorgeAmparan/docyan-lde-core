@@ -1,0 +1,9 @@
+/* Shared scaffold for Design System preview cards (~700px wide). Minimal, direct. */
+body{margin:0;font-family:var(--font-sans);background:var(--surface);color:var(--fg);padding:22px 24px;-webkit-font-smoothing:antialiased;}
+.row{display:flex;gap:10px;align-items:flex-start;}
+.col{display:flex;flex-direction:column;}
+.sw{flex:1;min-width:0;}
+.chip{height:72px;border-radius:var(--radius-md);border:1px solid rgba(0,0,0,.06);}
+.name{font-family:var(--font-mono);font-size:11px;color:var(--fg-muted);margin-top:8px;letter-spacing:.01em;}
+.hex{font-family:var(--font-mono);font-size:11px;color:var(--fg-subtle);margin-top:2px;text-transform:uppercase;}
+.eyebrow{font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-subtle);}
