@@ -1,0 +1,39 @@
+{
+  "tagline": "Live Document Environment by XCID",
+  "nav": {
+    "producto": "Producto",
+    "precios": "Precios",
+    "verticales": "Verticales",
+    "comoFunciona": "Cómo funciona",
+    "seguridad": "Seguridad",
+    "acerca": "Acerca",
+    "soporte": "Soporte",
+    "estado": "Estado",
+    "entrar": "Entrar",
+    "empezar": "Empezar"
+  },
+  "actions": {
+    "verPrecios": "Ver precios",
+    "agendarDemo": "Agendar demo",
+    "empezar": "Empezar",
+    "hablarVentas": "Hablar con ventas",
+    "continuar": "Continuar",
+    "atras": "Atrás",
+    "guardar": "Guardar",
+    "cancelar": "Cancelar",
+    "confirmar": "Confirmar",
+    "cerrar": "Cerrar",
+    "buscar": "Buscar"
+  },
+  "footer": {
+    "producto": "Producto",
+    "empresa": "Empresa",
+    "legal": "Legal",
+    "rights": "XCID SA de CV. Todos los derechos reservados.",
+    "estado": "Estado",
+    "operational": "Sistemas operativos"
+  },
+  "lang": { "label": "Idioma", "es": "Español", "en": "English" },
+  "region": { "label": "Región" },
+  "theme": { "light": "Claro", "dark": "Oscuro" }
+}

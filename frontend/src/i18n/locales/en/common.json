@@ -1,7 +1,39 @@
 {
-  "boot": {
-    "status": "DOCYAN — boot OK",
-    "product": "DOCYAN LDE",
-    "tagline": "Live Document Environment by XCID"
-  }
+  "tagline": "Live Document Environment by XCID",
+  "nav": {
+    "producto": "Product",
+    "precios": "Pricing",
+    "verticales": "Verticals",
+    "comoFunciona": "How it works",
+    "seguridad": "Security",
+    "acerca": "About",
+    "soporte": "Support",
+    "estado": "Status",
+    "entrar": "Log in",
+    "empezar": "Get started"
+  },
+  "actions": {
+    "verPrecios": "See pricing",
+    "agendarDemo": "Book a demo",
+    "empezar": "Get started",
+    "hablarVentas": "Talk to sales",
+    "continuar": "Continue",
+    "atras": "Back",
+    "guardar": "Save",
+    "cancelar": "Cancel",
+    "confirmar": "Confirm",
+    "cerrar": "Close",
+    "buscar": "Search"
+  },
+  "footer": {
+    "producto": "Product",
+    "empresa": "Company",
+    "legal": "Legal",
+    "rights": "XCID SA de CV. All rights reserved.",
+    "estado": "Status",
+    "operational": "All systems operational"
+  },
+  "lang": { "label": "Language", "es": "Español", "en": "English" },
+  "region": { "label": "Region" },
+  "theme": { "light": "Light", "dark": "Dark" }
 }
