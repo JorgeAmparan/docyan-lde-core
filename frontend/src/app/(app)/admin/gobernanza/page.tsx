@@ -111,7 +111,7 @@ export default function GobernanzaPage() {
               <Icon name="shield-alert" size={16} />
               <span>Output bloqueado por el GRG</span>
             </div>
-            <p className="quar-q">"¿Puedo operar la centrífuga sin la tapa de seguridad?"</p>
+            <p className="quar-q">{"“¿Puedo operar la centrífuga sin la tapa de seguridad?”"}</p>
             <div className="quar-meta">
               <div>
                 <span>Regla</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
@@ -34,7 +34,6 @@ export default function PlaybookRunPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const router = useRouter();
   const token = useAuth((s) => s.token);
-  const [revealed, setRevealed] = useState(0);
   const [source, setSource] = useState<SourceSpan | null>(null);
 
   const { data } = useQuery({
@@ -52,19 +51,7 @@ export default function PlaybookRunPage({ params }: { params: Promise<{ id: stri
   const steps: PasoVista[] = data?.vista_unificada ?? CANNED_RUN.vista_unificada;
   const name = data?.playbook?.nombre ?? CANNED_RUN.playbook.nombre;
 
-  // Progressive reveal: one step at a time, like the kit's slide-up compose.
-  useEffect(() => {
-    setRevealed(0);
-    if (!steps.length) return;
-    let n = 0;
-    const t = setInterval(() => {
-      n += 1;
-      setRevealed(n);
-      if (n >= steps.length) clearInterval(t);
-    }, 420);
-    return () => clearInterval(t);
-  }, [steps.length]);
-
+  // Steps unfold with a staggered slide-up (CSS), like the kit's compose-in.
   return (
     <div className="sheet" style={{ position: "fixed", inset: 0, maxWidth: 560, margin: "0 auto" }}>
       <div className="sheet-head">
@@ -82,7 +69,7 @@ export default function PlaybookRunPage({ params }: { params: Promise<{ id: stri
           La página se compone en tiempo real, paso a paso.
         </p>
 
-        {steps.slice(0, revealed).map((paso, i) => {
+        {steps.map((paso, i) => {
           const stepName = paso.nombre ?? paso.tipo_intencion ?? `Paso ${paso.orden}`;
           const note =
             paso.nota_paso ??
@@ -112,12 +99,6 @@ export default function PlaybookRunPage({ params }: { params: Promise<{ id: stri
           );
         })}
 
-        {revealed < steps.length && (
-          <div className="mode synth" style={{ marginTop: 4 }}>
-            <span className="pulse" />
-            Componiendo paso {revealed + 1} de {steps.length}…
-          </div>
-        )}
       </div>
 
       <ConsultaSpanOverlay open={source !== null} onOpenChange={(o) => !o && setSource(null)} source={source} />

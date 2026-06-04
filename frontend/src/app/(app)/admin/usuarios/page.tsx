@@ -153,7 +153,7 @@ export default function UsuariosPage() {
         ))}
         <div className="manual-note" style={{ marginTop: 14 }}>
           <Icon name="settings" size={15} />
-          Por usuario: par lingüístico default, variante regional, permiso de IA proactiva y "silenciar sugerencias".
+          Por usuario: par lingüístico default, variante regional, permiso de IA proactiva y “silenciar sugerencias”.
         </div>
       </div>
 
