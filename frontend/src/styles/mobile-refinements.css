@@ -1,0 +1,86 @@
+/* ============================================================================
+   DOCYAN — Mobile refinements (authored, not from the bundle).
+   The ported kit CSS targets desktop + a 920px breakpoint; these tighten the
+   commercial/landing surfaces for real phones (≤768 / ≤480). Imported LAST in
+   globals.css so it overrides. Scoped to public/commercial classes — the
+   collaborator consult PWA is already mobile-first.
+============================================================================ */
+
+@media (max-width: 768px) {
+  /* breathing room: less side padding on phones */
+  .wrap { padding-left: 20px; padding-right: 20px; }
+
+  /* sections compress vertically */
+  section.band { padding: 44px 0; }
+
+  /* headings scale down so they never overflow */
+  .hero h1, .hero-copy h1 { font-size: 33px; line-height: 1.08; }
+  .hero .sub { font-size: 16px; max-width: none; }
+  .hero { padding: 28px 0 40px; }
+  .sec-title { font-size: 26px; }
+  .sec-lead { font-size: 15px; }
+  .page-h1 { font-size: 32px; }
+  .pricing-head { padding: 36px 0 8px; }
+  .pricing-head h1 { font-size: 30px; }
+
+  /* nav: keep brand + the primary CTA; drop the secondary controls that
+     overflow a phone row (region/language live in the footer + pricing bar). */
+  .nav { padding: 11px 16px; gap: 8px; }
+  .nav .brand { font-size: 17px; }
+  .nav .right { gap: 8px; }
+  .nav .right .region { display: none; }
+  .nav .btn { height: 38px; padding: 0 12px; font-size: 13px; }
+  .nav .btn.ghost { padding: 0 8px; }
+
+  /* hero brand lockup wraps gracefully */
+  .hero-brand { flex-wrap: wrap; gap: 8px; }
+
+  /* demo-CoDo explorer cards: one per row on phones */
+  .demo-grid { grid-template-columns: 1fr; }
+
+  /* governance / levels / moat already stack at 920; keep arrows compact */
+  .gov-close { font-size: 14px; }
+
+  /* pricing comparison table: shrink to fit, allow horizontal scroll as fallback */
+  .cmp { font-size: 12px; display: block; overflow-x: auto; white-space: nowrap; }
+  .cmp th, .cmp td { padding: 9px 8px; }
+
+  /* footer: two columns is fine, tighten the bottom row */
+  .footer { padding: 36px 0 28px; }
+  .footer .fbottom { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .footer .fbottom .sp { margin-left: 0; flex-wrap: wrap; }
+
+  /* signup / account cards full-bleed-ish */
+  .auth { padding: 28px 0; }
+  .card { padding: 20px; }
+
+  /* demo explorer page header wraps instead of overflowing */
+  .dc-head { flex-wrap: wrap; gap: 10px; }
+  .dc-tag { margin-left: 0; }
+  .demo-banner { font-size: 12.5px; padding: 10px 16px; }
+
+  /* CTAs stack full width so they're thumb-friendly */
+  .hero .cta { flex-direction: column; align-items: stretch; }
+  .hero .cta .btn { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 480px) {
+  .wrap { padding-left: 16px; padding-right: 16px; }
+  .hero h1, .hero-copy h1 { font-size: 29px; }
+  .sec-title { font-size: 23px; }
+  .page-h1 { font-size: 28px; }
+
+  /* hero trust chips: tighter wrap */
+  .hero-trust { gap: 10px 14px; }
+
+  /* pricing region pills wrap snugly */
+  .region-bar { gap: 7px; }
+  .region-bar .rb { padding: 6px 11px; font-size: 12.5px; }
+
+  /* three-levels / how-it-works / verticals single column on tiny screens */
+  .steps3, .verts, .diffs, .levels { grid-template-columns: 1fr; }
+
+  /* account dashboard usage meters stack */
+  .usage { grid-template-columns: 1fr; }
+  .acct-main { padding: 20px; }
+}

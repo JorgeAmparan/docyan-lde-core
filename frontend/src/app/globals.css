@@ -5,6 +5,7 @@
 @import "../styles/kit-admin.css";
 @import "../styles/kit-commercial.css";
 @import "../styles/kit-landing-v2.css";
+@import "../styles/mobile-refinements.css";
 
 @tailwind base;
 @tailwind components;
