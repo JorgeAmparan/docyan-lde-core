@@ -1056,6 +1056,246 @@ export interface paths {
         patch: operations["actualizar_playbook_mo_playbooks__playbook_id__patch"];
         trace?: never;
     };
+    "/platform/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Platform Login */
+        post: operations["platform_login_platform_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Orgs */
+        get: operations["list_orgs_platform_orgs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/orgs/{org_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Org Metrics */
+        get: operations["org_metrics_platform_orgs__org_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs_platform_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/metrics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Metrics Summary */
+        get: operations["metrics_summary_platform_metrics_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/access-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Access Codes */
+        get: operations["list_access_codes_platform_access_codes_get"];
+        put?: never;
+        /** Create Access Code */
+        post: operations["create_access_code_platform_access_codes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/access-codes/{code}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Access Code */
+        post: operations["revoke_access_code_platform_access_codes__code__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Payments */
+        get: operations["list_payments_platform_payments_get"];
+        put?: never;
+        /** Create Payment */
+        post: operations["create_payment_platform_payments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/orgs/{org_id}/billing-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Billing Status */
+        get: operations["billing_status_platform_orgs__org_id__billing_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/support/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support Inbox */
+        get: operations["support_inbox_platform_support_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/support/threads/{thread_id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Support Reply */
+        post: operations["support_reply_platform_support_threads__thread_id__reply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access-codes/{code}/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Redeem Access Code */
+        post: operations["redeem_access_code_access_codes__code__redeem_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Thread */
+        post: operations["open_thread_support_threads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/threads/{thread_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Message */
+        post: operations["add_message_support_threads__thread_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -1111,6 +1351,36 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccessCodeList */
+        AccessCodeList: {
+            /** Items */
+            items: components["schemas"]["AccessCodeOut"][];
+            /** Total */
+            total: number;
+        };
+        /** AccessCodeOut */
+        AccessCodeOut: {
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /** Tipo */
+            tipo: string;
+            /** Cuota Documentos */
+            cuota_documentos: number;
+            /** Cuota Saldo Usd */
+            cuota_saldo_usd: number;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Status */
+            status: string;
+            /** Org Generada */
+            org_generada?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Redeemed At */
+            redeemed_at?: string | null;
+        };
         /** AceptarSugerenciaRequest */
         AceptarSugerenciaRequest: {
             /** Nombre */
@@ -1130,6 +1400,11 @@ export interface components {
             descripcion?: string | null;
             /** Pasos */
             pasos?: components["schemas"]["PasoPlaybookIn"][] | null;
+        };
+        /** AddMessageRequest */
+        AddMessageRequest: {
+            /** Cuerpo */
+            cuerpo: string;
         };
         /** AlertaItem */
         AlertaItem: {
@@ -1171,6 +1446,38 @@ export interface components {
             /** Citas */
             citas?: components["schemas"]["Cita"][];
         };
+        /** BillingStatus */
+        BillingStatus: {
+            /** Org Id */
+            org_id: string;
+            /**
+             * Plan
+             * @default piloto
+             */
+            plan: string;
+            /**
+             * Lifecycle Status
+             * @default active
+             */
+            lifecycle_status: string;
+            /** Next Billing Date */
+            next_billing_date?: string | null;
+            /**
+             * Pagos Registrados
+             * @default 0
+             */
+            pagos_registrados: number;
+            /**
+             * Total Pagado
+             * @default 0
+             */
+            total_pagado: number;
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
+        };
         /** Body_cotizar_documento_ingesta_documents_post */
         Body_cotizar_documento_ingesta_documents_post: {
             /** File */
@@ -1182,6 +1489,20 @@ export interface components {
         Body_procesar_documento_documents_process_post: {
             /** File */
             file: string;
+        };
+        /** BudgetMetrics */
+        BudgetMetrics: {
+            /** Saldo Actual Usd */
+            saldo_actual_usd?: number | null;
+            /** Hard Cap Por Documento */
+            hard_cap_por_documento?: number | null;
+            /** Hard Cap Por Sesion */
+            hard_cap_por_sesion?: number | null;
+            /**
+             * Moneda
+             * @default USD
+             */
+            moneda: string;
         };
         /**
          * Canal
@@ -1432,6 +1753,48 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** CreateAccessCodeRequest */
+        CreateAccessCodeRequest: {
+            /**
+             * Tipo
+             * @default piloto
+             */
+            tipo: string;
+            /**
+             * Cuota Documentos
+             * @default 0
+             */
+            cuota_documentos: number;
+            /**
+             * Cuota Saldo Usd
+             * @default 0
+             */
+            cuota_saldo_usd: number;
+            /**
+             * Dias Vigencia
+             * @default 30
+             */
+            dias_vigencia: number;
+        };
+        /** CreatePaymentRequest */
+        CreatePaymentRequest: {
+            /** Org Id */
+            org_id: string;
+            /** Monto */
+            monto: number;
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
+            /**
+             * Concepto
+             * @default suscripcion
+             */
+            concepto: string;
+            /** Nota */
+            nota?: string | null;
+        };
         /**
          * CruceSugerido
          * @description Cruce estructural a otro tipo de intención (doc 03). Permite a la UI ofrecer
@@ -1641,6 +2004,21 @@ export interface components {
              */
             render: boolean;
         };
+        /**
+         * GraphMetrics
+         * @description Tamaño del grafo como CONTEO (metadata), nunca su contenido.
+         */
+        GraphMetrics: {
+            /** Nodes */
+            nodes?: number | null;
+            /** Relationships */
+            relationships?: number | null;
+            /**
+             * Reachable
+             * @default true
+             */
+            reachable: boolean;
+        };
         /** GuardarConsultaRequest */
         GuardarConsultaRequest: {
             /** Nombre */
@@ -1723,6 +2101,36 @@ export interface components {
             canal: components["schemas"]["Canal"];
             /** Session Id */
             session_id?: string | null;
+        };
+        /** JobList */
+        JobList: {
+            /** Items */
+            items: components["schemas"]["JobSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * JobSummary
+         * @description Estado operativo de un job cross-org — metadata, sin contenido del documento.
+         */
+        JobSummary: {
+            /** Job Id */
+            job_id: string;
+            /** Org Id */
+            org_id: string;
+            /** Status */
+            status: string;
+            /** Phase */
+            phase?: string | null;
+            /**
+             * Pct
+             * @default 0
+             */
+            pct: number;
+            /** Nombre Archivo */
+            nombre_archivo?: string | null;
+            /** Tiempo Estimado Seg */
+            tiempo_estimado_seg?: number | null;
         };
         /** ListDocumentsRequest */
         ListDocumentsRequest: {
@@ -1914,6 +2322,78 @@ export interface components {
             /** Accion Resolutoria */
             accion_resolutoria?: string | null;
         };
+        /** OpenThreadRequest */
+        OpenThreadRequest: {
+            /** Pantalla Origen */
+            pantalla_origen?: string | null;
+            /** Mensaje */
+            mensaje: string;
+        };
+        /** OrgList */
+        OrgList: {
+            /** Items */
+            items: components["schemas"]["OrgSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * OrgMetrics
+         * @description Métricas por org — SOLO metadata agregada (sin contenido).
+         */
+        OrgMetrics: {
+            /** Org Id */
+            org_id: string;
+            /**
+             * Users
+             * @default 0
+             */
+            users: number;
+            /**
+             * Documentos Ingeridos
+             * @default 0
+             */
+            documentos_ingeridos: number;
+            /** Almacenamiento Bytes */
+            almacenamiento_bytes?: number | null;
+            /** Ingesta Tiempo Total Seg */
+            ingesta_tiempo_total_seg?: number | null;
+            /** Ingesta Tiempo Promedio Seg */
+            ingesta_tiempo_promedio_seg?: number | null;
+            /**
+             * Consultas Total
+             * @default 0
+             */
+            consultas_total: number;
+            grafo?: components["schemas"]["GraphMetrics"];
+            presupuesto?: components["schemas"]["BudgetMetrics"];
+        };
+        /**
+         * OrgSummary
+         * @description Fila de la lista de orgs — SOLO metadata.
+         */
+        OrgSummary: {
+            /** Org Id */
+            org_id: string;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Plan
+             * @default piloto
+             */
+            plan: string;
+            /**
+             * Lifecycle Status
+             * @default active
+             */
+            lifecycle_status: string;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Users
+             * @default 0
+             */
+            users: number;
+        };
         /** PasoPlaybookIn */
         PasoPlaybookIn: {
             /** Consulta Guardada Id */
@@ -1985,6 +2465,73 @@ export interface components {
             problemas_recurrentes?: string[];
             /** Observaciones Acumuladas */
             observaciones_acumuladas?: string[];
+        };
+        /** PaymentList */
+        PaymentList: {
+            /** Items */
+            items: components["schemas"]["PaymentOut"][];
+            /** Total */
+            total: number;
+        };
+        /** PaymentOut */
+        PaymentOut: {
+            /** Id */
+            id: string;
+            /** Org Id */
+            org_id: string;
+            /** Monto */
+            monto: number;
+            /** Moneda */
+            moneda: string;
+            /** Concepto */
+            concepto: string;
+            /** Fecha */
+            fecha?: string | null;
+            /** Nota */
+            nota?: string | null;
+            /** Registrado Por */
+            registrado_por?: string | null;
+        };
+        /** PlatformLoginRequest */
+        PlatformLoginRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** PlatformSummary */
+        PlatformSummary: {
+            /** Total Orgs */
+            total_orgs: number;
+            /** Total Usuarios */
+            total_usuarios: number;
+            /** Almacenamiento Total Bytes */
+            almacenamiento_total_bytes?: number | null;
+            /** Jobs Activos */
+            jobs_activos: number;
+            /** Ingresos Periodo */
+            ingresos_periodo: number;
+            /**
+             * Ingresos Moneda
+             * @default MXN
+             */
+            ingresos_moneda: string;
+        };
+        /** PlatformTokenResponse */
+        PlatformTokenResponse: {
+            /** Access Token */
+            access_token: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            /** Expires In */
+            expires_in: number;
+            /** Admin */
+            admin: {
+                [key: string]: unknown;
+            };
         };
         /** PlaybookOut */
         PlaybookOut: {
@@ -2065,6 +2612,35 @@ export interface components {
             session_id?: string | null;
             resultado: components["schemas"]["ConsultaResuelta"];
         };
+        /**
+         * RedeemAccessCodeRequest
+         * @description Canje (lado tenant): provisiona una org nueva. Alta controlada, NO cross-tenant.
+         */
+        RedeemAccessCodeRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Name */
+            name: string;
+            /** Org Name */
+            org_name: string;
+        };
+        /** RedeemAccessCodeResponse */
+        RedeemAccessCodeResponse: {
+            /** Org Id */
+            org_id: string;
+            /** User Id */
+            user_id: string;
+            /** Plan */
+            plan: string;
+            /** Cuota Documentos */
+            cuota_documentos: number;
+            /** Cuota Saldo Usd */
+            cuota_saldo_usd: number;
+            /** Expires At */
+            expires_at?: string | null;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
@@ -2109,6 +2685,16 @@ export interface components {
         RenombrarRequest: {
             /** Nombre */
             nombre: string;
+        };
+        /** ReplyThreadRequest */
+        ReplyThreadRequest: {
+            /** Cuerpo */
+            cuerpo: string;
+            /**
+             * Cerrar
+             * @default false
+             */
+            cerrar: boolean;
         };
         /** RevocarQrRequest */
         RevocarQrRequest: {
@@ -2239,6 +2825,52 @@ export interface components {
             created_at?: string | null;
             /** Decidido At */
             decidido_at?: string | null;
+        };
+        /** SupportMessageOut */
+        SupportMessageOut: {
+            /** Id */
+            id: string;
+            /** Thread Id */
+            thread_id: string;
+            /** Autor Tipo */
+            autor_tipo: string;
+            /** Autor Id */
+            autor_id?: string | null;
+            /** Cuerpo */
+            cuerpo: string;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** SupportThreadList */
+        SupportThreadList: {
+            /** Items */
+            items: components["schemas"]["SupportThreadOut"][];
+            /** Total */
+            total: number;
+        };
+        /** SupportThreadOut */
+        SupportThreadOut: {
+            /** Id */
+            id: string;
+            /** Org Id */
+            org_id: string;
+            /** User Id */
+            user_id?: string | null;
+            /** Pantalla Origen */
+            pantalla_origen?: string | null;
+            /** Estado */
+            estado: string;
+            /**
+             * Auto Respondible
+             * @default false
+             */
+            auto_respondible: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Mensajes */
+            mensajes?: components["schemas"]["SupportMessageOut"][];
         };
         /** TimelinePayload */
         TimelinePayload: {
@@ -4051,6 +4683,481 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaybookOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_login_platform_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTokenResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_orgs_platform_orgs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgList"];
+                };
+            };
+        };
+    };
+    org_metrics_platform_orgs__org_id__metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgMetrics"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_jobs_platform_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobList"];
+                };
+            };
+        };
+    };
+    metrics_summary_platform_metrics_summary_get: {
+        parameters: {
+            query?: {
+                moneda?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_access_codes_platform_access_codes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCodeList"];
+                };
+            };
+        };
+    };
+    create_access_code_platform_access_codes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_access_code_platform_access_codes__code__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessCodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payments_platform_payments_get: {
+        parameters: {
+            query?: {
+                org_id?: string | null;
+                desde?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_payment_platform_payments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    billing_status_platform_orgs__org_id__billing_status_get: {
+        parameters: {
+            query?: {
+                moneda?: string;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    support_inbox_platform_support_threads_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportThreadList"];
+                };
+            };
+        };
+    };
+    support_reply_platform_support_threads__thread_id__reply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeem_access_code_access_codes__code__redeem_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedeemAccessCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedeemAccessCodeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_thread_support_threads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_message_support_threads__thread_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportThreadOut"];
                 };
             };
             /** @description Validation Error */
