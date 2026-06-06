@@ -30,6 +30,7 @@ from app.api.auth import requiere_rol
 from app.ingesta import providers
 from app.ingesta.text_extract import extraer_texto
 from app.jobs.job_models import CotizacionSnapshot, IngestJob, JobStatus
+from app.jobs.progress import DocProgress, build_doc_progress
 
 router = APIRouter(prefix="/ingesta", tags=["ingesta"])
 
@@ -133,7 +134,7 @@ async def estado_job(
     job_id: str,
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
 ):
-    """Estado de un job (aislado por tenant)."""
+    """Estado plano de un job (aislado por tenant). Compat B2."""
     reader = providers.get_status_reader()
     job = reader.get(ctx["org_id"], job_id)
     if job is None:
@@ -145,3 +146,50 @@ async def estado_job(
         "resultado": job.resultado,
         "error": job.error,
     }
+
+
+def _consult_url_for(job) -> str | None:
+    """Destino de 'Consultar →' al completar (relativo; la UI lo navega)."""
+    doc_id = (job.resultado or {}).get("document_id") or job.content_sha256 or job.job_id
+    return f"/consulta?doc={doc_id}"
+
+
+@router.get("/documents/{job_id}/status", response_model=DocProgress)
+async def progreso_job(
+    job_id: str,
+    ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
+) -> DocProgress:
+    """
+    Progreso observable de un job (F1 §2.1, shape `DocProgress` del handoff). El
+    cliente sondea este endpoint por job (cada 2-3 s) y agrega los N en su
+    `BatchProgress`. Multi-tenant estricto: solo jobs del tenant del JWT (RLS).
+    """
+    reader = providers.get_status_reader()
+    job = reader.get(ctx["org_id"], job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job no encontrado.")
+    pos = reader.backend.queue_position(job_id)
+    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job))
+
+
+@router.post("/documents/{job_id}/retry", response_model=DocProgress)
+async def reintentar_job(
+    job_id: str,
+    ctx: dict = Depends(requiere_rol("admin", "editor")),
+) -> DocProgress:
+    """
+    Reintento manual de un documento en estado terminal de error (F1 §2.5). Re-
+    encola sin re-cotizar; la idempotencia por SHA-256 evita duplicar si el
+    contenido ya quedó ingerido. ('Omitir' es acción de cliente, no toca backend.)
+    """
+    reader = providers.get_status_reader()
+    job = reader.get(ctx["org_id"], job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job no encontrado.")
+    dispatcher = providers.get_dispatcher()
+    try:
+        job = dispatcher.reintentar(job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    pos = reader.backend.queue_position(job_id)
+    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job))

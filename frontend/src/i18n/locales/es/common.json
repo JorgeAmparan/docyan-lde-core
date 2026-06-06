@@ -35,5 +35,109 @@
   },
   "lang": { "label": "Idioma", "es": "Español", "en": "English" },
   "region": { "label": "Región" },
-  "theme": { "light": "Claro", "dark": "Oscuro" }
+  "theme": { "light": "Claro", "dark": "Oscuro" },
+  "ingesta": {
+    "page": {
+      "quoteTitle": "Cotización pre-ingesta",
+      "aboutTitle": "Gate financiero",
+      "gateNote": "Cada documento se cotiza con tiktoken y se verifica contra tu saldo y los hard caps ANTES de procesar. Sin confirmación no hay ingesta.",
+      "dropzone": "Arrastra hasta {{max}} documentos o selecciona",
+      "formats": "PDF · DOCX · XLSX · imágenes con OCR",
+      "quoting": "Cotizando con tiktoken…",
+      "quoteError": "No se pudo cotizar. Reintenta o verifica tu conexión.",
+      "confirmError": "No se pudo confirmar el lote. Reintenta.",
+      "costTotal": "Costo total estimado",
+      "timeTotal": "Tiempo estimado total",
+      "balance": "Saldo disponible",
+      "rejected": "rechazado por saldo/cap",
+      "overCapDoc": "fuera del cap de sesión",
+      "removeDoc": "Quitar documento del lote",
+      "insufficient": "Saldo insuficiente para algunos documentos del lote.",
+      "capExceeded": "Caben {{fit}} de {{total}} documentos dentro del límite de sesión (${{cap}} USD). Quita documentos o ajusta el cap antes de confirmar.",
+      "recharge": "Recargar saldo →",
+      "contactRecharge": "Contactar a DOCYAN para recargar saldo →",
+      "confirmBatch": "Confirmar e ingerir lote ({{n}})",
+      "confirming": "Encolando lote…"
+    },
+    "batch": {
+      "processing": "Procesando lote — {{count}} documentos",
+      "processingDoc": "Procesando",
+      "preparing": "Preparando…",
+      "remaining": "restante",
+      "pctOfBatch": "{{pct}}% del lote",
+      "doneTitle": "Lote completado",
+      "doneSub": "{{n}} documentos vivos y disponibles para consulta. La cadena SHA-256 quedó sellada.",
+      "doneErr": "{{k}} con error"
+    },
+    "counts": {
+      "completado": "{{n}} completados",
+      "procesando": "{{n}} procesando",
+      "encolado": "{{n}} en cola",
+      "error": "{{n}} con error"
+    },
+    "phase": {
+      "descarga": "Descarga",
+      "conversion": "Conversión",
+      "extraccion": "Extracción",
+      "grafo": "Escritura a grafo",
+      "dedup": "Deduplicación"
+    },
+    "status": { "cargando": "Cargando", "procesando": "Procesando" },
+    "queuePosition": "En cola · posición {{n}}",
+    "doc": {
+      "completed": "Completado",
+      "completedAvailable": "Completado · disponible para consulta",
+      "error": "Error · {{reason}}",
+      "eta": "queda {{clock}}"
+    },
+    "eta": {
+      "seconds": "unos segundos",
+      "lessThanMinute": "menos de 1 min",
+      "minutes": "~{{n}} min"
+    },
+    "detail": {
+      "conversion": "Página {{page}} / {{pages}}",
+      "extraccion": "Página {{page}} · {{spans}} spans · {{entities}} entidades",
+      "grafo": "{{entities}} entidades · {{relations}} / {{relationsTotal}} relaciones",
+      "dedup": "{{merged}} / {{entities}} entidades canónicas"
+    },
+    "ticker": {
+      "descarga": {
+        "0": "Recibiendo archivo…",
+        "1": "Verificando integridad SHA-256",
+        "2": "Cifrando en reposo"
+      },
+      "conversion": {
+        "0": "Normalizando layout · pág {{page}} / {{pages}}",
+        "1": "Detectando tablas y encabezados"
+      },
+      "extraccion": {
+        "0": "Span §{{spans}} extraído",
+        "1": "Vinculando citas a la fuente · pág {{page}}"
+      },
+      "grafo": {
+        "0": "{{relations}} relaciones en el grafo",
+        "1": "Indexando embeddings BGE-M3"
+      },
+      "dedup": {
+        "0": "{{merged}} / {{entities}} entidades canónicas",
+        "1": "Resolviendo alias y versiones"
+      }
+    },
+    "actions": {
+      "history": "Ver historial",
+      "newIngest": "Nueva ingesta",
+      "minimize": "Minimizar",
+      "viewProgress": "Ver progreso",
+      "consult": "Consultar →",
+      "retry": "Reintentar",
+      "skip": "Omitir",
+      "remove": "Quitar"
+    },
+    "toast": {
+      "docCompleted": "Documento disponible",
+      "docError": "Documento con error",
+      "batchCompleted": "Lote completado"
+    }
+  }
 }

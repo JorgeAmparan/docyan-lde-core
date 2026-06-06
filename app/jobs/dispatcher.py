@@ -27,18 +27,29 @@ from app.jobs.job_models import IngestJob, JobStatus
 
 QUEUE_KEY = "docyan:ingest:queue"
 JOB_KEY_PREFIX = "docyan:ingest:job:"
+# Registro de IDEMPOTENCIA (F1 §2.4): contenido ya ingerido, por tenant + SHA-256.
+# Aislado por tenant — el hash de un tenant NO se reconoce en otro (multi-tenant).
+INGESTED_KEY_PREFIX = "docyan:ingest:done:"
 # TTL del estado de jobs en Redis (7 días); el FAT lleva el registro permanente.
 JOB_STATE_TTL_SECONDS = 7 * 24 * 3600
 
 
+def _ingested_key(tenant_id: str, content_sha256: str) -> str:
+    return f"{INGESTED_KEY_PREFIX}{tenant_id}:{content_sha256}"
+
+
 class QueueBackend:
-    """Contrato de cola + almacén de estado de jobs."""
+    """Contrato de cola + almacén de estado de jobs + registro de idempotencia."""
 
     def save_job(self, job: IngestJob) -> None: ...
     def load_job(self, job_id: str) -> IngestJob | None: ...
     def push(self, job_id: str) -> None: ...
     def pop(self, timeout: int = 0) -> str | None: ...
     def queue_length(self) -> int: ...
+    def queue_position(self, job_id: str) -> int | None: ...
+    # Idempotencia por contenido (SHA-256), aislada por tenant.
+    def record_ingested(self, tenant_id: str, content_sha256: str, payload: dict) -> None: ...
+    def lookup_ingested(self, tenant_id: str, content_sha256: str) -> dict | None: ...
 
 
 # ── Backend en memoria (tests / dev sin Redis) ───────────────────────────────
@@ -48,6 +59,7 @@ class QueueBackend:
 class InMemoryQueueBackend:
     _jobs: dict[str, str] = field(default_factory=dict)
     _queue: list[str] = field(default_factory=list)
+    _ingested: dict[str, dict] = field(default_factory=dict)
 
     def save_job(self, job: IngestJob) -> None:
         self._jobs[job.job_id] = job.model_dump_json()
@@ -64,6 +76,15 @@ class InMemoryQueueBackend:
 
     def queue_length(self) -> int:
         return len(self._queue)
+
+    def queue_position(self, job_id: str) -> int | None:
+        return self._queue.index(job_id) + 1 if job_id in self._queue else None
+
+    def record_ingested(self, tenant_id: str, content_sha256: str, payload: dict) -> None:
+        self._ingested[_ingested_key(tenant_id, content_sha256)] = payload
+
+    def lookup_ingested(self, tenant_id: str, content_sha256: str) -> dict | None:
+        return self._ingested.get(_ingested_key(tenant_id, content_sha256))
 
 
 # ── Backend Redis (producción) ────────────────────────────────────────────────
@@ -101,6 +122,25 @@ class RedisQueueBackend:
 
     def queue_length(self) -> int:
         return int(self._r().llen(QUEUE_KEY))
+
+    def queue_position(self, job_id: str) -> int | None:
+        ids = self._r().lrange(QUEUE_KEY, 0, -1)
+        return ids.index(job_id) + 1 if job_id in ids else None
+
+    def record_ingested(self, tenant_id: str, content_sha256: str, payload: dict) -> None:
+        import json
+
+        self._r().setex(
+            _ingested_key(tenant_id, content_sha256),
+            JOB_STATE_TTL_SECONDS,
+            json.dumps(payload),
+        )
+
+    def lookup_ingested(self, tenant_id: str, content_sha256: str) -> dict | None:
+        import json
+
+        raw = self._r().get(_ingested_key(tenant_id, content_sha256))
+        return json.loads(raw) if raw else None
 
 
 # ── Dispatcher ─────────────────────────────────────────────────────────────────
@@ -148,22 +188,110 @@ class JobDispatcher:
     def marcar_procesando(self, job_id: str) -> IngestJob:
         return self._transicion(job_id, JobStatus.processing)
 
+    def actualizar_progreso(
+        self,
+        job_id: str,
+        *,
+        phase: str | None = None,
+        phase_fraction: float | None = None,
+        counters: dict | None = None,
+        retry_attempt: int | None = None,
+        content_sha256: str | None = None,
+    ) -> IngestJob:
+        """
+        Actualiza la granularidad de progreso de un job en proceso (F1 §2.2). El
+        worker la llama al entrar a cada fase y al avanzar contadores. Solo toca
+        los campos provistos; no cambia el `status`.
+        """
+        job = self.backend.load_job(job_id)
+        if job is None:
+            raise KeyError(f"job inexistente: {job_id}")
+        if phase is not None:
+            job.phase = phase
+        if phase_fraction is not None:
+            job.phase_fraction = max(0.0, min(1.0, phase_fraction))
+        if counters is not None:
+            job.counters = counters
+        if retry_attempt is not None:
+            job.retry_attempt = retry_attempt
+        if content_sha256 is not None:
+            job.content_sha256 = content_sha256
+        self.backend.save_job(job)
+        return job
+
     def marcar_completado(self, job_id: str, resultado: dict) -> IngestJob:
         job = self.backend.load_job(job_id)
         if job is None:
             raise KeyError(f"job inexistente: {job_id}")
         job.status = JobStatus.completed
         job.resultado = resultado
+        job.phase = None
+        job.phase_fraction = 1.0
+        self.backend.save_job(job)
+        # Idempotencia: registra el contenido como ya ingerido (clave SHA-256 por
+        # tenant). Un futuro job con el mismo contenido se resuelve sin reprocesar.
+        if job.content_sha256:
+            self.backend.record_ingested(
+                job.tenant_id, job.content_sha256, {"resultado": resultado}
+            )
+        return job
+
+    def marcar_completado_idempotente(self, job_id: str, resultado: dict) -> IngestJob:
+        """
+        Cierra un job porque su contenido (SHA-256) YA estaba ingerido: reusa el
+        resultado previo, marca `idempotente=True` y NO reprocesa ni re-cobra. El
+        estado final del sistema es idéntico a la primera ingesta (F1 §2.4 / #8).
+        """
+        job = self.backend.load_job(job_id)
+        if job is None:
+            raise KeyError(f"job inexistente: {job_id}")
+        job.status = JobStatus.completed
+        job.resultado = resultado
+        job.idempotente = True
+        job.phase = None
+        job.phase_fraction = 1.0
         self.backend.save_job(job)
         return job
 
     def marcar_fallido(self, job_id: str, error: str) -> IngestJob:
+        """Estado terminal de error (F1 §2.4): agotados los reintentos del worker."""
         job = self.backend.load_job(job_id)
         if job is None:
             raise KeyError(f"job inexistente: {job_id}")
         job.status = JobStatus.failed
         job.error = error
         self.backend.save_job(job)
+        return job
+
+    # ── Idempotencia por contenido (SHA-256), aislada por tenant ──────────────
+    def buscar_idempotente(self, tenant_id: str, content_sha256: str) -> dict | None:
+        """Devuelve el resultado previo si ese contenido ya se ingirió, o None."""
+        return self.backend.lookup_ingested(tenant_id, content_sha256)
+
+    # ── Reintento manual (F1 §2.5) ────────────────────────────────────────────
+    def reintentar(self, job_id: str) -> IngestJob:
+        """
+        Re-encola un job en estado terminal de error para volver a procesarlo
+        (acción manual del admin). Limpia el error y el progreso previo; conserva
+        la cotización aprobada (no re-cotiza). Idempotente: si el contenido ya
+        quedó ingerido, el worker lo resolverá sin duplicar.
+        """
+        job = self.backend.load_job(job_id)
+        if job is None:
+            raise KeyError(f"job inexistente: {job_id}")
+        if not job.reintentable():
+            raise ValueError(
+                f"job {job_id} no es reintentable (status={job.status.value}). "
+                "Solo un job en estado terminal de error se reintenta a mano."
+            )
+        job.status = JobStatus.queued
+        job.error = None
+        job.phase = None
+        job.phase_fraction = 0.0
+        job.counters = {}
+        job.idempotente = False
+        self.backend.save_job(job)
+        self.backend.push(job_id)
         return job
 
     def _transicion(self, job_id: str, status: JobStatus) -> IngestJob:
