@@ -20,11 +20,13 @@ def get_audit():
     return SupabasePlatformAudit()
 
 
-def get_metrics():
-    return MetricsService(get_store())
-
-
 def get_jobs_backend():
     from app.jobs.dispatcher import RedisQueueBackend
 
     return RedisQueueBackend()
+
+
+def get_metrics():
+    # F1.5: el agregado de peso/tiempo de ingesta se calcula desde los IngestJob
+    # (jobs_backend), por eso el MetricsService de producción lo lleva inyectado.
+    return MetricsService(get_store(), jobs_backend=get_jobs_backend())

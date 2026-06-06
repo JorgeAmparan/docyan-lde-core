@@ -39,6 +39,9 @@ class CotizacionSnapshot(BaseModel):
     tokens_documento: int
     aprobado: bool
     decision: str
+    # Precio de setup comercial (Modelo Comercial §2.3, F1.5). Informativo en el
+    # job; el SALDO reserva/liquida `costo_estimado_usd` (cómputo), no este precio.
+    precio_setup_usd: float = 0.0
 
 
 class IngestJob(BaseModel):
@@ -75,6 +78,26 @@ class IngestJob(BaseModel):
     # True si la ingesta se resolvió por idempotencia (contenido ya ingerido):
     # no se reprocesó ni se re-cobró; el documento ya estaba disponible.
     idempotente: bool = False
+
+    # ── F1.5 Parte A: estado del débito (reservar/liquidar/liberar) ─────────────
+    # Monto retenido (reservado) para este job al confirmar. La idempotencia del
+    # débito vive aquí: un reintento NO vuelve a reservar (opera sobre esta reserva
+    # viva); liquidar/liberar son idempotentes vía `reserva_estado`.
+    reserva_usd: float = 0.0
+    # ninguna | retenido | liquidado | liberado.
+    reserva_estado: str = "ninguna"
+    # Costo de cómputo real con el que se liquidó (o el cotizado como aproximación).
+    costo_real_usd: float | None = None
+
+    # ── F1.5 Parte B: instrumentación de peso y tiempo ──────────────────────────
+    # Peso en bytes del archivo original y del resultado almacenado (markdown).
+    bytes_originales: int | None = None
+    bytes_resultado: int | None = None
+    # Timestamps ISO-8601 (UTC) de inicio/fin de procesamiento del worker.
+    started_at: str | None = None
+    completed_at: str | None = None
+    # Duración real de la ingesta en segundos (completed_at − started_at).
+    duracion_seg: float | None = None
 
     def confirmable(self) -> bool:
         """Solo un job aprobado y pendiente de confirmación puede encolarse."""

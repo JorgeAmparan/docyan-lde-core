@@ -24,10 +24,22 @@ tokenizador de Gemini para texto técnico latino). Se documenta como aproximaci�
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 # Fecha de la tabla de precios. Actualizar junto con los valores.
 PRICING_AS_OF = "2026-05-28"
+
+
+def _env_float(name: str, default: float) -> float:
+    """Lee un float de env var (precio configurable, F1.5). Default = valor vigente."""
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
 
 
 @dataclass(frozen=True)
@@ -48,16 +60,18 @@ class ModelPricing:
 # ── Precios vigentes (Adenda §3 — modelos validados con el PoC NOM-052) ───────
 # Gemini 2.5 Flash: extracción + resolution (prefijo gemini/ vía LiteLLM).
 # gpt-4o-mini: QA / consulta.
+# F1.5: configurables por env var (el founder confirma los valores al desplegar,
+# ver PENDIENTE DE JORGE del contrato). Sin env var → el valor vigente del PoC.
 PRICING: dict[str, ModelPricing] = {
     "gemini/gemini-2.5-flash": ModelPricing(
         model="gemini/gemini-2.5-flash",
-        input_usd_per_1m=0.30,
-        output_usd_per_1m=2.50,
+        input_usd_per_1m=_env_float("PRICE_GEMINI_FLASH_IN_USD_PER_1M", 0.30),
+        output_usd_per_1m=_env_float("PRICE_GEMINI_FLASH_OUT_USD_PER_1M", 2.50),
     ),
     "gpt-4o-mini": ModelPricing(
         model="gpt-4o-mini",
-        input_usd_per_1m=0.15,
-        output_usd_per_1m=0.60,
+        input_usd_per_1m=_env_float("PRICE_GPT4O_MINI_IN_USD_PER_1M", 0.15),
+        output_usd_per_1m=_env_float("PRICE_GPT4O_MINI_OUT_USD_PER_1M", 0.60),
     ),
 }
 
@@ -78,11 +92,36 @@ QA_OUTPUT_RATIO = 0.1
 # Costo computacional de embeddings BGE-M3 self-hosted. No es un costo de API
 # (el embedder es propio), pero es reportable como costo marginal de cómputo.
 # Estimación conservadora en USD por 1M de tokens embebidos (electricidad+amort.).
-BGE_M3_COMPUTE_USD_PER_1M = 0.01
+# F1.5: configurable por env var (BGE-M3 es cómputo propio, parametrizable).
+BGE_M3_COMPUTE_USD_PER_1M = _env_float("PRICE_BGE_M3_USD_PER_1M", 0.01)
 
 # ── Modelo de tiempo (Adenda §8 — PoC: Gemini Flash 642s para una NOM 32pp) ───
 # Throughput efectivo observado incluyendo latencia de red y rate limiting.
 SECONDS_PER_1K_DOC_TOKENS = 642.0 / 22.4  # ≈ 28.7 s por 1k tokens (NOM 32pp≈22.4k)
+
+# ── Fórmula de cobro de setup (Modelo Comercial §2.3, cableada en F1.5) ────────
+#   precio_setup = MAX( PISO , costo_base_real × MULTIPLICADOR ) × factor_complejidad
+# El piso ($25) protege márgenes en documentos chicos; el múltiplo (×25) cubre
+# documentos caros. `factor_complejidad` arranca en 1.0 (perilla futura por tipo
+# documental). Los tres son configurables por env var sin tocar código.
+SETUP_PRICE_FLOOR_USD = _env_float("SETUP_PRICE_FLOOR_USD", 25.0)
+SETUP_COST_MULTIPLIER = _env_float("SETUP_COST_MULTIPLIER", 25.0)
+FACTOR_COMPLEJIDAD = _env_float("FACTOR_COMPLEJIDAD", 1.0)
+
+
+def precio_setup(costo_base_real: float, factor_complejidad: float | None = None) -> float:
+    """
+    Precio de setup por ingesta (Modelo Comercial §2.3):
+
+        MAX( SETUP_PRICE_FLOOR_USD , costo_base_real × SETUP_COST_MULTIPLIER )
+            × factor_complejidad
+
+    `costo_base_real` es el costo de cómputo estimado/real (extracción + QA +
+    embeddings). Documento chico → gana el piso; documento caro → gana costo×múltiplo.
+    """
+    factor = FACTOR_COMPLEJIDAD if factor_complejidad is None else factor_complejidad
+    base = max(SETUP_PRICE_FLOOR_USD, costo_base_real * SETUP_COST_MULTIPLIER)
+    return round(base * factor, 4)
 
 
 def model_pricing(model: str) -> ModelPricing:

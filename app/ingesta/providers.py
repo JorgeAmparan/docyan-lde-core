@@ -18,12 +18,18 @@ from app.schemas_documentales.registry import SchemaRegistry
 from app.schemas_documentales.selector import SchemaSelector
 
 
+def get_budget_manager() -> BudgetManager:
+    return BudgetManager()
+
+
 def get_cotizador() -> Cotizador:
     return Cotizador(budget_manager=BudgetManager())
 
 
 def get_dispatcher() -> JobDispatcher:
-    return JobDispatcher()
+    # F1.5: el dispatcher de producción reserva/liquida/libera saldo en cada
+    # transición del gate, por eso siempre lleva un BudgetManager real.
+    return JobDispatcher(budget_manager=BudgetManager())
 
 
 def get_status_reader() -> JobStatusReader:

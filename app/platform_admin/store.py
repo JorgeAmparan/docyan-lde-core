@@ -33,6 +33,8 @@ class PlatformStore(Protocol):
     def list_orgs(self) -> list[dict]: ...
     def count_users(self, org_id: str) -> int: ...
     def count_documents(self, org_id: str) -> int: ...
+    def sum_storage_bytes(self, org_id: str) -> int: ...
+    def total_storage_bytes(self) -> int: ...
     def get_budget(self, org_id: str) -> dict | None: ...
     def sum_consultas(self, org_id: str) -> int: ...
     def get_org_billing(self, org_id: str) -> dict | None: ...
@@ -124,6 +126,16 @@ class InMemoryPlatformStore:
 
     def count_documents(self, org_id: str) -> int:
         return sum(1 for d in self.documents if d["org_id"] == org_id)
+
+    def sum_storage_bytes(self, org_id: str) -> int:
+        return sum(
+            int(d.get("size_bytes") or 0)
+            for d in self.documents
+            if d["org_id"] == org_id
+        )
+
+    def total_storage_bytes(self) -> int:
+        return sum(int(d.get("size_bytes") or 0) for d in self.documents)
 
     def get_budget(self, org_id: str) -> dict | None:
         return self.budgets.get(org_id)
@@ -302,9 +314,17 @@ class SupabasePlatformStore:
         r = self.sb().table("documents").select("id", count="exact").eq("org_id", org_id).execute()
         return r.count or 0
 
+    def sum_storage_bytes(self, org_id: str) -> int:
+        r = self.sb().table("documents").select("size_bytes").eq("org_id", org_id).execute()
+        return sum(int(x.get("size_bytes") or 0) for x in (r.data or []))
+
+    def total_storage_bytes(self) -> int:
+        r = self.sb().table("documents").select("size_bytes").execute()
+        return sum(int(x.get("size_bytes") or 0) for x in (r.data or []))
+
     def get_budget(self, org_id: str) -> dict | None:
         r = self.sb().table("tenant_budget").select(
-            "saldo_actual_usd, hard_cap_por_documento, hard_cap_por_sesion, moneda"
+            "saldo_actual_usd, retenido_usd, hard_cap_por_documento, hard_cap_por_sesion, moneda"
         ).eq("tenant_id", org_id).execute()
         return r.data[0] if r.data else None
 

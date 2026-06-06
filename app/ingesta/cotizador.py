@@ -66,6 +66,13 @@ class Cotizacion:
     motivo: str
     saldo_disponible_usd: float
     falta_usd: float = 0.0
+    # Precio de setup por ingesta (Modelo Comercial §2.3, F1.5): el cobro comercial
+    # = MAX($25, costo_base×25) × factor_complejidad. Es el número que el cliente
+    # ve facturado por la ingesta; el SALDO retiene/liquida el costo de cómputo
+    # (costo_estimado_usd), no este precio (la relación cuota-de-plan vs recarga se
+    # cierra en F4/Stripe — ver contrato A.5).
+    precio_setup_usd: float = 0.0
+    factor_complejidad: float = 1.0
     pricing_as_of: str = pt.PRICING_AS_OF
     # Detalle de tokens facturables estimados por fase (transparencia para el PM).
     detalle_tokens: dict = field(default_factory=dict)
@@ -158,6 +165,8 @@ class Cotizador:
         desglose, detalle = estimar_costo(tokens)
         costo = desglose.total_usd
         tiempo = estimar_tiempo_seg(tokens)
+        # Precio de setup comercial (Modelo Comercial §2.3): MAX($25, costo×25)×factor.
+        precio_setup = pt.precio_setup(costo)
 
         verdict = self.budget.verificar(
             tenant_id, costo, costo_sesion_acumulado_usd
@@ -166,7 +175,8 @@ class Cotizador:
         if verdict.aprobado:
             decision = DecisionCotizacion.aprobado_requiere_confirmacion
             motivo = (
-                f"Estimación ${costo:.4f} USD (~{tiempo:.0f}s). "
+                f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s); "
+                f"setup ${precio_setup:.2f} USD. "
                 "Presupuesto suficiente. Requiere confirmación explícita para ingerir."
             )
         elif "hard cap" in verdict.motivo.lower():
@@ -187,5 +197,7 @@ class Cotizador:
             motivo=motivo,
             saldo_disponible_usd=verdict.saldo_disponible,
             falta_usd=verdict.falta_usd,
+            precio_setup_usd=precio_setup,
+            factor_complejidad=pt.FACTOR_COMPLEJIDAD,
             detalle_tokens=detalle,
         )
