@@ -77,6 +77,21 @@ def convertir_a_markdown(path: str) -> str:
     return result.document.export_to_markdown()
 
 
+def _contar_paginas(path: str) -> int | None:
+    """
+    Cuenta páginas de un PDF para el contador de la fase `conversion` (F1 §2.2).
+    Best-effort: si no es PDF o falla, devuelve None y la UI omite el contador.
+    """
+    if not path.lower().endswith(".pdf"):
+        return None
+    try:
+        from pypdf import PdfReader
+
+        return len(PdfReader(path).pages)
+    except Exception:  # noqa: BLE001 — el conteo es señal de progreso, no gate
+        return None
+
+
 # ── Construcción del GraphRAG por tenant ──────────────────────────────────────
 
 
@@ -148,13 +163,21 @@ class IngestPipeline:
                 logger.warning("no se pudo registrar el schema generado")
         return schema
 
-    async def procesar(self, job: IngestJob, local_path: str) -> dict:
+    async def procesar(self, job: IngestJob, local_path: str, progreso=None) -> dict:
         """
         Ejecuta el pipeline completo para un job confirmado. Devuelve estadísticas.
 
         `local_path`: ruta local del documento (el worker ya lo descargó del
         document store). `job` debe traer una cotización aprobada (invariante del
         gate; el worker la verifica como defensa en profundidad).
+
+        `progreso`: callback opcional `fn(phase, phase_fraction, counters)` (F1
+        §2.2). El pipeline lo invoca en los límites de fase con los contadores
+        reales que conoce en cada punto (pages tras conversión, entities/relations
+        tras extracción/grafo, merged tras dedup). La fase `descarga` la emite el
+        worker ANTES de llamar a procesar (ya tiene los bytes). La granularidad es
+        por fase con contadores de cierre reales; Docling y GraphRAG-SDK no
+        exponen avance intra-fase síncrono (limitación documentada en el reporte).
         """
         if job.cotizacion is None or not job.cotizacion.aprobado:
             raise PermissionError(
@@ -162,8 +185,31 @@ class IngestPipeline:
                 "documentos que no pasaron el gate del cotizador (CLAUDE.md §14)."
             )
 
+        def _emit(phase: str, fraction: float, counters: dict) -> None:
+            if progreso is not None:
+                try:
+                    progreso(phase, fraction, counters)
+                except Exception:  # noqa: BLE001 — el progreso es señal, no gate
+                    logger.debug("callback de progreso falló (ignorado)")
+
+        # Idempotencia (F1 §2.4 / #8): el document_id que ve el SDK es el SHA-256
+        # del CONTENIDO (no el job_id). apply_changes() es crash-safe por SHA-256,
+        # así que re-ingerir el mismo contenido (otro job_id, nombre o sesión) NO
+        # duplica entidades. El worker además corta antes vía buscar_idempotente.
+        doc_id = job.content_sha256 or job.job_id
+
+        # FASE conversion — Docling convierte (opaco): inicio y, al terminar, el
+        # conteo de páginas real.
+        _emit("conversion", 0.0, {})
         markdown = convertir_a_markdown(local_path)
+        paginas = _contar_paginas(local_path)
+        pg_counters = {"pages": paginas, "page": paginas} if paginas else {}
+        _emit("conversion", 1.0, pg_counters)
         schema = self._resolver_schema(job, muestra=markdown[:8000])
+
+        # FASE extraccion — arranca; los contadores finos (spans/entities) los
+        # produce el SDK al cerrar `ingest`.
+        _emit("extraccion", 0.0, pg_counters)
 
         # Fallback multi-modelo (B2.2): el worker prueba la cadena
         # [primario, *fallbacks] de llm_config. Si la extracción falla con un
@@ -185,13 +231,24 @@ class IngestPipeline:
                 )
                 ingest_result = await graphrag.ingest(
                     text=markdown,
-                    document_id=job.job_id,
+                    document_id=doc_id,
                     extractor=extractor,
                     resolver=resolver,
                 )
-                # Deduplicación fuzzy — BUG PoC #1 (653 residuos). Async, con await.
+                nodos = getattr(ingest_result, "nodes_created", None)
+                rels = getattr(ingest_result, "relationships_created", None)
+                _emit("extraccion", 1.0, {**pg_counters, "entities": nodos or 0})
+                # FASE grafo — relaciones escritas (las reporta el ingest_result).
+                _emit("grafo", 1.0, {
+                    "entities": nodos or 0,
+                    "relations": rels or 0,
+                    "relationsTotal": rels or 0,
+                })
+                # FASE dedup — fusión de duplicados (BUG PoC #1; async con await).
+                _emit("dedup", 0.0, {"entities": nodos or 0})
                 if llm_config.LLM_CONFIG["deduplicate_fuzzy"]:
                     duplicados_resueltos = await graphrag.deduplicate_entities(fuzzy=True)
+                _emit("dedup", 1.0, {"merged": duplicados_resueltos, "entities": nodos or 0})
                 # Finalize (async; existe finalize_sync para contextos sync).
                 await graphrag.finalize()
                 modelo_usado = model
@@ -226,12 +283,12 @@ class IngestPipeline:
         # ingesta exitosa, las entradas del caché atadas a las entidades modificadas
         # (incluido el documento recién ingestado) se invalidan. NO se borra el caché
         # entero: solo lo afectado. Best-effort: el caché es optimización, no gate.
-        invalidadas = self._invalidar_cache(job.tenant_id, ingest_result, job.job_id)
+        invalidadas = self._invalidar_cache(job.tenant_id, ingest_result, doc_id)
 
         # Campos del IngestionResult del SDK (como reporta el PoC).
         return {
             "tipo_documento": schema.tipo_documento if schema else None,
-            "document_id": job.job_id,
+            "document_id": doc_id,
             "nodos_creados": getattr(ingest_result, "nodes_created", None),
             "relaciones_creadas": getattr(ingest_result, "relationships_created", None),
             "chunks_indexados": getattr(ingest_result, "chunks_indexed", None),

@@ -1,118 +1,254 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import { Icon } from "@/components/icon";
-import { api } from "@/lib/api-client";
-import { STRIPE_ENABLED, CONTACT_EMAIL } from "@/lib/config";
+import { IngestBatch } from "@/components/ingesta/ingest-batch";
+import { api, ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth";
+import { useIngestStore } from "@/lib/ingest-store";
+import type { DocProgress } from "@/lib/ingesta";
+import {
+  CONTACT_EMAIL,
+  INGEST_BATCH_MAX,
+  SESSION_HARD_CAP_USD,
+  STRIPE_ENABLED,
+} from "@/lib/config";
 
 /**
- * Ingesta — the pre-ingest quote GATE (no bypass). Upload → /mo/ingesta/quote
- * (cost regional + tiempo + saldo) → EXPLICIT human confirmation → /mo/ingesta/
- * confirm enqueues. Insufficient balance: recharge (Stripe) or manual mailto.
- * Justification: PoC $5,000 incident. The gate is the decision; never auto-skip.
+ * Ingesta — cotización de lote (gate sin bypass) + ingesta observable (F1).
+ *
+ * Flujo real (decisión rectora #3, orquestación en cliente):
+ *   subir ≤10 docs → POST /ingesta/documents por doc (cotiza + crea job) →
+ *   cotización de lote agregada en cliente → confirmar los que caben bajo
+ *   saldo/hard cap → POST .../{job_id}/confirm por doc → vista de progreso viva
+ *   (polling por job, agregado en cliente). CERO datos de demostración fijos: si el
+ *   backend no responde, error real, nunca fallback simulado (decisión rectora #11).
  */
 
-interface Quote {
-  cost_usd: number;
-  eta_minutes: number;
-  balance_usd: number;
-  tokens?: number;
-  doc_name?: string;
-}
-
-const CANNED_QUOTE: Quote = { cost_usd: 58.4, eta_minutes: 14, balance_usd: 184, doc_name: "documento.pdf" };
-
-type QStatus = "encolado" | "procesando" | "terminado" | "fallido";
-interface QItem {
-  id: string;
+interface QuotedDoc {
+  jobId: string;
   name: string;
-  status: QStatus;
-  pct: number;
-  eta: string;
+  tokens: number;
+  costUsd: number;
+  timeSec: number;
+  aprobado: boolean;
+  decision: string;
+  saldo: number;
+  advertencia?: string | null;
 }
 
-const CANNED_QUEUE: QItem[] = [
-  { id: "q1", name: "Procedimiento de limpieza CIP.pdf", status: "procesando", pct: 62, eta: "~3 min" },
-  { id: "q2", name: "Anexo IATF — registros.docx", status: "encolado", pct: 0, eta: "en cola" },
-  { id: "q3", name: "Bitácora calibración Q1.xlsx", status: "terminado", pct: 100, eta: "completado" },
-  { id: "q4", name: "Manual prensa (escaneo).pdf", status: "fallido", pct: 0, eta: "OCR ilegible" },
-];
-
-const ING_HIST: [string, string, string, string, "ok"][] = [
-  ["28 may", "Manual CNC Haas VF-2.pdf", "$42.80", "11 min", "ok"],
-  ["24 may", "Lote MSDS (×6)", "$66.10", "23 min", "ok"],
-  ["19 may", "Histórico calibración 2024", "$18.30", "6 min", "ok"],
-];
-
-const BALANCE = { available: 184, consumed: 316, total: 500 };
+interface UploadResponse {
+  job_id: string;
+  status: string;
+  cotizacion: {
+    tokens_documento: number;
+    costo_estimado_usd: number;
+    tiempo_estimado_seg: number;
+    decision: string;
+    aprobado: boolean;
+    saldo_disponible_usd: number;
+  };
+  advertencia?: string | null;
+}
 
 export default function IngestaPage() {
+  const { t } = useTranslation("common");
+  const router = useRouter();
+  const token = useAuth((s) => s.token);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
-  const [queue, setQueue] = useState<QItem[]>(CANNED_QUEUE);
 
-  const quoteMut = useMutation({
-    mutationFn: (name: string) => api.post<Quote>("/mo/ingesta/quote", { doc_name: name }),
-    onSuccess: (q) => setQuote(q),
-    // DESIGN: canned quote when endpoint absent — but the GATE still requires confirm.
-    onError: () => setQuote({ ...CANNED_QUOTE, doc_name: fileName ?? CANNED_QUOTE.doc_name }),
-  });
+  const [quotes, setQuotes] = useState<QuotedDoc[]>([]);
+  const [quoting, setQuoting] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
-  const confirmMut = useMutation({
-    mutationFn: () => api.post<{ job_id: string }>("/mo/ingesta/confirm", { doc_name: fileName }),
-    onSuccess: (r) => {
-      setConfirmed(true);
-      setQueue((q) => [
-        { id: r?.job_id ?? `job-${Date.now()}`, name: fileName ?? "documento.pdf", status: "encolado", pct: 0, eta: "en cola" },
-        ...q,
-      ]);
-    },
-    // DESIGN: optimistic local enqueue if confirm endpoint absent.
-    onError: () => {
-      setConfirmed(true);
-      setQueue((q) => [
-        { id: `job-${Date.now()}`, name: fileName ?? "documento.pdf", status: "encolado", pct: 0, eta: "en cola" },
-        ...q,
-      ]);
-    },
-  });
+  const jobIds = useIngestStore((s) => s.jobIds);
+  const batch = useIngestStore((s) => s.batch);
+  const minimized = useIngestStore((s) => s.minimized);
+  const startBatch = useIngestStore((s) => s.startBatch);
+  const setMinimized = useIngestStore((s) => s.setMinimized);
+  const skip = useIngestStore((s) => s.skip);
+  const clear = useIngestStore((s) => s.clear);
 
-  function onFile(name: string) {
-    setFileName(name);
-    setQuote(null);
-    setConfirmed(false);
-    quoteMut.mutate(name);
+  const hasActiveBatch = jobIds.length > 0;
+
+  // ── Cotización de lote agregada (saldo + hard cap de sesión) ────────────────
+  const saldo = quotes.length > 0 ? quotes[0].saldo : null;
+  const budget = Math.min(saldo ?? Infinity, SESSION_HARD_CAP_USD);
+
+  const { fitIds, totalCost, totalTime, overflowIds } = useMemo(() => {
+    let cum = 0;
+    const fit: string[] = [];
+    const overflow: string[] = [];
+    let cost = 0;
+    let time = 0;
+    for (const q of quotes) {
+      const next = cum + q.costUsd;
+      if (q.aprobado && next <= budget) {
+        cum = next;
+        cost += q.costUsd;
+        time += q.timeSec;
+        fit.push(q.jobId);
+      } else {
+        overflow.push(q.jobId);
+      }
+    }
+    return { fitIds: fit, totalCost: cost, totalTime: time, overflowIds: overflow };
+  }, [quotes, budget]);
+
+  async function onFiles(fileList: FileList) {
+    const files = Array.from(fileList).slice(0, INGEST_BATCH_MAX);
+    setQuoting(true);
+    setQuoteError(null);
+    setQuotes([]);
+    try {
+      const results = await Promise.all(
+        files.map(async (f) => {
+          const form = new FormData();
+          form.append("file", f, f.name);
+          const r = await api.postForm<UploadResponse>("/ingesta/documents", form, { token });
+          const c = r.cotizacion;
+          return {
+            jobId: r.job_id,
+            name: f.name,
+            tokens: c.tokens_documento,
+            costUsd: c.costo_estimado_usd,
+            timeSec: c.tiempo_estimado_seg,
+            aprobado: c.aprobado,
+            decision: c.decision,
+            saldo: c.saldo_disponible_usd,
+            advertencia: r.advertencia,
+          } as QuotedDoc;
+        }),
+      );
+      setQuotes(results);
+    } catch (e) {
+      // Backend no responde / error real → se muestra, NUNCA un fallback simulado.
+      setQuoteError(e instanceof ApiError ? e.message : t("ingesta.page.quoteError"));
+    } finally {
+      setQuoting(false);
+    }
   }
 
-  const balPct = Math.round((BALANCE.consumed / BALANCE.total) * 100);
-  const q = quote;
-  const insufficient = q ? q.cost_usd > q.balance_usd : false;
-
-  function retry(id: string) {
-    setQueue((cur) => cur.map((it) => (it.id === id ? { ...it, status: "encolado", eta: "reintentando…" } : it)));
+  function removeDoc(jobId: string) {
+    setQuotes((cur) => cur.filter((q) => q.jobId !== jobId));
   }
-  function cancel(id: string) {
-    setQueue((cur) => cur.filter((it) => it.id !== id));
+
+  async function confirmBatch() {
+    if (fitIds.length === 0) return;
+    setConfirming(true);
+    try {
+      await Promise.all(
+        fitIds.map((id) =>
+          api.post(`/ingesta/documents/${id}/confirm`, undefined, { token }),
+        ),
+      );
+      // Monta la vista de progreso de inmediato (feedback instantáneo, handoff §7):
+      // los docs arrancan en 'encolado' y el watcher global toma el relevo.
+      const seed: Record<string, DocProgress> = {};
+      const weights: Record<string, number> = {};
+      fitIds.forEach((id, i) => {
+        const q = quotes.find((x) => x.jobId === id)!;
+        seed[id] = {
+          docId: id,
+          name: q.name,
+          kind: q.name.split(".").pop() ?? "doc",
+          status: "encolado",
+          phase: null,
+          phaseFraction: 0,
+          pct: 0,
+          etaSeconds: null,
+          queuePosition: i + 1,
+        };
+        weights[id] = q.timeSec || 1;
+      });
+      startBatch(fitIds, seed, weights);
+      setQuotes([]);
+    } catch (e) {
+      setQuoteError(e instanceof ApiError ? e.message : t("ingesta.page.confirmError"));
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  async function retry(docId: string) {
+    try {
+      await api.post(`/ingesta/documents/${docId}/retry`, undefined, { token });
+    } catch {
+      // el watcher reflejará el estado real en el siguiente poll
+    }
+  }
+
+  function consult(doc: DocProgress) {
+    if (doc.consultUrl) router.push(doc.consultUrl);
+  }
+
+  const insufficient = saldo != null && quotes.some((q) => !q.aprobado);
+  const overCap = overflowIds.length > 0 && quotes.every((q) => q.aprobado);
+
+  // ── Vista de progreso activa (no minimizada) ────────────────────────────────
+  if (hasActiveBatch && !minimized && batch) {
+    return (
+      <IngestBatch
+        batch={batch}
+        onRetry={retry}
+        onSkip={skip}
+        onConsult={consult}
+        onMinimize={() => setMinimized(true)}
+        onNewIngest={() => {
+          clear();
+          fileRef.current?.click();
+        }}
+      />
+    );
   }
 
   return (
     <>
+      {/* Banner minimizado: el lote sigue en segundo plano (active waiting). */}
+      {hasActiveBatch && minimized && batch && (
+        <div className="batch-head" style={{ marginBottom: 16 }}>
+          <div className="bh-row">
+            <div className="bh-title">
+              <span className="bh-spin">
+                <Icon name="loader" size={16} />
+              </span>
+              <div className="bh-tt">
+                <div className="bh-h">
+                  {t("ingesta.batch.processing", { count: batch.docs.length })}
+                </div>
+                <div className="bh-sub mono">
+                  {t("ingesta.batch.pctOfBatch", { pct: Math.round(batch.pct) })}
+                </div>
+              </div>
+            </div>
+            <button className="mini-btn" onClick={() => setMinimized(false)}>
+              <Icon name="maximize-2" size={14} />
+              {t("ingesta.actions.viewProgress")}
+            </button>
+          </div>
+          <div className="batch-bar">
+            <i style={{ width: batch.pct + "%" }} />
+          </div>
+        </div>
+      )}
+
       <div className="ing-grid">
         <div className="panel">
           <div className="sec-h">
-            <h2>Cotización pre-ingesta</h2>
+            <h2>{t("ingesta.page.quoteTitle")}</h2>
           </div>
           <input
             ref={fileRef}
             type="file"
             hidden
+            multiple
+            data-testid="ingesta-file-input"
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onFile(f.name);
+              if (e.target.files?.length) onFiles(e.target.files);
             }}
           />
           <div
@@ -124,169 +260,131 @@ export default function IngestaPage() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              const f = e.dataTransfer.files?.[0];
-              if (f) onFile(f.name);
+              if (e.dataTransfer.files?.length) onFiles(e.dataTransfer.files);
             }}
           >
             <Icon name="upload-cloud" size={26} />
             <div className="dz-t">
-              {fileName ? fileName : <>Arrastra documentos o <b>selecciona</b></>}
+              {t("ingesta.page.dropzone", { max: INGEST_BATCH_MAX })}
             </div>
-            <div className="dz-m">PDF · DOCX · XLSX · imágenes con OCR</div>
+            <div className="dz-m">{t("ingesta.page.formats")}</div>
           </div>
 
-          {quoteMut.isPending && (
+          {quoting && (
             <div className="manual-note" style={{ marginTop: 14 }}>
               <Icon name="loader" size={15} />
-              Cotizando con tiktoken…
+              {t("ingesta.page.quoting")}
             </div>
           )}
 
-          {q && (
+          {quoteError && (
+            <div className="manual-note warn" style={{ marginTop: 14 }} role="alert">
+              <Icon name="alert-triangle" size={15} />
+              {quoteError}
+            </div>
+          )}
+
+          {quotes.length > 0 && (
             <>
               <div className="quote">
                 <div className="qr2">
-                  <span>Costo estimado (regional)</span>
-                  <b className="mono">${q.cost_usd.toFixed(2)} USD</b>
+                  <span>{t("ingesta.page.costTotal")}</span>
+                  <b className="mono">${totalCost.toFixed(2)} USD</b>
                 </div>
                 <div className="qr2">
-                  <span>Tiempo estimado</span>
-                  <b className="mono">~{q.eta_minutes} min</b>
+                  <span>{t("ingesta.page.timeTotal")}</span>
+                  <b className="mono">~{Math.round(totalTime / 60)} min</b>
                 </div>
                 <div className="qr2">
-                  <span>Saldo disponible</span>
-                  <b className={"mono " + (insufficient ? "warn" : "ok")}>${q.balance_usd.toFixed(2)} USD</b>
+                  <span>{t("ingesta.page.balance")}</span>
+                  <b className={"mono " + (insufficient ? "warn" : "ok")}>
+                    {saldo != null ? `$${saldo.toFixed(2)} USD` : "—"}
+                  </b>
                 </div>
               </div>
 
-              {insufficient ? (
-                STRIPE_ENABLED ? (
-                  <Link className="primary-btn" href="/cuenta/recharge" style={{ marginTop: 12 }}>
-                    <Icon name="credit-card" size={15} />
-                    Recargar saldo
-                  </Link>
-                ) : (
-                  <div className="manual-note">
-                    <Icon name="info" size={15} />
-                    Saldo insuficiente para esta ingesta.{" "}
-                    <a href={`mailto:${CONTACT_EMAIL}?subject=Recarga de saldo de ingesta DOCYAN`}>
-                      Contactar a DOCYAN para recargar saldo →
-                    </a>
-                  </div>
-                )
-              ) : (
-                <>
-                  {!STRIPE_ENABLED && (
-                    <div className="manual-note">
-                      <Icon name="info" size={15} />
-                      Cobro manual durante el piloto.{" "}
-                      <a href={`mailto:${CONTACT_EMAIL}?subject=Recarga de saldo de ingesta DOCYAN`}>
-                        Contactar a DOCYAN para recargar saldo →
-                      </a>
+              {/* Desglose por documento (real, por tiktoken) */}
+              <div className="ing-breakdown" style={{ marginTop: 12 }}>
+                {quotes.map((q) => {
+                  const fits = fitIds.includes(q.jobId);
+                  return (
+                    <div className="pre-doc" key={q.jobId}>
+                      <span className="pd-ic">
+                        <Icon name="file-text" size={16} />
+                      </span>
+                      <div className="pd-main">
+                        <div className="pd-name">{q.name}</div>
+                        <div className="pd-sub mono">
+                          {q.tokens.toLocaleString()} tok · ${q.costUsd.toFixed(2)} · ~
+                          {Math.max(1, Math.round(q.timeSec / 60))} min
+                          {!q.aprobado && ` · ${t("ingesta.page.rejected")}`}
+                          {q.aprobado && !fits && ` · ${t("ingesta.page.overCapDoc")}`}
+                        </div>
+                      </div>
+                      <button
+                        className="link-btn"
+                        onClick={() => removeDoc(q.jobId)}
+                        aria-label={t("ingesta.page.removeDoc")}
+                      >
+                        {t("ingesta.actions.remove")}
+                      </button>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Manejo explícito del hard cap / saldo (no rechazo en silencio) */}
+              {(overCap || insufficient) && (
+                <div className="manual-note" style={{ marginTop: 12 }}>
+                  <Icon name="info" size={15} />
+                  {insufficient
+                    ? t("ingesta.page.insufficient")
+                    : t("ingesta.page.capExceeded", {
+                        fit: fitIds.length,
+                        total: quotes.length,
+                        cap: SESSION_HARD_CAP_USD,
+                      })}
+                  {!STRIPE_ENABLED ? (
+                    <>
+                      {" "}
+                      <a
+                        href={`mailto:${CONTACT_EMAIL}?subject=Recarga de saldo de ingesta DOCYAN`}
+                      >
+                        {t("ingesta.page.contactRecharge")}
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      <Link href="/cuenta/recharge">{t("ingesta.page.recharge")}</Link>
+                    </>
                   )}
-                  {/* GATE: explicit human confirmation before enqueue. No bypass. */}
-                  <button
-                    className="primary-btn"
-                    onClick={() => confirmMut.mutate()}
-                    disabled={confirmMut.isPending || confirmed}
-                  >
-                    <Icon name="play" size={15} />
-                    {confirmed ? "Encolado ✓" : confirmMut.isPending ? "Encolando…" : "Confirmar e ingerir"}
-                  </button>
-                </>
+                </div>
               )}
+
+              <button
+                className="primary-btn"
+                onClick={confirmBatch}
+                disabled={confirming || fitIds.length === 0}
+                style={{ marginTop: 12 }}
+              >
+                <Icon name="play" size={15} />
+                {confirming
+                  ? t("ingesta.page.confirming")
+                  : t("ingesta.page.confirmBatch", { n: fitIds.length })}
+              </button>
             </>
           )}
         </div>
 
         <div className="panel">
           <div className="sec-h">
-            <h2>Cola de ingesta</h2>
+            <h2>{t("ingesta.page.aboutTitle")}</h2>
           </div>
-          {queue.map((it) => (
-            <div className="qitem" key={it.id}>
-              <div className="qi-top">
-                <span className={"q-dot " + it.status} />
-                <span className="qi-name">{it.name}</span>
-                <span className={"qi-st " + it.status}>{it.status}</span>
-              </div>
-              {it.status === "procesando" && (
-                <div className="bar" style={{ marginTop: 8 }}>
-                  <i style={{ width: it.pct + "%" }} />
-                </div>
-              )}
-              <div className="qi-foot">
-                <span className="mono">{it.eta}</span>
-                {it.status === "fallido" && (
-                  <button className="link-btn" onClick={() => retry(it.id)}>
-                    Reintentar
-                  </button>
-                )}
-                {it.status === "encolado" && (
-                  <button className="link-btn" onClick={() => cancel(it.id)}>
-                    Cancelar
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="two" style={{ marginTop: 18 }}>
-        <div className="panel">
-          <div className="sec-h">
-            <h2>Saldo prepagado</h2>
-            {STRIPE_ENABLED ? (
-              <Link className="more" href="/cuenta/recharge">
-                Recargar →
-              </Link>
-            ) : (
-              <a className="more" href={`mailto:${CONTACT_EMAIL}?subject=Recarga de saldo de ingesta DOCYAN`}>
-                Recargar →
-              </a>
-            )}
+          <div className="manual-note">
+            <Icon name="shield" size={15} />
+            {t("ingesta.page.gateNote")}
           </div>
-          <div className="bal-row">
-            <span className="bv">${BALANCE.available}</span>
-            <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>USD disponibles</span>
-          </div>
-          <div className="bar">
-            <i style={{ width: `${balPct}%` }} />
-          </div>
-          <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 7 }}>
-            Consumido ${BALANCE.consumed} de ${BALANCE.total} este ciclo
-          </div>
-        </div>
-        <div className="panel">
-          <div className="sec-h">
-            <h2>Historial</h2>
-          </div>
-          <table className="mini-tbl">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Documento</th>
-                <th>Costo</th>
-                <th>Duración</th>
-                <th>Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ING_HIST.map((r, i) => (
-                <tr key={i}>
-                  <td className="mono">{r[0]}</td>
-                  <td>{r[1]}</td>
-                  <td className="mono">{r[2]}</td>
-                  <td className="mono">{r[3]}</td>
-                  <td>
-                    <Icon name="check" size={14} color="var(--success-600)" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </>

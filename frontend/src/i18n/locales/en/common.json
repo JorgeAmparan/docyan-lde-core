@@ -35,5 +35,109 @@
   },
   "lang": { "label": "Language", "es": "Español", "en": "English" },
   "region": { "label": "Region" },
-  "theme": { "light": "Light", "dark": "Dark" }
+  "theme": { "light": "Light", "dark": "Dark" },
+  "ingesta": {
+    "page": {
+      "quoteTitle": "Pre-ingest quote",
+      "aboutTitle": "Financial gate",
+      "gateNote": "Every document is measured with tiktoken and checked against your balance and hard caps BEFORE processing. No confirmation, no ingestion.",
+      "dropzone": "Drag up to {{max}} documents or select",
+      "formats": "PDF · DOCX · XLSX · images with OCR",
+      "quoting": "Measuring with tiktoken…",
+      "quoteError": "Could not get a quote. Retry or check your connection.",
+      "confirmError": "Could not confirm the batch. Retry.",
+      "costTotal": "Estimated total cost",
+      "timeTotal": "Estimated total time",
+      "balance": "Available balance",
+      "rejected": "rejected by balance/cap",
+      "overCapDoc": "over session cap",
+      "removeDoc": "Remove document from batch",
+      "insufficient": "Insufficient balance for some documents in the batch.",
+      "capExceeded": "{{fit}} of {{total}} documents fit within the session limit (${{cap}} USD). Remove documents or adjust the cap before confirming.",
+      "recharge": "Recharge balance →",
+      "contactRecharge": "Contact DOCYAN to recharge →",
+      "confirmBatch": "Confirm & ingest batch ({{n}})",
+      "confirming": "Enqueuing batch…"
+    },
+    "batch": {
+      "processing": "Processing batch — {{count}} documents",
+      "processingDoc": "Processing",
+      "preparing": "Preparing…",
+      "remaining": "remaining",
+      "pctOfBatch": "{{pct}}% of batch",
+      "doneTitle": "Batch complete",
+      "doneSub": "{{n}} live documents available for queries. The SHA-256 chain was sealed.",
+      "doneErr": "{{k}} with error"
+    },
+    "counts": {
+      "completado": "{{n}} completed",
+      "procesando": "{{n}} processing",
+      "encolado": "{{n}} queued",
+      "error": "{{n}} with error"
+    },
+    "phase": {
+      "descarga": "Download",
+      "conversion": "Conversion",
+      "extraccion": "Extraction",
+      "grafo": "Graph write",
+      "dedup": "Deduplication"
+    },
+    "status": { "cargando": "Loading", "procesando": "Processing" },
+    "queuePosition": "Queued · position {{n}}",
+    "doc": {
+      "completed": "Completed",
+      "completedAvailable": "Completed · available for queries",
+      "error": "Error · {{reason}}",
+      "eta": "{{clock}} left"
+    },
+    "eta": {
+      "seconds": "a few seconds",
+      "lessThanMinute": "less than 1 min",
+      "minutes": "~{{n}} min"
+    },
+    "detail": {
+      "conversion": "Page {{page}} / {{pages}}",
+      "extraccion": "Page {{page}} · {{spans}} spans · {{entities}} entities",
+      "grafo": "{{entities}} entities · {{relations}} / {{relationsTotal}} relations",
+      "dedup": "{{merged}} / {{entities}} canonical entities"
+    },
+    "ticker": {
+      "descarga": {
+        "0": "Receiving file…",
+        "1": "Verifying SHA-256 integrity",
+        "2": "Encrypting at rest"
+      },
+      "conversion": {
+        "0": "Normalizing layout · pg {{page}} / {{pages}}",
+        "1": "Detecting tables and headers"
+      },
+      "extraccion": {
+        "0": "Span §{{spans}} extracted",
+        "1": "Linking citations to source · pg {{page}}"
+      },
+      "grafo": {
+        "0": "{{relations}} relations in the graph",
+        "1": "Indexing BGE-M3 embeddings"
+      },
+      "dedup": {
+        "0": "{{merged}} / {{entities}} canonical entities",
+        "1": "Resolving aliases and versions"
+      }
+    },
+    "actions": {
+      "history": "View history",
+      "newIngest": "New ingestion",
+      "minimize": "Minimize",
+      "viewProgress": "View progress",
+      "consult": "Query →",
+      "retry": "Retry",
+      "skip": "Skip",
+      "remove": "Remove"
+    },
+    "toast": {
+      "docCompleted": "Document available",
+      "docError": "Document with error",
+      "batchCompleted": "Batch complete"
+    }
+  }
 }

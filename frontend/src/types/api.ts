@@ -378,11 +378,55 @@ export interface paths {
         };
         /**
          * Estado Job
-         * @description Estado de un job (aislado por tenant).
+         * @description Estado plano de un job (aislado por tenant). Compat B2.
          */
         get: operations["estado_job_ingesta_documents__job_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingesta/documents/{job_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Progreso Job
+         * @description Progreso observable de un job (F1 §2.1, shape `DocProgress` del handoff). El
+         *     cliente sondea este endpoint por job (cada 2-3 s) y agrega los N en su
+         *     `BatchProgress`. Multi-tenant estricto: solo jobs del tenant del JWT (RLS).
+         */
+        get: operations["progreso_job_ingesta_documents__job_id__status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ingesta/documents/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reintentar Job
+         * @description Reintento manual de un documento en estado terminal de error (F1 §2.5). Re-
+         *     encola sin re-cotizar; la idempotencia por SHA-256 evita duplicar si el
+         *     contenido ya quedó ingerido. ('Omitir' es acción de cliente, no toca backend.)
+         */
+        post: operations["reintentar_job_ingesta_documents__job_id__retry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1481,6 +1525,61 @@ export interface components {
             /** Vista Unificada */
             vista_unificada?: components["schemas"]["PasoVistaUnificada"][];
         };
+        /**
+         * DocProgress
+         * @description Respuesta de `GET /ingesta/documents/{job_id}/status` (handoff §3.1).
+         *
+         *     `BatchProgress` NO existe en el backend: el cliente lo agrega a partir de N
+         *     de estos (orquestación en cliente, decisión rectora #3). Los nombres siguen
+         *     el contrato TS del handoff (camelCase) para que el shape calce 1:1 con el
+         *     componente de diseño sin transformación intermedia.
+         */
+        DocProgress: {
+            /** Docid */
+            docId: string;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /** Status */
+            status: string;
+            /** Phase */
+            phase?: string | null;
+            /**
+             * Phasefraction
+             * @default 0
+             */
+            phaseFraction: number;
+            /**
+             * Pct
+             * @default 0
+             */
+            pct: number;
+            /** Etaseconds */
+            etaSeconds?: number | null;
+            /** Queueposition */
+            queuePosition?: number | null;
+            /** Counters */
+            counters?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Retryattempt
+             * @default 0
+             */
+            retryAttempt: number;
+            error?: components["schemas"]["ProgressError"] | null;
+            /** Consulturl */
+            consultUrl?: string | null;
+            /**
+             * Disponibleparaconsulta
+             * @default false
+             */
+            disponibleParaConsulta: boolean;
+        };
         /** DocumentRef */
         DocumentRef: {
             /** External Id */
@@ -1941,6 +2040,13 @@ export interface components {
             modo_ejecutar_paso_a_paso: boolean;
             /** Citas */
             citas?: components["schemas"]["Cita"][];
+        };
+        /** ProgressError */
+        ProgressError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
         };
         /**
          * QueryResponse
@@ -2815,6 +2921,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    progreso_job_ingesta_documents__job_id__status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocProgress"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reintentar_job_ingesta_documents__job_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocProgress"];
                 };
             };
             /** @description Validation Error */

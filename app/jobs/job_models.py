@@ -57,6 +57,25 @@ class IngestJob(BaseModel):
     resultado: dict = Field(default_factory=dict)
     error: str | None = None
 
+    # ── F1: observabilidad de progreso (worker → status endpoint → UI) ──────────
+    # Clave de IDEMPOTENCIA (F1 §2.4): SHA-256 del CONTENIDO del documento. La fija
+    # el worker al descargar. Dos jobs con el mismo contenido comparten hash, así
+    # un reintento —o la misma re-subida con otro nombre/sesión— se reconoce como
+    # ya ingerido y NO reprocesa ni re-cobra tokens. También es el `document_id`
+    # que se pasa a apply_changes() del SDK (crash-safe por SHA-256).
+    content_sha256: str | None = None
+    # Fase actual del pipeline (descarga|conversion|extraccion|grafo|dedup) o None.
+    phase: str | None = None
+    # Avance DENTRO de la fase actual (0..1).
+    phase_fraction: float = 0.0
+    # Contadores reales de la fase (page/pages, spans, entities, relations, …).
+    counters: dict = Field(default_factory=dict)
+    # Intento de reintento en curso (0 = primer intento). Lo sube el worker.
+    retry_attempt: int = 0
+    # True si la ingesta se resolvió por idempotencia (contenido ya ingerido):
+    # no se reprocesó ni se re-cobró; el documento ya estaba disponible.
+    idempotente: bool = False
+
     def confirmable(self) -> bool:
         """Solo un job aprobado y pendiente de confirmación puede encolarse."""
         return (
@@ -64,3 +83,7 @@ class IngestJob(BaseModel):
             and self.cotizacion is not None
             and self.cotizacion.aprobado
         )
+
+    def reintentable(self) -> bool:
+        """Solo un job en estado terminal de error puede reintentarse a mano."""
+        return self.status == JobStatus.failed

@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { useApplyTheme } from "@/lib/theme";
 import { PwaRegister } from "./pwa-register";
+import { GlobalIngestWatcher } from "./ingesta/global-ingest-watcher";
 import "@/i18n/config";
 
 function ThemeBridge() {
@@ -26,6 +27,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={client}>
       <ThemeBridge />
       <PwaRegister />
+      <GlobalIngestWatcher />
       {children}
       <Toaster position="top-center" toastOptions={{ style: { fontFamily: "var(--font-sans)" } }} />
     </QueryClientProvider>

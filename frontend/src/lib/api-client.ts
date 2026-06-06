@@ -23,6 +23,8 @@ export class ApiError extends Error {
 export interface ApiOptions extends Omit<RequestInit, "body"> {
   /** JSON body — serialized automatically. */
   json?: unknown;
+  /** Multipart body (file uploads) — sent as-is; the browser sets the boundary. */
+  form?: FormData;
   /** Bearer token override (server-side passes the cookie value). */
   token?: string | null;
   /** Query params. */
@@ -43,18 +45,22 @@ export async function apiFetch<T = unknown>(
   path: string,
   opts: ApiOptions = {},
 ): Promise<T> {
-  const { json, token, query, headers, ...rest } = opts;
+  const { json, form, token, query, headers, ...rest } = opts;
   const finalHeaders: Record<string, string> = {
     Accept: "application/json",
     ...(headers as Record<string, string>),
   };
+  // Multipart: NO fijar Content-Type — el browser pone el boundary correcto.
   if (json !== undefined) finalHeaders["Content-Type"] = "application/json";
   if (token) finalHeaders["Authorization"] = `Bearer ${token}`;
+
+  const body: BodyInit | undefined =
+    form !== undefined ? form : json !== undefined ? JSON.stringify(json) : undefined;
 
   const res = await fetch(buildUrl(path, query), {
     ...rest,
     headers: finalHeaders,
-    body: json !== undefined ? JSON.stringify(json) : (rest as RequestInit).body,
+    body,
   });
 
   const isJson = res.headers.get("content-type")?.includes("application/json");
@@ -74,6 +80,7 @@ export async function apiFetch<T = unknown>(
 export const api = {
   get: <T = unknown>(path: string, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "GET" }),
   post: <T = unknown>(path: string, json?: unknown, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "POST", json }),
+  postForm: <T = unknown>(path: string, form: FormData, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "POST", form }),
   patch: <T = unknown>(path: string, json?: unknown, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "PATCH", json }),
   del: <T = unknown>(path: string, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "DELETE" }),
 };

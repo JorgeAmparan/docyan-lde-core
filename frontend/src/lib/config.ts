@@ -14,6 +14,17 @@ export const STRIPE_ENABLED = STRIPE_PUBLISHABLE_KEY.startsWith("pk_");
 export const CONTACT_EMAIL = "hola@docyan.com";
 export const SUPPORT_EMAIL = "soporte@docyan.com";
 
+/** Máximo de documentos por lote de ingesta (decisión rectora F1 #1). */
+export const INGEST_BATCH_MAX = 10;
+/**
+ * Hard cap de sesión en USD (default alfa $20, decisión rectora F1 #2). Guardrail
+ * de UX del lado cliente para "cuántos caben"; el gate financiero autoritativo
+ * sigue siendo el cotizador del backend por documento (saldo + caps, sin bypass).
+ */
+export const SESSION_HARD_CAP_USD = Number(
+  process.env.NEXT_PUBLIC_SESSION_HARD_CAP_USD ?? "20",
+);
+
 /** Cookie that carries the access JWT (httpOnly, set by the route handler). */
 export const AUTH_COOKIE = "docyan_token";
 /** Cookie that carries the active CoDo (DoCo) id for multi-CoDo admins. */
