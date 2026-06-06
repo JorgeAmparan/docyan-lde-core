@@ -22,6 +22,7 @@ B2). El activo en B2 es el modo manual (usuario sube archivo).
 """
 from __future__ import annotations
 
+import hashlib
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -71,6 +72,11 @@ async def cotizar_documento(
     store = providers.get_document_store()
     documento_ref = store.put(tenant_id, file.filename, data)
 
+    # SHA-256 del contenido al subir (F1.5/A.3): habilita cortar la idempotencia
+    # ANTES de reservar en /confirm (mismo contenido ya liquidado → no re-cobra).
+    # El worker lo recalcula de los bytes descargados como defensa en profundidad.
+    content_sha256 = hashlib.sha256(data).hexdigest()
+
     job = IngestJob(
         job_id=uuid.uuid4().hex,
         tenant_id=tenant_id,
@@ -79,12 +85,15 @@ async def cotizar_documento(
         tipo_documento=tipo_tentativo,
         tipo_forzado=tipo_forzado,
         usuario_id=ctx.get("user_id"),
+        content_sha256=content_sha256,
+        bytes_originales=len(data),
         cotizacion=CotizacionSnapshot(
             costo_estimado_usd=cotizacion.costo_estimado_usd,
             tiempo_estimado_seg=cotizacion.tiempo_estimado_seg,
             tokens_documento=cotizacion.tokens_documento,
             aprobado=cotizacion.aprobado,
             decision=cotizacion.decision.value,
+            precio_setup_usd=cotizacion.precio_setup_usd,
         ),
     )
 
@@ -126,7 +135,15 @@ async def confirmar_ingesta(
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
-    return {"job_id": job.job_id, "status": job.status.value, "encolado": True}
+    # encolado=False si la idempotencia (A.3) lo resolvió sin reservar ni encolar
+    # (mismo contenido ya liquidado): queda 'completed' marcado idempotente.
+    encolado = job.status == JobStatus.queued
+    return {
+        "job_id": job.job_id,
+        "status": job.status.value,
+        "encolado": encolado,
+        "idempotente": job.idempotente,
+    }
 
 
 @router.get("/documents/{job_id}")

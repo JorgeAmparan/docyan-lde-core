@@ -22,13 +22,20 @@ from typing import Any, Protocol
 
 @dataclass
 class TenantBudget:
-    """Vista de dominio de una fila de `tenant_budget`."""
+    """Vista de dominio de una fila de `tenant_budget`.
+
+    El saldo se parte en DISPONIBLE (`saldo_actual_usd`) y RETENIDO
+    (`retenido_usd`, F1.5). El esquema reservar/liquidar/liberar mueve montos
+    entre ambos sin perder el invariante disponible + retenido = saldo total vivo.
+    """
 
     tenant_id: str
     saldo_actual_usd: float
     hard_cap_por_documento: float = 5.0
     hard_cap_por_sesion: float = 20.0
     moneda: str = "USD"
+    # Monto comprometido por ingestas confirmadas y aún no liquidadas (F1.5).
+    retenido_usd: float = 0.0
 
 
 class BudgetStore(Protocol):
@@ -39,6 +46,10 @@ class BudgetStore(Protocol):
     def upsert(self, budget: TenantBudget) -> TenantBudget: ...
 
     def set_balance(self, tenant_id: str, nuevo_saldo: float) -> TenantBudget: ...
+
+    def set_balances(
+        self, tenant_id: str, saldo_disponible: float, retenido: float
+    ) -> TenantBudget: ...
 
 
 # ── Almacén en memoria (tests / dev local) ────────────────────────────────────
@@ -60,6 +71,14 @@ class InMemoryBudgetStore:
     def set_balance(self, tenant_id: str, nuevo_saldo: float) -> TenantBudget:
         b = self._rows[tenant_id]
         b.saldo_actual_usd = nuevo_saldo
+        return b
+
+    def set_balances(
+        self, tenant_id: str, saldo_disponible: float, retenido: float
+    ) -> TenantBudget:
+        b = self._rows[tenant_id]
+        b.saldo_actual_usd = saldo_disponible
+        b.retenido_usd = retenido
         return b
 
 
@@ -92,6 +111,7 @@ class SupabaseBudgetStore:
             hard_cap_por_documento=float(row.get("hard_cap_por_documento", 5.0)),
             hard_cap_por_sesion=float(row.get("hard_cap_por_sesion", 20.0)),
             moneda=row.get("moneda", "USD"),
+            retenido_usd=float(row.get("retenido_usd", 0.0) or 0.0),
         )
 
     def get(self, tenant_id: str) -> TenantBudget | None:
@@ -115,6 +135,7 @@ class SupabaseBudgetStore:
                 "hard_cap_por_documento": budget.hard_cap_por_documento,
                 "hard_cap_por_sesion": budget.hard_cap_por_sesion,
                 "moneda": budget.moneda,
+                "retenido_usd": budget.retenido_usd,
             },
             on_conflict="tenant_id",
         ).execute()
@@ -123,6 +144,17 @@ class SupabaseBudgetStore:
     def set_balance(self, tenant_id: str, nuevo_saldo: float) -> TenantBudget:
         self._sb().table(self.TABLE).update(
             {"saldo_actual_usd": nuevo_saldo}
+        ).eq("tenant_id", tenant_id).execute()
+        b = self.get(tenant_id)
+        if b is None:
+            raise KeyError(f"tenant_budget inexistente para {tenant_id}")
+        return b
+
+    def set_balances(
+        self, tenant_id: str, saldo_disponible: float, retenido: float
+    ) -> TenantBudget:
+        self._sb().table(self.TABLE).update(
+            {"saldo_actual_usd": saldo_disponible, "retenido_usd": retenido}
         ).eq("tenant_id", tenant_id).execute()
         b = self.get(tenant_id)
         if b is None:
@@ -141,6 +173,18 @@ class CapVerdict:
     motivo: str
     saldo_disponible: float
     falta_usd: float = 0.0  # cuánto falta si fue rechazado por saldo
+
+
+@dataclass
+class ReservaResultado:
+    """Resultado de intentar reservar (retener) un monto sobre el saldo (F1.5)."""
+
+    ok: bool
+    monto_reservado: float
+    saldo_disponible: float
+    retenido: float
+    motivo: str = ""
+    falta_usd: float = 0.0  # cuánto falta si no alcanzó (comportamiento "cuántos caben")
 
 
 class BudgetManager:
@@ -242,9 +286,81 @@ class BudgetManager:
         Descuenta del saldo tras una ingesta efectivamente realizada. Se invoca
         DESPUÉS de procesar (con el costo real o el estimado confirmado), nunca
         antes de la confirmación del usuario.
+
+        NOTA F1.5: el flujo de ingesta usa el esquema reservar/liquidar/liberar
+        (opción C) en lugar de un débito directo; `debitar` se conserva para usos
+        puntuales (recargas/ajustes) y compatibilidad.
         """
         budget = self.store.get(tenant_id)
         if budget is None:
             raise KeyError(f"tenant_budget inexistente para {tenant_id}")
         nuevo = round(budget.saldo_actual_usd - monto_usd, 4)
         return self.store.set_balance(tenant_id, nuevo)
+
+    # ── Esquema reservar / liquidar / liberar (opción C, F1.5) ────────────────
+    def reservar(self, tenant_id: str, monto_usd: float) -> ReservaResultado:
+        """
+        Mueve `monto_usd` de DISPONIBLE a RETENIDO al confirmar una ingesta
+        (paso 2 del gate). Si el disponible no alcanza, NO reserva y devuelve
+        `ok=False` con `falta_usd` (el llamador no confirma / no encola — el
+        comportamiento de "cuántos caben" del cotizador sigue vigente).
+        """
+        budget = self.store.get(tenant_id)
+        if budget is None:
+            raise KeyError(f"tenant_budget inexistente para {tenant_id}")
+        monto = round(monto_usd, 4)
+        if monto > budget.saldo_actual_usd:
+            return ReservaResultado(
+                ok=False,
+                monto_reservado=0.0,
+                saldo_disponible=budget.saldo_actual_usd,
+                retenido=budget.retenido_usd,
+                motivo=(
+                    f"Saldo disponible insuficiente para reservar ${monto:.4f}: "
+                    f"disponible ${budget.saldo_actual_usd:.4f}. No se encola."
+                ),
+                falta_usd=round(monto - budget.saldo_actual_usd, 4),
+            )
+        nuevo_disp = round(budget.saldo_actual_usd - monto, 4)
+        nuevo_ret = round(budget.retenido_usd + monto, 4)
+        self.store.set_balances(tenant_id, nuevo_disp, nuevo_ret)
+        return ReservaResultado(
+            ok=True,
+            monto_reservado=monto,
+            saldo_disponible=nuevo_disp,
+            retenido=nuevo_ret,
+            motivo="Reserva creada (disponible→retenido).",
+        )
+
+    def liquidar(
+        self, tenant_id: str, reserva_usd: float, costo_real_usd: float
+    ) -> TenantBudget:
+        """
+        Convierte una reserva en consumo real al COMPLETAR la ingesta: libera la
+        reserva de `retenido` y descuenta el `costo_real` definitivo, devolviendo
+        el sobrante (reserva − real) a `disponible`. Si el real excede la reserva
+        (sobre-consumo), el disponible absorbe la diferencia (puede quedar negativo;
+        es el reflejo honesto del cómputo realmente gastado).
+        """
+        budget = self.store.get(tenant_id)
+        if budget is None:
+            raise KeyError(f"tenant_budget inexistente para {tenant_id}")
+        reserva = round(reserva_usd, 4)
+        real = round(costo_real_usd, 4)
+        nuevo_ret = round(max(0.0, budget.retenido_usd - reserva), 4)
+        nuevo_disp = round(budget.saldo_actual_usd + (reserva - real), 4)
+        return self.store.set_balances(tenant_id, nuevo_disp, nuevo_ret)
+
+    def liberar(self, tenant_id: str, reserva_usd: float) -> TenantBudget:
+        """
+        Devuelve la reserva COMPLETA a `disponible` cuando la ingesta falla de
+        forma terminal (o se resuelve por idempotencia sin consumir cómputo).
+        Estado final del saldo idéntico al de antes de reservar.
+        """
+        budget = self.store.get(tenant_id)
+        if budget is None:
+            raise KeyError(f"tenant_budget inexistente para {tenant_id}")
+        reserva = round(reserva_usd, 4)
+        nuevo_ret = round(max(0.0, budget.retenido_usd - reserva), 4)
+        nuevo_disp = round(budget.saldo_actual_usd + reserva, 4)
+        return self.store.set_balances(tenant_id, nuevo_disp, nuevo_ret)

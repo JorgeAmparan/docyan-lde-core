@@ -20,10 +20,30 @@ Flujo del gate (sin bypass):
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from app.jobs.job_models import IngestJob, JobStatus
+
+logger = logging.getLogger("docyan.jobs.dispatcher")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _duracion_seg(started_at: str | None, completed_at: str | None) -> float | None:
+    """Segundos entre dos timestamps ISO-8601, o None si falta alguno/parseo falla."""
+    if not started_at or not completed_at:
+        return None
+    try:
+        ini = datetime.fromisoformat(started_at)
+        fin = datetime.fromisoformat(completed_at)
+        return round(max(0.0, (fin - ini).total_seconds()), 3)
+    except ValueError:
+        return None
 
 QUEUE_KEY = "docyan:ingest:queue"
 JOB_KEY_PREFIX = "docyan:ingest:job:"
@@ -161,10 +181,22 @@ class RedisQueueBackend:
 
 
 class JobDispatcher:
-    """Encola jobs hacia el worker y gestiona transiciones de estado."""
+    """Encola jobs hacia el worker y gestiona transiciones de estado.
 
-    def __init__(self, backend: QueueBackend | None = None):
+    F1.5: si se inyecta `budget_manager`, las transiciones del gate ejecutan el
+    esquema reservar/liquidar/liberar sobre `tenant_budget` (confirmar reserva el
+    monto cotizado; completar liquida a costo real; fallar/idempotente liberan).
+    Producción y worker SIEMPRE lo inyectan (ver providers / worker.main). Si es
+    None, el débito se omite (tests que verifican invariantes ortogonales al saldo).
+    """
+
+    def __init__(
+        self,
+        backend: QueueBackend | None = None,
+        budget_manager=None,
+    ):
         self.backend = backend or RedisQueueBackend()
+        self.budget = budget_manager
 
     def crear_job(self, job: IngestJob) -> IngestJob:
         """
@@ -183,6 +215,14 @@ class JobDispatcher:
         """
         Confirma e encola un job aprobado. Lanza si el job no existe o no es
         confirmable (rechazado, ya procesado, o sin cotización aprobada).
+
+        F1.5: tras pasar el gate, RESERVA el monto cotizado (disponible→retenido).
+          · Idempotencia (A.3): si el contenido (SHA-256) YA fue liquidado, corta
+            ANTES de reservar — no re-cobra; cierra el job como idempotente sin
+            encolar.
+          · Si la reserva falla (saldo disponible insuficiente), NO encola y lanza
+            ValueError (el endpoint responde 409; el comportamiento "cuántos caben"
+            del cotizador sigue vigente).
         """
         job = self.backend.load_job(job_id)
         if job is None:
@@ -193,6 +233,31 @@ class JobDispatcher:
                 f"aprobado={job.cotizacion.aprobado if job.cotizacion else None}). "
                 "Sin confirmación válida no se encola hacia el worker."
             )
+
+        # Idempotencia (A.3): contenido ya ingerido/liquidado → no se cobra de
+        # nuevo. Corta antes de reservar (igual que F1 corta antes de reprocesar).
+        if job.content_sha256:
+            previo = self.backend.lookup_ingested(job.tenant_id, job.content_sha256)
+            if previo is not None:
+                logger.info(
+                    "job %s: SHA-256 ya liquidado; idempotente, no reserva ni encola",
+                    job_id,
+                )
+                return self.marcar_completado_idempotente(
+                    job_id, previo.get("resultado", {})
+                )
+
+        # Reserva del monto cotizado (costo de cómputo estimado).
+        if self.budget is not None and job.reserva_estado == "ninguna":
+            monto = job.cotizacion.costo_estimado_usd if job.cotizacion else 0.0
+            res = self.budget.reservar(job.tenant_id, monto)
+            if not res.ok:
+                raise ValueError(
+                    f"job {job_id}: {res.motivo} (falta ${res.falta_usd:.4f})."
+                )
+            job.reserva_usd = res.monto_reservado
+            job.reserva_estado = "retenido"
+
         job.status = JobStatus.queued
         self.backend.save_job(job)
         self.backend.push(job_id)
@@ -200,7 +265,15 @@ class JobDispatcher:
 
     # ── Transiciones que ejecuta el worker ───────────────────────────────────
     def marcar_procesando(self, job_id: str) -> IngestJob:
-        return self._transicion(job_id, JobStatus.processing)
+        """Marca el job en proceso y sella `started_at` (instrumentación F1.5)."""
+        job = self.backend.load_job(job_id)
+        if job is None:
+            raise KeyError(f"job inexistente: {job_id}")
+        job.status = JobStatus.processing
+        if job.started_at is None:  # el primer intento fija el inicio real
+            job.started_at = _now_iso()
+        self.backend.save_job(job)
+        return job
 
     def actualizar_progreso(
         self,
@@ -211,6 +284,7 @@ class JobDispatcher:
         counters: dict | None = None,
         retry_attempt: int | None = None,
         content_sha256: str | None = None,
+        bytes_originales: int | None = None,
     ) -> IngestJob:
         """
         Actualiza la granularidad de progreso de un job en proceso (F1 §2.2). El
@@ -230,10 +304,23 @@ class JobDispatcher:
             job.retry_attempt = retry_attempt
         if content_sha256 is not None:
             job.content_sha256 = content_sha256
+        if bytes_originales is not None:
+            job.bytes_originales = bytes_originales
         self.backend.save_job(job)
         return job
 
-    def marcar_completado(self, job_id: str, resultado: dict) -> IngestJob:
+    def marcar_completado(
+        self, job_id: str, resultado: dict, costo_real_usd: float | None = None
+    ) -> IngestJob:
+        """
+        Cierra un job con éxito. F1.5:
+          · LIQUIDA la reserva a costo real (devuelve el sobrante a disponible).
+            `costo_real_usd` = tokens reales del SDK si se conocen; si no, se usa
+            el cotizado como aproximación (el IngestionResult del SDK NO expone los
+            tokens consumidos — documentado en el reporte). Idempotente vía
+            `reserva_estado`: un cierre repetido no re-liquida.
+          · Sella `completed_at`/`duracion_seg` y el peso del resultado.
+        """
         job = self.backend.load_job(job_id)
         if job is None:
             raise KeyError(f"job inexistente: {job_id}")
@@ -241,6 +328,18 @@ class JobDispatcher:
         job.resultado = resultado
         job.phase = None
         job.phase_fraction = 1.0
+        job.completed_at = _now_iso()
+        job.duracion_seg = _duracion_seg(job.started_at, job.completed_at)
+        if job.bytes_resultado is None and resultado.get("markdown_bytes") is not None:
+            job.bytes_resultado = int(resultado["markdown_bytes"])
+
+        # Liquidación del débito (idempotente: solo si hay reserva viva).
+        if self.budget is not None and job.reserva_estado == "retenido":
+            real = job.reserva_usd if costo_real_usd is None else round(costo_real_usd, 4)
+            self.budget.liquidar(job.tenant_id, job.reserva_usd, real)
+            job.costo_real_usd = real
+            job.reserva_estado = "liquidado"
+
         self.backend.save_job(job)
         # Idempotencia: registra el contenido como ya ingerido (clave SHA-256 por
         # tenant). Un futuro job con el mismo contenido se resuelve sin reprocesar.
@@ -255,6 +354,9 @@ class JobDispatcher:
         Cierra un job porque su contenido (SHA-256) YA estaba ingerido: reusa el
         resultado previo, marca `idempotente=True` y NO reprocesa ni re-cobra. El
         estado final del sistema es idéntico a la primera ingesta (F1 §2.4 / #8).
+
+        F1.5: como NO se consumió cómputo, LIBERA la reserva (si la hubiera) — el
+        re-ingerir el mismo contenido no cuesta saldo (A.3).
         """
         job = self.backend.load_job(job_id)
         if job is None:
@@ -264,16 +366,27 @@ class JobDispatcher:
         job.idempotente = True
         job.phase = None
         job.phase_fraction = 1.0
+        job.completed_at = _now_iso()
+        job.duracion_seg = _duracion_seg(job.started_at, job.completed_at)
+        if self.budget is not None and job.reserva_estado == "retenido":
+            self.budget.liberar(job.tenant_id, job.reserva_usd)
+            job.reserva_estado = "liberado"
         self.backend.save_job(job)
         return job
 
     def marcar_fallido(self, job_id: str, error: str) -> IngestJob:
-        """Estado terminal de error (F1 §2.4): agotados los reintentos del worker."""
+        """
+        Estado terminal de error (F1 §2.4): agotados los reintentos del worker.
+        F1.5: LIBERA la reserva completa a disponible (idempotente vía estado).
+        """
         job = self.backend.load_job(job_id)
         if job is None:
             raise KeyError(f"job inexistente: {job_id}")
         job.status = JobStatus.failed
         job.error = error
+        if self.budget is not None and job.reserva_estado == "retenido":
+            self.budget.liberar(job.tenant_id, job.reserva_usd)
+            job.reserva_estado = "liberado"
         self.backend.save_job(job)
         return job
 
@@ -298,6 +411,21 @@ class JobDispatcher:
                 f"job {job_id} no es reintentable (status={job.status.value}). "
                 "Solo un job en estado terminal de error se reintenta a mano."
             )
+        # F1.5: el fallo terminal ya liberó la reserva; un reintento manual vuelve
+        # a procesar (consume cómputo), así que RE-reserva. Si el contenido ya
+        # estaba ingerido, el worker lo resolverá por idempotencia y liberará. Un
+        # reintento AUTOMÁTICO del worker (antes del fallo terminal) NO pasa por
+        # aquí: opera sobre la reserva viva sin re-reservar (A.3).
+        if self.budget is not None and job.reserva_estado != "retenido":
+            monto = job.cotizacion.costo_estimado_usd if job.cotizacion else 0.0
+            res = self.budget.reservar(job.tenant_id, monto)
+            if not res.ok:
+                raise ValueError(
+                    f"job {job_id}: {res.motivo} (falta ${res.falta_usd:.4f})."
+                )
+            job.reserva_usd = res.monto_reservado
+            job.reserva_estado = "retenido"
+            job.costo_real_usd = None
         job.status = JobStatus.queued
         job.error = None
         job.phase = None
@@ -306,12 +434,4 @@ class JobDispatcher:
         job.idempotente = False
         self.backend.save_job(job)
         self.backend.push(job_id)
-        return job
-
-    def _transicion(self, job_id: str, status: JobStatus) -> IngestJob:
-        job = self.backend.load_job(job_id)
-        if job is None:
-            raise KeyError(f"job inexistente: {job_id}")
-        job.status = status
-        self.backend.save_job(job)
         return job

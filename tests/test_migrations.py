@@ -45,11 +45,14 @@ MIGRATION_FILES = [
     "013_fat_hash_chain.sql",
     "014_playbooks.sql",
     "015_pcl_metrics.sql",
+    # 016 (platform_superadmin) crea tablas propias y se verifica aparte (F2).
+    "017_debito_y_metricas.sql",
 ]
 
 # (tabla, columnas clave que el código de la app referencia)
 NEW_TABLES = {
-    "documents": ["id", "org_id", "name", "status"],
+    # size_bytes/result_bytes añadidas en 017 (instrumentación de peso, F1.5).
+    "documents": ["id", "org_id", "name", "status", "size_bytes", "result_bytes"],
     "entities": ["id", "org_id", "document_id", "entity_class",
                  "entity_value", "data_text", "knowledge_triple", "embedding", "status"],
     "audit_trail": ["id", "org_id", "document_id", "entity_id", "component",
@@ -63,7 +66,7 @@ NEW_TABLES = {
     "quarantine": ["id", "org_id", "entity_id", "rule_id", "reason", "resolved"],
     "api_keys": ["id", "org_id", "api_key", "email", "org_name", "plan",
                  "stripe_customer_id", "is_active"],
-    "tenant_budget": ["id", "tenant_id", "saldo_actual_usd",
+    "tenant_budget": ["id", "tenant_id", "saldo_actual_usd", "retenido_usd",
                       "hard_cap_por_documento", "hard_cap_por_sesion"],
     "tenant_schemas": ["id", "tenant_id", "tipo_documento", "schema_def",
                        "es_generado_dinamicamente", "uso_contador"],

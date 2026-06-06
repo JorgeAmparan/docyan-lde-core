@@ -1494,6 +1494,8 @@ export interface components {
         BudgetMetrics: {
             /** Saldo Actual Usd */
             saldo_actual_usd?: number | null;
+            /** Retenido Usd */
+            retenido_usd?: number | null;
             /** Hard Cap Por Documento */
             hard_cap_por_documento?: number | null;
             /** Hard Cap Por Sesion */

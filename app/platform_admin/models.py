@@ -54,6 +54,7 @@ class GraphMetrics(BaseModel):
 
 class BudgetMetrics(BaseModel):
     saldo_actual_usd: float | None = None
+    retenido_usd: float | None = None  # comprometido por reservas vivas (F1.5)
     hard_cap_por_documento: float | None = None
     hard_cap_por_sesion: float | None = None
     moneda: str = "USD"

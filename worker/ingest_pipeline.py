@@ -295,6 +295,8 @@ class IngestPipeline:
             "duplicados_resueltos": duplicados_resueltos,
             "modelo_extraccion": modelo_usado,
             "cache_invalidadas": invalidadas,
+            # F1.5: peso del resultado almacenado (markdown convertido) en bytes.
+            "markdown_bytes": len(markdown.encode("utf-8")),
             "metadata": getattr(ingest_result, "metadata", {}),
         }
 
