@@ -103,6 +103,14 @@ async def verificar_credenciales(
     if bearer and bearer.credentials:
         try:
             payload = jwt.decode(bearer.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            # F2: un token de PLATAFORMA (scope="platform") NO concede acceso a
+            # recursos de tenant. Se rechaza explícito (403), no se intenta leer
+            # org_id/role (que no trae). El RLS de tenant queda intacto.
+            if payload.get("scope") == "platform":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Token de plataforma no válido para recursos de tenant.",
+                )
             return {
                 "org_id": payload["org_id"],
                 "user_id": payload["sub"],
@@ -111,6 +119,8 @@ async def verificar_credenciales(
                 "plan": None,
                 "api_key": None,
             }
+        except HTTPException:
+            raise
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expirado.")
         except jwt.InvalidTokenError:

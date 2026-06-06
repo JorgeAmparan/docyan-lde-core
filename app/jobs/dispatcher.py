@@ -47,6 +47,7 @@ class QueueBackend:
     def pop(self, timeout: int = 0) -> str | None: ...
     def queue_length(self) -> int: ...
     def queue_position(self, job_id: str) -> int | None: ...
+    def list_all_jobs(self) -> list[IngestJob]: ...
     # Idempotencia por contenido (SHA-256), aislada por tenant.
     def record_ingested(self, tenant_id: str, content_sha256: str, payload: dict) -> None: ...
     def lookup_ingested(self, tenant_id: str, content_sha256: str) -> dict | None: ...
@@ -79,6 +80,9 @@ class InMemoryQueueBackend:
 
     def queue_position(self, job_id: str) -> int | None:
         return self._queue.index(job_id) + 1 if job_id in self._queue else None
+
+    def list_all_jobs(self) -> list[IngestJob]:
+        return [IngestJob.model_validate_json(raw) for raw in self._jobs.values()]
 
     def record_ingested(self, tenant_id: str, content_sha256: str, payload: dict) -> None:
         self._ingested[_ingested_key(tenant_id, content_sha256)] = payload
@@ -126,6 +130,16 @@ class RedisQueueBackend:
     def queue_position(self, job_id: str) -> int | None:
         ids = self._r().lrange(QUEUE_KEY, 0, -1)
         return ids.index(job_id) + 1 if job_id in ids else None
+
+    def list_all_jobs(self) -> list[IngestJob]:
+        """Escanea el estado de todos los jobs (observabilidad de plataforma, F2)."""
+        r = self._r()
+        jobs: list[IngestJob] = []
+        for key in r.scan_iter(match=f"{JOB_KEY_PREFIX}*", count=200):
+            raw = r.get(key)
+            if raw:
+                jobs.append(IngestJob.model_validate_json(raw))
+        return jobs
 
     def record_ingested(self, tenant_id: str, content_sha256: str, payload: dict) -> None:
         import json
