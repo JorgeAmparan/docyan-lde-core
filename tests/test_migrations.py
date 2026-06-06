@@ -47,6 +47,7 @@ MIGRATION_FILES = [
     "015_pcl_metrics.sql",
     # 016 (platform_superadmin) crea tablas propias y se verifica aparte (F2).
     "017_debito_y_metricas.sql",
+    "018_budget_rpc.sql",
 ]
 
 # (tabla, columnas clave que el código de la app referencia)
@@ -204,6 +205,14 @@ def test_match_entities_function_exists(clean_db):
             "SELECT 1 FROM pg_proc WHERE proname = 'match_entities';"
         )
         assert cur.fetchone() is not None, "función match_entities ausente"
+
+
+@pytest.mark.parametrize("fn", ["budget_reservar", "budget_liquidar", "budget_liberar"])
+def test_budget_rpc_functions_exist(clean_db, fn):
+    """Las RPC atómicas de débito (018) que invoca SupabaseBudgetStore deben existir."""
+    with clean_db.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_proc WHERE proname = %s;", (fn,))
+        assert cur.fetchone() is not None, f"función {fn} ausente"
 
 
 def test_entities_embedding_is_vector(clean_db):
