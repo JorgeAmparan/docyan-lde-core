@@ -109,7 +109,7 @@ def test_reservar_concurrente_no_sobrevende(db):
 
     def _reservar(c):
         with c.cursor() as cur:
-            cur.execute("SELECT out_ok, out_disponible FROM budget_reservar(%s, %s);",
+            cur.execute("SELECT out_ok, out_disponible FROM budget_reservar(%s, %s::numeric);",
                         (TENANT, 1.0))
             ok, disp = cur.fetchone()
             assert float(disp) >= 0.0, "el disponible NUNCA debe quedar negativo"
@@ -129,7 +129,7 @@ def test_liberar_concurrente_no_pierde_actualizaciones(db):
 
     def _liberar(c):
         with c.cursor() as cur:
-            cur.execute("SELECT out_disponible, out_retenido FROM budget_liberar(%s, %s);",
+            cur.execute("SELECT out_disponible, out_retenido FROM budget_liberar(%s, %s::numeric);",
                         (TENANT, 1.0))
             return cur.fetchone()
 
@@ -147,7 +147,7 @@ def test_liquidar_concurrente_conserva_el_total(db):
     def _liquidar(c):
         with c.cursor() as cur:
             cur.execute(
-                "SELECT out_disponible, out_retenido FROM budget_liquidar(%s, %s, %s);",
+                "SELECT out_disponible, out_retenido FROM budget_liquidar(%s, %s::numeric, %s::numeric);",
                 (TENANT, 1.0, 0.40),
             )
             return cur.fetchone()

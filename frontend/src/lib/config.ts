@@ -29,3 +29,9 @@ export const SESSION_HARD_CAP_USD = Number(
 export const AUTH_COOKIE = "docyan_token";
 /** Cookie that carries the active CoDo (DoCo) id for multi-CoDo admins. */
 export const DOCO_COOKIE = "docyan_doco";
+/**
+ * Cookie that mirrors a live `platform_admin` session (separate scope/JWT from the
+ * tenant session). Presence gates `/platform/*` in the middleware. The Consola del
+ * Fundador opera FUERA del aislamiento de tenant — su sesión es independiente. (F2)
+ */
+export const PLATFORM_AUTH_COOKIE = "docyan_platform_token";

@@ -1,0 +1,38 @@
+{
+  "scope": {
+    "name": "platform_admin",
+    "sub": "Outside client isolation",
+    "guard": "Metadata · never content",
+    "logout": "Sign out",
+    "founder": "XCID · Founder"
+  },
+  "nav": {
+    "grupoOperacion": "Operations",
+    "grupoComercial": "Commercial",
+    "grupoRelacion": "Relationship",
+    "resumen": "Overview",
+    "orgs": "Organizations",
+    "jobs": "Ingest jobs",
+    "codigos": "Access codes",
+    "ingresos": "Revenue",
+    "soporte": "Support"
+  },
+  "title": {
+    "resumen": "Platform overview",
+    "orgs": "Organizations",
+    "jobs": "Ingest jobs",
+    "codigos": "Access codes",
+    "ingresos": "Revenue",
+    "soporte": "Support"
+  },
+  "login": {
+    "heading": "Founder console",
+    "sub": "platform_admin access, separate from organization access. You operate outside client isolation: metadata only, never content.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "invalid": "Invalid platform credentials.",
+    "guard": "Outside tenant isolation · metadata, never content"
+  }
+}

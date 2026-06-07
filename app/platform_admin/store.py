@@ -37,6 +37,7 @@ class PlatformStore(Protocol):
     def total_storage_bytes(self) -> int: ...
     def get_budget(self, org_id: str) -> dict | None: ...
     def sum_consultas(self, org_id: str) -> int: ...
+    def list_consultas_daily(self) -> list[dict]: ...  # {fecha, consultas_totales} cross-org
     def get_org_billing(self, org_id: str) -> dict | None: ...
     def upsert_org_billing(self, org_id: str, **fields: Any) -> dict: ...
     def total_orgs(self) -> int: ...
@@ -90,6 +91,7 @@ class InMemoryPlatformStore:
         self.documents: list[dict] = []    # {id, org_id}
         self.budgets: dict[str, dict] = {}  # org_id -> budget dict
         self.consultas: dict[str, int] = {}  # org_id -> total consultas
+        self.pcl_daily: list[dict] = []  # {tenant_id, fecha, consultas_totales} (series)
 
     # admins
     def get_admin_by_email(self, email: str) -> dict | None:
@@ -142,6 +144,12 @@ class InMemoryPlatformStore:
 
     def sum_consultas(self, org_id: str) -> int:
         return int(self.consultas.get(org_id, 0))
+
+    def list_consultas_daily(self) -> list[dict]:
+        return [
+            {"fecha": r.get("fecha"), "consultas_totales": int(r.get("consultas_totales", 0))}
+            for r in self.pcl_daily
+        ]
 
     def get_org_billing(self, org_id: str) -> dict | None:
         return self.org_billing.get(org_id)
@@ -333,6 +341,13 @@ class SupabasePlatformStore:
             "consultas_totales"
         ).eq("tenant_id", org_id).execute()
         return sum(int(x.get("consultas_totales", 0)) for x in (r.data or []))
+
+    def list_consultas_daily(self) -> list[dict]:
+        r = self.sb().table("pcl_metrics_daily").select("fecha, consultas_totales").execute()
+        return [
+            {"fecha": x.get("fecha"), "consultas_totales": int(x.get("consultas_totales", 0))}
+            for x in (r.data or [])
+        ]
 
     def get_org_billing(self, org_id: str) -> dict | None:
         r = self.sb().table("org_billing").select("*").eq("org_id", org_id).execute()
