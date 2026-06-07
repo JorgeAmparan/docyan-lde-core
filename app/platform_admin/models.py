@@ -84,6 +84,9 @@ class JobSummary(BaseModel):
     pct: float = 0.0
     nombre_archivo: str | None = None
     tiempo_estimado_seg: float | None = None
+    # Motivo TÉCNICO de fallo (formato/OCR/tamaño/protección). Es metadata: explica
+    # POR QUÉ falló el procesamiento, NUNCA qué decía el documento (línea dura F2).
+    error: str | None = None
 
 
 class JobList(BaseModel):
@@ -100,14 +103,40 @@ class PlatformSummary(BaseModel):
     ingresos_moneda: str = "MXN"
 
 
+# ── Series de tendencia (datos reales; ver MetricsService.trends) ─────────────
+
+
+class TrendPoint(BaseModel):
+    """Un punto de una serie temporal mensual. `value` agregado, nunca contenido."""
+
+    label: str  # "2026-01"
+    value: float
+
+
+class PlatformTrends(BaseModel):
+    """
+    Series temporales REALES para las gráficas de Resumen (no canned):
+      · orgs_acumuladas — crecimiento acumulado de organizaciones por mes (altas).
+      · ingresos_por_mes — suma de pagos manuales por mes (en `moneda`).
+      · consultas_por_mes — consultas agregadas cross-org por mes (pcl_metrics_daily).
+    Si una fuente no tiene datos, su serie viene vacía (honesto, no inventada).
+    """
+
+    orgs_acumuladas: list[TrendPoint] = Field(default_factory=list)
+    ingresos_por_mes: list[TrendPoint] = Field(default_factory=list)
+    consultas_por_mes: list[TrendPoint] = Field(default_factory=list)
+    moneda: str = "MXN"
+
+
 # ── (B) Códigos de acceso ─────────────────────────────────────────────────────
 
 
 class CreateAccessCodeRequest(BaseModel):
     tipo: str = "piloto"  # prueba | piloto
-    cuota_documentos: int = 0
+    cuota_documentos: int = 50  # default Esencial (valor cerrado F2)
     cuota_saldo_usd: float = 0.0
-    dias_vigencia: int = 30
+    dias_vigencia: int = 60  # default piloto (valor cerrado F2; el diseño mostraba 30)
+    nota: str | None = None  # nota interna del fundador (metadata, no contenido)
 
 
 class AccessCodeOut(BaseModel):
@@ -121,6 +150,7 @@ class AccessCodeOut(BaseModel):
     org_generada: str | None = None
     created_at: datetime | None = None
     redeemed_at: datetime | None = None
+    nota: str | None = None
 
 
 class AccessCodeList(BaseModel):

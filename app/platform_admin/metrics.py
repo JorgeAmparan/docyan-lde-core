@@ -17,7 +17,17 @@ from app.platform_admin.models import (
     OrgMetrics,
     OrgSummary,
     PlatformSummary,
+    PlatformTrends,
+    TrendPoint,
 )
+
+
+def _ym(value) -> str | None:
+    """Mes 'YYYY-MM' a partir de un timestamp ISO/str; None si no se puede parsear."""
+    if not value:
+        return None
+    s = str(value)
+    return s[:7] if len(s) >= 7 and s[4] == "-" else None
 
 
 class MetricsService:
@@ -124,6 +134,49 @@ class MetricsService:
             consultas_total=self.store.sum_consultas(org_id),
             grafo=self.graph_metrics(org_id) if include_graph else GraphMetrics(reachable=False),
             presupuesto=bm,
+        )
+
+    def trends(self, moneda: str = "MXN") -> PlatformTrends:
+        """
+        Series temporales REALES (no canned) para las gráficas de Resumen:
+          · orgs_acumuladas — altas por mes (created_at de orgs), acumulado.
+          · ingresos_por_mes — suma de manual_payments por mes en `moneda`.
+          · consultas_por_mes — pcl_metrics_daily agregado por mes (cross-org).
+        Series vacías si la fuente no tiene datos (honesto). Todo es metadata.
+        """
+        # Ingresos por mes (de pagos manuales reales en la moneda pedida).
+        ingresos: dict[str, float] = {}
+        for p in self.store.list_payments():
+            if p.get("moneda") != moneda:
+                continue
+            ym = _ym(p.get("fecha") or p.get("created_at"))
+            if ym:
+                ingresos[ym] = round(ingresos.get(ym, 0.0) + float(p["monto"]), 2)
+
+        # Altas de orgs por mes → acumulado.
+        altas: dict[str, int] = {}
+        for o in self.store.list_orgs():
+            ym = _ym(o.get("created_at"))
+            if ym:
+                altas[ym] = altas.get(ym, 0) + 1
+        orgs_acumuladas: list[TrendPoint] = []
+        running = 0
+        for ym in sorted(altas):
+            running += altas[ym]
+            orgs_acumuladas.append(TrendPoint(label=ym, value=float(running)))
+
+        # Consultas por mes (pcl_metrics_daily agregado cross-org).
+        consultas: dict[str, float] = {}
+        for r in self.store.list_consultas_daily():
+            ym = _ym(r.get("fecha"))
+            if ym:
+                consultas[ym] = consultas.get(ym, 0.0) + float(r.get("consultas_totales", 0))
+
+        return PlatformTrends(
+            orgs_acumuladas=orgs_acumuladas,
+            ingresos_por_mes=[TrendPoint(label=ym, value=ingresos[ym]) for ym in sorted(ingresos)],
+            consultas_por_mes=[TrendPoint(label=ym, value=consultas[ym]) for ym in sorted(consultas)],
+            moneda=moneda,
         )
 
     def summary(self, jobs_activos: int, ingresos_periodo: float, moneda: str = "MXN") -> PlatformSummary:

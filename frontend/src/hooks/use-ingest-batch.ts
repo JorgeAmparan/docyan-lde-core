@@ -47,16 +47,21 @@ export function useIngestBatch(
 ): UseIngestBatch {
   const { pollMs = DEFAULT_POLL_MS, token, weights } = opts;
   const [byId, setById] = useState<Record<string, DocProgress>>(seed);
-  const [polling, setPolling] = useState(false);
 
   // Refs para los callbacks y el diff de status (no re-suscribir el intervalo).
   const prevStatus = useRef<Record<string, string>>({});
   const batchDoneFired = useRef(false);
   const cbRef = useRef(opts);
-  cbRef.current = opts;
   const seedRef = useRef(seed);
-  seedRef.current = seed;
   const idsKey = jobIds.join(",");
+
+  // Mantener las refs frescas FUERA del render (react-hooks/refs): se sincronizan
+  // tras cada commit, nunca durante el render. Va ANTES del efecto de [idsKey] para
+  // que seedRef ya esté actualizado cuando aquél lea seedRef.current.
+  useEffect(() => {
+    cbRef.current = opts;
+    seedRef.current = seed;
+  });
 
   // Nuevo lote (cambia el set de jobIds): reinicia el estado a su seed y rearma
   // los disparadores de toast/banner (rehidratación, handoff §6.7).
@@ -103,12 +108,8 @@ export function useIngestBatch(
   // Loop de polling: se detiene cuando no quedan jobs activos.
   useEffect(() => {
     const ids = idsKey ? idsKey.split(",") : [];
-    if (ids.length === 0) {
-      setPolling(false);
-      return;
-    }
+    if (ids.length === 0) return;
     let cancelled = false;
-    setPolling(true);
 
     const tick = async () => {
       if (cancelled) return;
@@ -124,7 +125,6 @@ export function useIngestBatch(
         });
         if (!activos) {
           clearInterval(handle);
-          setPolling(false);
         }
         return cur;
       });
@@ -153,6 +153,14 @@ export function useIngestBatch(
       cbRef.current.onBatchCompleted?.(batch);
     }
   }, [batch]);
+
+  // `polling` DERIVADO en render (sin setState-en-effect): sondeamos mientras quede
+  // algún job sin estado terminal (o aún sin snapshot). Cuando todos terminan o no
+  // hay jobs, es false. Coincide con el ciclo de vida del intervalo de arriba.
+  const polling = (idsKey ? idsKey.split(",") : []).some((id) => {
+    const d = byId[id];
+    return !d || isActive(d.status);
+  });
 
   return { batch, byId, refresh: () => void pollOnce(), polling };
 }

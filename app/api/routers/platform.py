@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.jobs.job_models import JobStatus
 from app.jobs.progress import pct_total
 from app.platform_admin import providers
 from app.platform_admin.models import (
@@ -33,6 +34,7 @@ from app.platform_admin.models import (
     PlatformLoginRequest,
     PlatformSummary,
     PlatformTokenResponse,
+    PlatformTrends,
     ReplyThreadRequest,
     SupportMessageOut,
     SupportThreadList,
@@ -113,6 +115,8 @@ async def list_jobs(ctx: dict = Depends(requiere_platform_admin)) -> JobList:
             pct=pct,
             nombre_archivo=job.nombre_archivo,
             tiempo_estimado_seg=(job.cotizacion.tiempo_estimado_seg if job.cotizacion else None),
+            # Motivo técnico de fallo (metadata): por qué falló, nunca el contenido.
+            error=(job.error if job.status == JobStatus.failed else None),
         ))
     return JobList(items=items, total=len(items))
 
@@ -133,6 +137,15 @@ async def metrics_summary(
     )
 
 
+@router.get("/metrics/trends", response_model=PlatformTrends)
+async def metrics_trends(
+    ctx: dict = Depends(requiere_platform_admin),
+    moneda: str = Query("MXN"),
+) -> PlatformTrends:
+    """Series temporales reales para las gráficas de Resumen (metadata, no contenido)."""
+    return providers.get_metrics().trends(moneda=moneda)
+
+
 # ── (B) Códigos de acceso ─────────────────────────────────────────────────────
 
 
@@ -142,7 +155,7 @@ def _access_code_out(row: dict) -> AccessCodeOut:
         cuota_documentos=row["cuota_documentos"], cuota_saldo_usd=float(row["cuota_saldo_usd"]),
         expires_at=row.get("expires_at"), status=row["status"],
         org_generada=row.get("org_generada"), created_at=row.get("created_at"),
-        redeemed_at=row.get("redeemed_at"),
+        redeemed_at=row.get("redeemed_at"), nota=row.get("nota"),
     )
 
 
@@ -159,6 +172,7 @@ async def create_access_code(
         "code": _gen_code(), "tipo": body.tipo,
         "cuota_documentos": body.cuota_documentos, "cuota_saldo_usd": body.cuota_saldo_usd,
         "expires_at": expires, "status": "active", "created_by": actor_de(ctx),
+        "nota": body.nota,
     })
     providers.get_audit().record("access_code_created", actor_de(ctx), {
         "code": row["code"], "tipo": body.tipo, "cuota_documentos": body.cuota_documentos,

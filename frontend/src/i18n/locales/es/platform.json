@@ -1,0 +1,38 @@
+{
+  "scope": {
+    "name": "platform_admin",
+    "sub": "Fuera del aislamiento de cliente",
+    "guard": "Metadata · nunca contenido",
+    "logout": "Cerrar sesión",
+    "founder": "XCID · Fundador"
+  },
+  "nav": {
+    "grupoOperacion": "Operación",
+    "grupoComercial": "Comercial",
+    "grupoRelacion": "Relación",
+    "resumen": "Resumen",
+    "orgs": "Organizaciones",
+    "jobs": "Jobs de ingesta",
+    "codigos": "Códigos de acceso",
+    "ingresos": "Ingresos",
+    "soporte": "Soporte"
+  },
+  "title": {
+    "resumen": "Resumen de plataforma",
+    "orgs": "Organizaciones",
+    "jobs": "Jobs de ingesta",
+    "codigos": "Códigos de acceso",
+    "ingresos": "Ingresos",
+    "soporte": "Soporte"
+  },
+  "login": {
+    "heading": "Consola del fundador",
+    "sub": "Acceso de platform_admin, separado del acceso de organización. Operas fuera del aislamiento de cliente: solo metadata, nunca contenido.",
+    "email": "Correo",
+    "password": "Contraseña",
+    "submit": "Entrar",
+    "submitting": "Entrando…",
+    "invalid": "Credenciales de plataforma inválidas.",
+    "guard": "Fuera del aislamiento de tenant · metadata, nunca contenido"
+  }
+}

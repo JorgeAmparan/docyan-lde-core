@@ -7,9 +7,11 @@ import LanguageDetector from "i18next-browser-languagedetector";
 import esCommon from "./locales/es/common.json";
 import esLanding from "./locales/es/landing.json";
 import esPricing from "./locales/es/pricing.json";
+import esPlatform from "./locales/es/platform.json";
 import enCommon from "./locales/en/common.json";
 import enLanding from "./locales/en/landing.json";
 import enPricing from "./locales/en/pricing.json";
+import enPlatform from "./locales/en/platform.json";
 
 export const NAMESPACES = [
   "common",
@@ -21,6 +23,7 @@ export const NAMESPACES = [
   "admin",
   "consult",
   "playbook",
+  "platform",
 ] as const;
 
 /**
@@ -28,8 +31,8 @@ export const NAMESPACES = [
  * es-MX/es-CO/es-AR → es, en-US/en-UK/en-AU → en. Voice: tú in all Spanish.
  */
 export const resources = {
-  es: { common: esCommon, landing: esLanding, pricing: esPricing },
-  en: { common: enCommon, landing: enLanding, pricing: enPricing },
+  es: { common: esCommon, landing: esLanding, pricing: esPricing, platform: esPlatform },
+  en: { common: enCommon, landing: enLanding, pricing: enPricing, platform: enPlatform },
 } as const;
 
 export const SUPPORTED_LNGS = [
@@ -52,7 +55,7 @@ if (!i18n.isInitialized) {
       nonExplicitSupportedLngs: true,
       load: "all",
       defaultNS: "common",
-      ns: ["common", "landing", "pricing"],
+      ns: ["common", "landing", "pricing", "platform"],
       interpolation: { escapeValue: false },
       detection: {
         order: ["localStorage", "cookie", "navigator", "htmlTag"],

@@ -1141,6 +1141,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/metrics/trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metrics Trends
+         * @description Series temporales reales para las gráficas de Resumen (metadata, no contenido).
+         */
+        get: operations["metrics_trends_platform_metrics_trends_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/access-codes": {
         parameters: {
             query?: never;
@@ -1380,6 +1400,8 @@ export interface components {
             created_at?: string | null;
             /** Redeemed At */
             redeemed_at?: string | null;
+            /** Nota */
+            nota?: string | null;
         };
         /** AceptarSugerenciaRequest */
         AceptarSugerenciaRequest: {
@@ -1764,7 +1786,7 @@ export interface components {
             tipo: string;
             /**
              * Cuota Documentos
-             * @default 0
+             * @default 50
              */
             cuota_documentos: number;
             /**
@@ -1774,9 +1796,11 @@ export interface components {
             cuota_saldo_usd: number;
             /**
              * Dias Vigencia
-             * @default 30
+             * @default 60
              */
             dias_vigencia: number;
+            /** Nota */
+            nota?: string | null;
         };
         /** CreatePaymentRequest */
         CreatePaymentRequest: {
@@ -2133,6 +2157,8 @@ export interface components {
             nombre_archivo?: string | null;
             /** Tiempo Estimado Seg */
             tiempo_estimado_seg?: number | null;
+            /** Error */
+            error?: string | null;
         };
         /** ListDocumentsRequest */
         ListDocumentsRequest: {
@@ -2535,6 +2561,27 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * PlatformTrends
+         * @description Series temporales REALES para las gráficas de Resumen (no canned):
+         *       · orgs_acumuladas — crecimiento acumulado de organizaciones por mes (altas).
+         *       · ingresos_por_mes — suma de pagos manuales por mes (en `moneda`).
+         *       · consultas_por_mes — consultas agregadas cross-org por mes (pcl_metrics_daily).
+         *     Si una fuente no tiene datos, su serie viene vacía (honesto, no inventada).
+         */
+        PlatformTrends: {
+            /** Orgs Acumuladas */
+            orgs_acumuladas?: components["schemas"]["TrendPoint"][];
+            /** Ingresos Por Mes */
+            ingresos_por_mes?: components["schemas"]["TrendPoint"][];
+            /** Consultas Por Mes */
+            consultas_por_mes?: components["schemas"]["TrendPoint"][];
+            /**
+             * Moneda
+             * @default MXN
+             */
+            moneda: string;
+        };
         /** PlaybookOut */
         PlaybookOut: {
             /** Id */
@@ -2900,6 +2947,16 @@ export interface components {
         /** TransferirSesionRequest */
         TransferirSesionRequest: {
             canal: components["schemas"]["Canal"];
+        };
+        /**
+         * TrendPoint
+         * @description Un punto de una serie temporal mensual. `value` agregado, nunca contenido.
+         */
+        TrendPoint: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -4820,6 +4877,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    metrics_trends_platform_metrics_trends_get: {
+        parameters: {
+            query?: {
+                moneda?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTrends"];
                 };
             };
             /** @description Validation Error */
