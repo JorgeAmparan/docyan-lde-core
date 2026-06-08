@@ -3,7 +3,7 @@ import { AUTH_COOKIE, PLATFORM_AUTH_COOKIE } from "@/lib/config";
 
 /** Authenticated route prefixes (Capa A PWA + account). Collaborators enter via
  *  /q/[token] (public, the QR is the credential) and are never gated here. */
-const PROTECTED = ["/consult", "/saved", "/playbook", "/admin", "/onboarding", "/select-codo", "/cuenta"];
+const PROTECTED = ["/consult", "/saved", "/playbook", "/admin", "/onboarding", "/select-codo", "/cuenta", "/curacion"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

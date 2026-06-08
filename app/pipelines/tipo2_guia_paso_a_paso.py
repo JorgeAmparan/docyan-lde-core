@@ -14,7 +14,7 @@ from app.orchestrator.clasificacion.tipos import TipoIntencion
 from app.pipelines import cruces
 from app.pipelines.base import ContextoPipeline, ResultadoPipeline
 from app.pipelines.dkg_reader import PipelineGraphReader
-from app.schemas.pipeline_payloads import PasoProcedimiento, ProcedureCardPayload
+from app.schemas.pipeline_payloads import Cita, PasoProcedimiento, ProcedureCardPayload
 
 
 def _lista(v) -> list[str]:
@@ -23,6 +23,16 @@ def _lista(v) -> list[str]:
     if isinstance(v, str):
         return [v]
     return [str(x) for x in v if x]
+
+
+def _cita(data: dict) -> Cita | None:
+    """Cita de procedencia del procedimiento (bridge §1.0.1). None si no hay doc."""
+    if not (data.get("documento_id") or data.get("documento_nombre")):
+        return None
+    return Cita(
+        documento_id=data.get("documento_id"),
+        documento_nombre=data.get("documento_nombre"),
+    )
 
 
 def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPipeline:
@@ -44,11 +54,13 @@ def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPip
         for i, p in enumerate(pasos_raw)
     ]
 
+    cita = _cita(data)
     payload = ProcedureCardPayload(
         procedimiento_id=data.get("procedimiento_id"),
         titulo=data.get("titulo") or termino or "Procedimiento",
         pasos=pasos,
         modo_ejecutar_paso_a_paso=bool(ctx.params.get("ejecutar_paso_a_paso", False)),
+        citas=[cita] if cita else [],
     )
     return ResultadoPipeline(
         payload=payload,

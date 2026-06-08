@@ -1,66 +1,75 @@
 "use client";
 
 import { Icon } from "@/components/icon";
+import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
 import { CitationChip } from "@/components/brand/citation-chip";
+import { citaLabel, citaToSource, type ComparativeViewPayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
-/** Tipo 8 · Comparativa — old/new versions + `.diff` (+/−/~) + `.cmp-sum`
- *  executive summary + EDB insight. Ported from consult.jsx CompareAnswer. */
-type Diff =
-  | { k: "chg"; lab: string; from: string; to: string }
-  | { k: "add" | "del"; text: string };
+/** Tipo 8 · Comparativa — diferencias campo a campo del payload real. Los cambios
+ *  de seguridad (`es_cambio_seguridad`) se marcan; el resto como cambio normal. */
+export function ComparativaView({
+  payload,
+  saved,
+  onSave,
+  onCite,
+}: {
+  payload: ComparativeViewPayload;
+  saved: boolean;
+  onSave: () => void;
+  onCite: (s: SourceSpan | null) => void;
+}) {
+  const difs = payload.diferencias ?? [];
+  const cita = (payload.citas ?? [])[0] ?? null;
+  const label = citaLabel(cita);
+  const seguridad = difs.filter((d) => d.es_cambio_seguridad).length;
 
-const DIFF: Diff[] = [
-  { k: "chg", lab: "Torque del perno B", from: "80 N·m", to: "85 N·m" },
-  { k: "add", text: "Etapa de apriete en cruz en 3 pasos (40 → 65 → 85)." },
-  { k: "del", text: "Lubricación del perno antes del montaje." },
-];
-
-export function ComparativaView({ saved, onSave, onCite }: { saved: boolean; onSave: () => void; onCite: () => void }) {
   return (
     <div className="acard">
-      <div className="q">Comparativa · Manual VF-2</div>
+      <div className="q">{payload.titulo || "Comparativa"}</div>
       <div className="cmp-vers">
         <span className="ver old">
-          Rev. C<small>mar 2025</small>
+          {payload.referencia_izquierda}
+          <small>{payload.estrategia === "versiones_documento" ? "izquierda" : "A"}</small>
         </span>
         <Icon name="arrow-right" size={15} />
         <span className="ver new">
-          Rev. D<small>vigente</small>
+          {payload.referencia_derecha}
+          <small>{payload.estrategia === "versiones_documento" ? "derecha" : "B"}</small>
         </span>
       </div>
       <ul className="diff">
-        {DIFF.map((d, i) => (
-          <li key={i} className={"d-" + d.k}>
-            {d.k === "chg" ? (
-              <>
-                <span className="dm">~</span>
-                <span className="dt">
-                  {d.lab}: <s>{d.from}</s> → <b>{d.to}</b>
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="dm">{d.k === "add" ? "+" : "−"}</span>
-                <span className="dt">{d.text}</span>
-              </>
-            )}
+        {difs.map((d, i) => (
+          <li key={i} className={"d-chg" + (d.es_cambio_seguridad ? " d-seg" : "")}>
+            <span className="dm">{d.es_cambio_seguridad ? "⚠" : "~"}</span>
+            <span className="dt">
+              {d.campo}: <s>{d.valor_izquierda ?? "—"}</s> → <b>{d.valor_derecha ?? "—"}</b>
+            </span>
           </li>
         ))}
+        {difs.length === 0 && (
+          <li className="d-chg">
+            <span className="dt">Sin diferencias detectadas.</span>
+          </li>
+        )}
       </ul>
-      <div className="cmp-sum">
-        <span className="cs-lab">Resumen</span>
-        La Rev. D endurece el apriete del perno B y formaliza el patrón en cruz; elimina la lubricación previa.
-      </div>
-      <div className="patterns slim">
-        <div className="ph">
-          <Icon name="sparkles" size={15} />
-          Insight
+      {seguridad > 0 && (
+        <div className="cmp-sum">
+          <span className="cs-lab">Atención</span>
+          {seguridad} cambio(s) marcados como relevantes para seguridad.
         </div>
-        <p>3 consultas usaron el valor antiguo (80 N·m) esta semana. DOCYAN sugiere notificar al turno.</p>
-      </div>
+      )}
+      {payload.computo_asincrono && (
+        <p style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+          Comparación extensa: computándose en segundo plano.
+        </p>
+      )}
       <div className="acard-foot">
-        <CitationChip label="VF-2 · §4.2.1 · Δ rev." onOpen={onCite} />
+        {label ? (
+          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Comparativa de revisiones</span>
+        )}
         <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>

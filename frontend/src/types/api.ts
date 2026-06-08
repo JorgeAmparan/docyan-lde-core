@@ -1316,6 +1316,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/curacion/diagrama/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Guardar Borrador Diagrama
+         * @description Persiste un borrador de diagrama (Tipo 3) para corrección humana.
+         */
+        post: operations["guardar_borrador_diagrama_curacion_diagrama_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/curacion/arbol/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Guardar Borrador Arbol
+         * @description Persiste un borrador de árbol de diagnóstico (Tipo 5); incluye advertencias
+         *     de conectividad para que el editor las muestre.
+         */
+        post: operations["guardar_borrador_arbol_curacion_arbol_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/curacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Borradores
+         * @description Lista borradores pendientes de curar del tenant.
+         */
+        get: operations["listar_borradores_curacion_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/curacion/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtener Borrador */
+        get: operations["obtener_borrador_curacion__draft_id__get"];
+        put?: never;
+        post?: never;
+        /** Descartar Borrador */
+        delete: operations["descartar_borrador_curacion__draft_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/curacion/{draft_id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Borrador
+         * @description Materializa el borrador (corregido) en el grafo y lo elimina del store.
+         */
+        post: operations["confirmar_borrador_curacion__draft_id__confirmar_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/curacion/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adjuntar Recurso Video
+         * @description Adjunta un video como recurso de apoyo (Tipo 4; no se analiza ni transcribe).
+         */
+        post: operations["adjuntar_recurso_video_curacion_video_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -1427,6 +1546,23 @@ export interface components {
         AddMessageRequest: {
             /** Cuerpo */
             cuerpo: string;
+        };
+        /** AdjuntarVideoRequest */
+        AdjuntarVideoRequest: {
+            /** Titulo */
+            titulo: string;
+            /** Video Url */
+            video_url: string;
+            /** Doc Id */
+            doc_id?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Acompana Procedimiento Id */
+            acompana_procedimiento_id?: string | null;
+            /** Capitulos */
+            capitulos?: {
+                [key: string]: unknown;
+            }[];
         };
         /** AlertaItem */
         AlertaItem: {
@@ -1986,6 +2122,40 @@ export interface components {
          * @enum {string}
          */
         DocumentSource: "google_drive" | "onedrive" | "ftp" | "notion";
+        /** DraftArbol */
+        DraftArbol: {
+            /**
+             * Kind
+             * @default arbol
+             * @constant
+             */
+            kind: "arbol";
+            /** Arbol Id */
+            arbol_id?: string | null;
+            /** Titulo */
+            titulo: string;
+            /** Nodos */
+            nodos?: components["schemas"]["NodoBorrador"][];
+        };
+        /** DraftDiagrama */
+        DraftDiagrama: {
+            /**
+             * Kind
+             * @default diagrama
+             * @constant
+             */
+            kind: "diagrama";
+            /** Recurso Id */
+            recurso_id?: string | null;
+            /** Titulo */
+            titulo: string;
+            /** Recurso Url */
+            recurso_url?: string | null;
+            /** Etiquetas */
+            etiquetas?: components["schemas"]["EtiquetaBorrador"][];
+            /** Leyenda Simbolica */
+            leyenda_simbolica?: components["schemas"]["LeyendaBorrador"][];
+        };
         /** EspecificacionItem */
         EspecificacionItem: {
             /** Nombre */
@@ -1995,6 +2165,28 @@ export interface components {
             /** Unidad */
             unidad?: string | null;
             cita?: components["schemas"]["Cita"] | null;
+        };
+        /**
+         * EtiquetaBorrador
+         * @description Etiqueta/callout sobre la imagen, con caja normalizada (0..1).
+         */
+        EtiquetaBorrador: {
+            /** Texto */
+            texto: string;
+            /**
+             * X
+             * @default 0
+             */
+            x: number;
+            /**
+             * Y
+             * @default 0
+             */
+            y: number;
+            /** W */
+            w?: number | null;
+            /** H */
+            h?: number | null;
         };
         /** EtiquetaDiagrama */
         EtiquetaDiagrama: {
@@ -2045,6 +2237,14 @@ export interface components {
              */
             reachable: boolean;
         };
+        /** GuardarArbolRequest */
+        GuardarArbolRequest: {
+            draft: components["schemas"]["DraftArbol"];
+            /** Doc Id */
+            doc_id?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+        };
         /** GuardarConsultaRequest */
         GuardarConsultaRequest: {
             /** Nombre */
@@ -2061,6 +2261,14 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        };
+        /** GuardarDiagramaRequest */
+        GuardarDiagramaRequest: {
+            draft: components["schemas"]["DraftDiagrama"];
+            /** Doc Id */
+            doc_id?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2159,6 +2367,13 @@ export interface components {
             tiempo_estimado_seg?: number | null;
             /** Error */
             error?: string | null;
+        };
+        /** LeyendaBorrador */
+        LeyendaBorrador: {
+            /** Simbolo */
+            simbolo: string;
+            /** Significado */
+            significado: string;
         };
         /** ListDocumentsRequest */
         ListDocumentsRequest: {
@@ -2334,10 +2549,35 @@ export interface components {
              */
             sugerencias_rechazadas: number;
         };
+        /** NodoBorrador */
+        NodoBorrador: {
+            /** Id */
+            id: string;
+            /** Pregunta */
+            pregunta?: string | null;
+            /**
+             * Orden
+             * @default 0
+             */
+            orden: number;
+            /** Opciones */
+            opciones?: components["schemas"]["OpcionBorrador"][];
+            /** Causa Probable */
+            causa_probable?: string | null;
+            /** Accion Resolutoria */
+            accion_resolutoria?: string | null;
+        };
         /** ObservacionRequest */
         ObservacionRequest: {
             /** Texto */
             texto: string;
+        };
+        /** OpcionBorrador */
+        OpcionBorrador: {
+            /** Etiqueta */
+            etiqueta: string;
+            /** Siguiente Nodo Id */
+            siguiente_nodo_id?: string | null;
         };
         /** OpcionDecision */
         OpcionDecision: {
@@ -5248,6 +5488,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    guardar_borrador_diagrama_curacion_diagrama_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardarDiagramaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    guardar_borrador_arbol_curacion_arbol_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardarArbolRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_borradores_curacion_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    obtener_borrador_curacion__draft_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    descartar_borrador_curacion__draft_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_borrador_curacion__draft_id__confirmar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adjuntar_recurso_video_curacion_video_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjuntarVideoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

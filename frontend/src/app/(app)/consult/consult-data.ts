@@ -1,13 +1,27 @@
 /**
- * Canned consult data + answer types, recreated verbatim from the design bundle
- * (`ui_kits/pwa/consult.jsx` ANSWERS / SUGGESTIONS). These are the FALLBACKS that
- * let every intent type render without a backend. When the real MO answers
- * (`POST /mo/query` → ConsultaResuelta), `mapResueltaToAnswer` adapts the live
- * payload into the same `Answer` shape the renderers consume.
+ * Consult answer model (B9.5 §2.1) — derives ENTIRELY from the backend OpenAPI
+ * contract. `mapResueltaToAnswer` wraps the live `ConsultaResuelta` payload (the
+ * discriminated `payload.kind` union) into a thin `Answer` the renderers consume.
+ *
+ * The 8 renderers read the REAL typed payload — no parallel/hardcoded shapes, no
+ * canned fallback. On backend failure the view shows an honest error (kind:"error"),
+ * never invented data (§2.5).
  */
 import type { components } from "@/types/api";
+import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
 
 export type ConsultaResuelta = components["schemas"]["ConsultaResuelta"];
+export type Cita = components["schemas"]["Cita"];
+export type PipelinePayload = ConsultaResuelta["payload"];
+
+export type InfoCardPayload = components["schemas"]["InfoCardPayload"];
+export type ProcedureCardPayload = components["schemas"]["ProcedureCardPayload"];
+export type DiagramViewerPayload = components["schemas"]["DiagramViewerPayload"];
+export type VideoPlayerPayload = components["schemas"]["VideoPlayerPayload"];
+export type DiagnosticTreePayload = components["schemas"]["DiagnosticTreePayload"];
+export type TimelinePayload = components["schemas"]["TimelinePayload"];
+export type AlertsDashboardPayload = components["schemas"]["AlertsDashboardPayload"];
+export type ComparativeViewPayload = components["schemas"]["ComparativeViewPayload"];
 
 export type AnswerKind =
   | "info"
@@ -17,173 +31,97 @@ export type AnswerKind =
   | "video"
   | "history"
   | "alerts"
-  | "compare";
+  | "compare"
+  | "error";
 
 /** "cache" = instant cache hit (jade pulse). "synth" = synthesized (amber blink). */
 export type AnswerMode = "cache" | "synth";
 
-export interface BaseAnswer {
+export interface Answer {
   kind: AnswerKind;
   mode: AnswerMode;
-  title?: string;
+  question: string;
+  /** The live typed payload (undefined only for kind:"error"). */
+  payload?: PipelinePayload;
+  degradado?: boolean;
+  nota?: string | null;
+  errorMsg?: string;
 }
 
-export interface InfoAnswerData extends BaseAnswer {
-  kind: "info";
-  q: string;
-  value: string;
-  unit: string;
-  note: string;
-  cite: string;
-}
-
-export interface StepsAnswerData extends BaseAnswer {
-  kind: "steps";
-  title: string;
-  ppe: Array<[string, string]>;
-  steps: string[];
-  warn: { lab: string; text: string };
-  cite: string;
-}
-
-export interface SimpleAnswerData extends BaseAnswer {
-  kind: "troubleshoot" | "diagram" | "video" | "history" | "alerts" | "compare";
-  title: string;
-}
-
-export type Answer = InfoAnswerData | StepsAnswerData | SimpleAnswerData;
-
-/** Suggested questions: [icon, label, answerKey]. */
-export const SUGGESTIONS: Array<[string, string, string]> = [
-  ["gauge", "¿Torque del perno B?", "torque"],
-  ["wrench", "¿Cómo cambio el filtro de refrigerante?", "filtro"],
-  ["activity", "La centrífuga vibra al arrancar", "vibra"],
-  ["image", "Muéstrame el diagrama del rotor", "diagrama"],
-  ["play-circle", "Video: montaje del rotor", "video"],
-  ["history", "Historial de esta centrífuga", "historial"],
-  ["bell", "¿Qué alertas tengo pendientes?", "alertas"],
-  ["git-compare", "Compara la rev. C y D del manual", "compara"],
+/** Suggested questions: [icon, question]. Each hits the REAL MO (`/mo/query`). */
+export const SUGGESTIONS: Array<[string, string]> = [
+  ["gauge", "¿Torque del perno B?"],
+  ["wrench", "¿Cómo cambio el filtro de refrigerante?"],
+  ["activity", "La centrífuga vibra al arrancar"],
+  ["image", "Muéstrame el diagrama del rotor"],
+  ["play-circle", "Video: montaje del rotor"],
+  ["history", "Historial de esta centrífuga"],
+  ["bell", "¿Qué alertas tengo pendientes?"],
+  ["git-compare", "Compara la rev. C y D del manual"],
 ];
 
-export const ANSWERS: Record<string, Answer> = {
-  torque: {
-    kind: "info",
-    q: "Torque del perno B — cabezal",
-    value: "85",
-    unit: "N·m",
-    mode: "cache",
-    note: "Aplicado en cruz, en tres etapas progresivas (40 → 65 → 85 N·m).",
-    cite: "Manual VF-2 · §4.2.1",
-  },
-  filtro: {
-    kind: "steps",
-    title: "Cambio del filtro de refrigerante",
-    mode: "synth",
-    ppe: [
-      ["hand", "Guantes nitrilo"],
-      ["glasses", "Gafas de seguridad"],
-    ],
-    steps: [
-      "Detén la máquina y aplica bloqueo/etiquetado (LOTO) en el interruptor principal.",
-      "Cierra la válvula de suministro y deja drenar 2 min al depósito.",
-      "Retira la tapa del alojamiento del filtro girando en sentido antihorario.",
-      "Extrae el cartucho usado y deséchalo según el MSDS del refrigerante.",
-      "Coloca el cartucho nuevo, vuelve a sellar y reabre la válvula.",
-    ],
-    warn: {
-      lab: "Advertencia",
-      text: "No retires la tapa sin haber drenado: el alojamiento permanece presurizado.",
-    },
-    cite: "Manual VF-2 · §7.3",
-  },
-  vibra: { kind: "troubleshoot", mode: "synth", title: "Vibración al arrancar" },
-  diagrama: { kind: "diagram", mode: "cache", title: "Diagrama del rotor" },
-  video: { kind: "video", mode: "cache", title: "Video · montaje del rotor" },
-  historial: { kind: "history", mode: "synth", title: "Historial de la centrífuga" },
-  alertas: { kind: "alerts", mode: "synth", title: "Alertas pendientes" },
-  compara: { kind: "compare", mode: "synth", title: "Comparativa rev. C vs D" },
-};
-
-/** Default CoDo/entity context (used by /q/[token] when QR fetch fails + demo). */
+/** Default CoDo/entity context for the strip when no QR/entity is resolved. */
 export const CANNED_CTX = {
   codo: "CODO-LAB-04",
   entityName: "Centrífuga Hettich",
   entityTitle: "Centrífuga Hettich Rotina 380",
-  entityMeta: "QR escaneado · 4 documentos vivos",
+  entityMeta: "QR escaneado · documentos vivos",
 };
 
-/** The cited source span surfaced by the citation chip overlay (from playbook.jsx). */
-export const CANNED_SOURCE = {
-  title: "Manual CNC Haas VF-2",
-  ref: "§4.2.1 · Apriete de cabezal",
-  paragraphs: [
-    {
-      text: "4.2 — Montaje del cabezal. Antes de aplicar par, verifica que las superficies de contacto estén limpias y libres de rebabas.",
-    },
-    {
-      text: "4.2.1 — El par de apriete del perno B es 85 N·m, aplicado en cruz en tres etapas progresivas (40 → 65 → 85 N·m). Repite la secuencia una segunda vez para asegurar el asentamiento.",
-      highlight: true,
-    },
-    {
-      text: "4.2.2 — Tras el apriete final, registra el valor en la bitácora de mantenimiento del equipo.",
-    },
-  ],
-  footnote: "Referenciado por 3 consultas en este CoDo",
+const KIND_BY_PAYLOAD: Record<string, AnswerKind> = {
+  info_card: "info",
+  procedure_card: "steps",
+  diagram_viewer: "diagram",
+  video_player: "video",
+  diagnostic_tree: "troubleshoot",
+  timeline: "history",
+  alerts_dashboard: "alerts",
+  comparative_view: "compare",
 };
 
-const KIND_BY_INTENT: Record<string, AnswerKind> = {
-  informativa: "info",
-  guia: "steps",
-  guía: "steps",
-  procedure: "steps",
-  troubleshooting: "troubleshoot",
-  diagnostico: "troubleshoot",
-  graficos: "diagram",
-  gráficos: "diagram",
-  diagram: "diagram",
-  video: "video",
-  historial: "history",
-  history: "history",
-  alertas: "alerts",
-  alerts: "alerts",
-  comparativa: "compare",
-  compare: "compare",
-};
-
-/**
- * Adapt a live MO `ConsultaResuelta` envelope into the renderer `Answer` shape.
- * DESIGN: the live payloads (InfoCardPayload, ProcedureCardPayload, …) carry more
- * fields than the kit; we map the ones the renderers need and fall back to the
- * canned example for that kind when the payload is sparse, so the UI never breaks.
- */
+/** Wrap a live MO `ConsultaResuelta` into the renderer `Answer` (kind from the
+ *  payload discriminator — the contract's own `kind`, not a guess on tipo_intencion). */
 export function mapResueltaToAnswer(r: ConsultaResuelta, question: string): Answer {
-  const key = (r.tipo_intencion || "").toLowerCase();
-  const kind: AnswerKind = KIND_BY_INTENT[key] ?? "info";
+  const payload = r.payload;
+  const pk = (payload as { kind?: string } | undefined)?.kind ?? "";
+  const kind: AnswerKind = KIND_BY_PAYLOAD[pk] ?? "info";
   const mode: AnswerMode = r.contexto_ccp?.cache_hit ? "cache" : "synth";
-  const payload = (r.payload ?? {}) as Record<string, unknown>;
+  return { kind, mode, question, payload, degradado: r.degradado ?? false, nota: r.nota };
+}
 
-  if (kind === "info") {
-    return {
-      kind: "info",
-      mode,
-      q: (payload.titulo as string) || (payload.pregunta as string) || question,
-      value: (payload.valor as string) ?? "—",
-      unit: (payload.unidad as string) ?? "",
-      note: (payload.nota as string) || (payload.detalle as string) || (r.nota ?? ""),
-      cite: (payload.cita as string) || (payload.fuente as string) || "Documento fuente · §",
-    };
-  }
-  if (kind === "steps") {
-    const fallback = ANSWERS.filtro as StepsAnswerData;
-    return {
-      kind: "steps",
-      mode,
-      title: (payload.titulo as string) || question,
-      ppe: (payload.epp as Array<[string, string]>) ?? fallback.ppe,
-      steps: (payload.pasos as string[]) ?? fallback.steps,
-      warn: (payload.advertencia as { lab: string; text: string }) ?? fallback.warn,
-      cite: (payload.cita as string) || "Documento fuente · §",
-    };
-  }
-  return { kind, mode, title: (payload.titulo as string) || question };
+/** Honest error answer (no invented data). */
+export function errorAnswer(question: string, msg: string): Answer {
+  return { kind: "error", mode: "synth", question, errorMsg: msg };
+}
+
+// ── Citation helpers (single source of truth: label chip + overlay) ───────────
+
+/** Human label for the citation chip from a backend `Cita`. */
+export function citaLabel(c?: Cita | null): string | null {
+  if (!c) return null;
+  const doc = c.documento_nombre || c.documento_id;
+  const sec = c.seccion ? ` · ${c.seccion}` : "";
+  const pag = c.pagina != null ? ` · p.${c.pagina}` : "";
+  if (doc) return `${doc}${sec}${pag}`;
+  return c.seccion || null;
+}
+
+/** Build the source overlay from a backend `Cita`. Span text only when the
+ *  ingest provides character offsets; otherwise the location is shown honestly. */
+export function citaToSource(c?: Cita | null): SourceSpan | null {
+  if (!c) return null;
+  const ref =
+    [c.seccion, c.pagina != null ? `p.${c.pagina}` : null].filter(Boolean).join(" · ") || "—";
+  return {
+    title: c.documento_nombre || c.documento_id || "Documento fuente",
+    ref,
+    paragraphs: [
+      {
+        text:
+          "Fragmento citado de la fuente. El resaltado al span exacto se habilita cuando la ingesta aporta offsets de carácter.",
+        highlight: true,
+      },
+    ],
+    footnote: c.documento_id ? `Documento ${c.documento_id.slice(0, 12)}` : undefined,
+  };
 }

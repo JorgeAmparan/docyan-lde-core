@@ -272,6 +272,29 @@ class IngestPipeline:
                 f"chain {chain}. Último error: {last_exc}"
             ) from last_exc
 
+        # B9.5 §1.0 — Bridge de procedencia + normalización: crea el :DocumentoSource
+        # y las aristas/propiedades que los pipelines de lectura (B8) esperan para
+        # CITAS y para los tipos 1/2/6/8. Corre sobre el MISMO grafo del tenant, tras
+        # el cierre del SDK. Best-effort acotado: es parte del cierre de la ingesta,
+        # no un gate del cobro — si fallara, se loguea y el documento queda ingerido
+        # (las citas degradan, no se pierde contenido).
+        bridge_counters: dict = {}
+        try:
+            from app.graph.dkg_client import DKGClient
+            from app.graph.dkg_provenance import bridge_and_normalize
+
+            bridge_counters = bridge_and_normalize(
+                DKGClient(host=FALKOR_HOST, port=FALKOR_PORT),
+                job.tenant_id,
+                doc_id=doc_id,
+                tipo_documento=(schema.tipo_documento if schema else job.tipo_documento) or "documento",
+                nombre_archivo=job.nombre_archivo,
+                content_sha256=job.content_sha256,
+                entidad_id=job.contexto.get("entidad_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 — el bridge no es gate del cobro
+            logger.warning("bridge de procedencia falló (citas degradan): %s", exc)
+
         # Marca uso del schema (señal de utilidad para el registry vivo).
         if self.schema_registry is not None and schema is not None:
             try:
@@ -295,6 +318,7 @@ class IngestPipeline:
             "duplicados_resueltos": duplicados_resueltos,
             "modelo_extraccion": modelo_usado,
             "cache_invalidadas": invalidadas,
+            "bridge": bridge_counters,
             # F1.5: peso del resultado almacenado (markdown convertido) en bytes.
             "markdown_bytes": len(markdown.encode("utf-8")),
             "metadata": getattr(ingest_result, "metadata", {}),

@@ -13,16 +13,21 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 
 import {
-  ANSWERS,
   CANNED_CTX,
-  CANNED_SOURCE,
   SUGGESTIONS,
+  errorAnswer,
   mapResueltaToAnswer,
   type Answer,
   type AnswerMode,
+  type AlertsDashboardPayload,
+  type ComparativeViewPayload,
   type ConsultaResuelta,
-  type InfoAnswerData,
-  type StepsAnswerData,
+  type DiagnosticTreePayload,
+  type DiagramViewerPayload,
+  type InfoCardPayload,
+  type ProcedureCardPayload,
+  type TimelinePayload,
+  type VideoPlayerPayload,
 } from "./consult-data";
 import { InformativaCard } from "./renderers/informativa-card";
 import { GuiaPasoAPaso } from "./renderers/guia-paso-a-paso";
@@ -62,49 +67,75 @@ function ModeLine({ mode }: { mode: AnswerMode }) {
   );
 }
 
+function ErrorCard({ msg }: { msg: string }) {
+  return (
+    <div className="acard">
+      <div className="warn">
+        <Icon name="triangle-alert" size={16} />
+        <div className="wt">
+          <span className="wlab">No se pudo resolver la consulta</span>
+          {msg}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AnswerBody({
   a,
   saved,
   onSave,
   onCite,
+  onNavigate,
 }: {
   a: Answer;
   saved: boolean;
   onSave: () => void;
-  onCite: () => void;
+  onCite: (s: SourceSpan | null) => void;
+  onNavigate: (nodoId: string) => void;
 }) {
   switch (a.kind) {
     case "info":
-      return <InformativaCard a={a as InfoAnswerData} saved={saved} onSave={onSave} onCite={onCite} />;
+      return <InformativaCard payload={a.payload as InfoCardPayload} saved={saved} onSave={onSave} onCite={onCite} />;
     case "steps":
-      return <GuiaPasoAPaso a={a as StepsAnswerData} saved={saved} onSave={onSave} onCite={onCite} />;
+      return <GuiaPasoAPaso payload={a.payload as ProcedureCardPayload} saved={saved} onSave={onSave} onCite={onCite} />;
     case "troubleshoot":
-      return <TroubleshootingTree saved={saved} onSave={onSave} onCite={onCite} />;
+      return (
+        <TroubleshootingTree
+          payload={a.payload as DiagnosticTreePayload}
+          saved={saved}
+          onSave={onSave}
+          onCite={onCite}
+          onNavigate={onNavigate}
+        />
+      );
     case "diagram":
-      return <GraficosViewer saved={saved} onSave={onSave} onCite={onCite} />;
+      return <GraficosViewer payload={a.payload as DiagramViewerPayload} saved={saved} onSave={onSave} onCite={onCite} />;
     case "video":
-      return <VideoPlayer saved={saved} onSave={onSave} onCite={onCite} />;
+      return <VideoPlayer payload={a.payload as VideoPlayerPayload} saved={saved} onSave={onSave} onCite={onCite} />;
     case "history":
-      return <HistorialTimeline saved={saved} onSave={onSave} />;
+      return <HistorialTimeline payload={a.payload as TimelinePayload} saved={saved} onSave={onSave} />;
     case "alerts":
-      return <AlertasDashboard saved={saved} onSave={onSave} onCite={onCite} />;
+      return <AlertasDashboard payload={a.payload as AlertsDashboardPayload} saved={saved} onSave={onSave} onCite={() => {}} />;
     case "compare":
-      return <ComparativaView saved={saved} onSave={onSave} onCite={onCite} />;
+      return <ComparativaView payload={a.payload as ComparativeViewPayload} saved={saved} onSave={onSave} onCite={onCite} />;
+    case "error":
+      return <ErrorCard msg={a.errorMsg ?? "Error desconocido."} />;
     default:
       return null;
   }
 }
 
 function answerTitle(a: Answer): string {
-  if (a.kind === "info") return a.q;
-  return a.title ?? "Consulta";
+  const p = a.payload as { titulo?: string } | undefined;
+  return p?.titulo || a.question || "Consulta";
 }
 
 /**
  * The collaborator consult view — full-screen, mobile-first, bottom-anchored
- * query box. Shared by /consult (admin) and /q/[token] (public QR). Recreated
- * from consult.jsx ConsultScreen with real /mo/query + /mo/queries/save wiring
- * and canned fallbacks so every intent renders without a backend.
+ * query box. Shared by /consult (admin) and /q/[token] (public QR). Wired to the
+ * real `/mo/query` (8 typed payloads). On backend failure shows an honest error
+ * (NO canned data — B9.5 §2.5).
  */
 export function ConsultView({ context }: { context?: ConsultContext }) {
   const ctx = context ?? CANNED_CTX;
@@ -127,56 +158,53 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
     setText("");
   }, []);
 
-  /** Suggested questions use the canned answer for that key (instant). */
-  const askCanned = useCallback(
-    (key: string, label: string) => {
-      const a = ANSWERS[key] ?? {
-        kind: "info" as const,
-        mode: "synth" as const,
-        q: label,
-        value: "—",
-        unit: "",
-        note: "Consulta de ejemplo. En producto real, DOCYAN clasifica la intención y renderiza la respuesta.",
-        cite: "Documento fuente · §",
-      };
-      appendAnswer(label, a);
+  const query = useCallback(
+    async (label: string, params?: Record<string, unknown>): Promise<Answer> => {
+      const res = await api.post<{ resultado: ConsultaResuelta }>(
+        "/mo/query",
+        {
+          texto: label,
+          canal: "pwa",
+          entidad_id: ("entityId" in ctx && ctx.entityId) || undefined,
+          token_qr: ("tokenQr" in ctx && ctx.tokenQr) || undefined,
+          params,
+        },
+        { token },
+      );
+      const resuelta = res.resultado ?? (res as unknown as ConsultaResuelta);
+      return mapResueltaToAnswer(resuelta, label);
     },
-    [appendAnswer],
+    [ctx, token],
   );
 
-  /** Free-text questions hit the real MO; on failure fall back to a canned info card. */
+  /** Both free-text and suggestions hit the real MO; failure → honest error. */
   const askFree = useCallback(
     async (label: string) => {
       setBusy(true);
       try {
-        const res = await api.post<{ resultado: ConsultaResuelta }>(
-          "/mo/query",
-          {
-            texto: label,
-            canal: "pwa",
-            entidad_id: ("entityId" in ctx && ctx.entityId) || undefined,
-            token_qr: ("tokenQr" in ctx && ctx.tokenQr) || undefined,
-          },
-          { token },
-        );
-        const resuelta = res.resultado ?? (res as unknown as ConsultaResuelta);
-        appendAnswer(label, mapResueltaToAnswer(resuelta, label));
+        appendAnswer(label, await query(label));
       } catch {
-        // No backend / error — degrade to a canned synthesized info card.
-        appendAnswer(label, {
-          kind: "info",
-          mode: "synth",
-          q: label,
-          value: "—",
-          unit: "",
-          note: "Consulta de ejemplo. En producto real, DOCYAN clasifica la intención y renderiza la respuesta con cita a la fuente.",
-          cite: "Documento fuente · §",
-        });
+        appendAnswer(label, errorAnswer(label, "El motor no respondió. Reintenta en unos segundos."));
       } finally {
         setBusy(false);
       }
     },
-    [appendAnswer, ctx, token],
+    [appendAnswer, query],
+  );
+
+  /** Tipo 5 navigation — re-query the next decision node and append it. */
+  const navigateNode = useCallback(
+    async (nodoId: string) => {
+      setBusy(true);
+      try {
+        appendAnswer("Continuar diagnóstico", await query("Continuar diagnóstico", { nodo_id: nodoId }));
+      } catch {
+        appendAnswer("Continuar diagnóstico", errorAnswer("Continuar diagnóstico", "No se pudo avanzar en el diagnóstico."));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [appendAnswer, query],
   );
 
   useEffect(() => {
@@ -201,14 +229,9 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
     [savedIds, token],
   );
 
-  const openSource = useCallback(() => setSource(CANNED_SOURCE), []);
-
   const showNudge = savedIds.length >= 2;
 
   return (
-    // Full-screen mobile-first column (NOT wrapped in the demo `.phone` frame).
-    // The kit's `.ctx`/`.convo`/`.qbar` assume a flex column that fills height;
-    // we reproduce the `.phone-screen` layout inline rather than add new CSS.
     <div
       style={{
         position: "fixed",
@@ -220,7 +243,6 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
         margin: "0 auto",
       }}
     >
-      {/* Context strip — ALWAYS visible. */}
       <div className="ctx">
         <DocyanMark size={26} />
         <div className="ctx-t">
@@ -251,8 +273,8 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
             </div>
           </div>
           <div className="sugs">
-            {SUGGESTIONS.map(([ic, q, key]) => (
-              <button type="button" className="sug" key={key} onClick={() => askCanned(key, q)}>
+            {SUGGESTIONS.map(([ic, q]) => (
+              <button type="button" className="sug" key={q} onClick={() => askFree(q)} disabled={busy}>
                 <Icon name={ic} size={15} />
                 {q}
                 <span className="ar">→</span>
@@ -273,7 +295,8 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
                 a={m.answer!}
                 saved={savedIds.includes(m.id)}
                 onSave={() => onSave(m.id, m.answer!)}
-                onCite={openSource}
+                onCite={(s) => s && setSource(s)}
+                onNavigate={navigateNode}
               />
             </div>
           ),
