@@ -44,7 +44,9 @@ SCHEMA = DocumentSchema(
         "Responde SIEMPRE en español, conservando los términos técnicos y nombres de "
         "norma en su forma original."
     ),
-    tipos_intencion_visualizacion=[2],
+    # T2 (procedimientos paso a paso) + T3 (los manuales traen figuras/diagramas
+    # que se auto-extraen como borrador curable, B9.5 §1.1 T3).
+    tipos_intencion_visualizacion=[2, 3],
     palabras_clave=[
         "manual", "instruction", "installation", "instalación", "instrucciones",
         "procedimiento", "procedure", "paso", "step", "advertencia", "warning",

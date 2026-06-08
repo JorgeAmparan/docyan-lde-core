@@ -2196,6 +2196,10 @@ export interface components {
             x?: number | null;
             /** Y */
             y?: number | null;
+            /** W */
+            w?: number | null;
+            /** H */
+            h?: number | null;
             /** Lookup Dtm */
             lookup_dtm?: string | null;
         };

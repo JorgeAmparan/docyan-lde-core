@@ -64,10 +64,11 @@ def confirmar_diagrama(
             """
             MATCH (r:RecursoVisual {id:$rid})
             MERGE (et:Etiqueta {id:$eid})
-            SET et.texto = $texto, et.x = $x, et.y = $y
+            SET et.texto = $texto, et.x = $x, et.y = $y, et.w = $w, et.h = $h
             MERGE (r)-[:CONTIENE]->(et)
             """,
-            {"rid": recurso_id, "eid": eid, "texto": et.texto, "x": et.x, "y": et.y},
+            {"rid": recurso_id, "eid": eid, "texto": et.texto,
+             "x": et.x, "y": et.y, "w": et.w, "h": et.h},
         )
     for i, ls in enumerate(draft.leyenda_simbolica):
         lid = f"{recurso_id}_ls{i}"

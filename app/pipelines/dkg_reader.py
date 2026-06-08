@@ -124,7 +124,7 @@ class DKGReader:
             OPTIONAL MATCH (r)-[:CONTIENE]->(et:Etiqueta)
             OPTIONAL MATCH (r)-[:CONTIENE]->(ls:LeyendaSimbolica)
             WITH r,
-                 collect(DISTINCT {texto: et.texto, x: et.x, y: et.y}) AS etiquetas,
+                 collect(DISTINCT {texto: et.texto, x: et.x, y: et.y, w: et.w, h: et.h}) AS etiquetas,
                  collect(DISTINCT {simbolo: ls.simbolo, significado: ls.significado}) AS leyenda
             RETURN r.id AS recurso_id, coalesce(r.titulo, r.nombre) AS titulo,
                    r.url AS recurso_url, etiquetas, leyenda

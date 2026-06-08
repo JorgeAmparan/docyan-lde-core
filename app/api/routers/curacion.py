@@ -26,13 +26,14 @@ from pydantic import BaseModel, Field
 from app.api.auth import requiere_rol
 from app.curacion.confirm import confirmar_arbol, confirmar_diagrama
 from app.curacion.models import DraftArbol, DraftDiagrama
-from app.curacion.store import InMemoryDraftStore
+from app.curacion.store import build_draft_store
 from app.recursos.video import adjuntar_video
 
 router = APIRouter(prefix="/curacion", tags=["curacion"])
 
-# Store de borradores (proceso). Producción: inyectar SupabaseDraftStore.
-_store = InMemoryDraftStore()
+# Store COMPARTIDO con el worker (Supabase en prod; memoria en dev/tests). El
+# worker auto-extrae el borrador y lo persiste aquí; este editor lo lee.
+_store = build_draft_store()
 
 
 def _dkg():

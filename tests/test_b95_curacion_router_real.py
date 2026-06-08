@@ -44,6 +44,10 @@ def dkg(monkeypatch):
         pytest.skip(f"FalkorDB no alcanzable en {FALKOR_HOST}:{FALKOR_PORT}")
     # El router usa _dkg() singleton; lo apuntamos al cliente de test.
     monkeypatch.setattr(router, "_dkg", lambda: c)
+    # Aísla el store de borradores en memoria (se mockea el ALMACÉN, no la decisión).
+    from app.curacion.store import InMemoryDraftStore
+
+    monkeypatch.setattr(router, "_store", InMemoryDraftStore())
     c.drop_tenant_graph(TENANT)
     yield c
     c.drop_tenant_graph(TENANT)

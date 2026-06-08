@@ -115,6 +115,50 @@ def build_resolution(embedder=None):
     return LLMVerifiedResolution(llm=llm, embedder=embedder)
 
 
+def complete_text(prompt: str, *, model: str | None = None, temperature: float = 0.0) -> str:
+    """
+    Completion de texto directa vía LiteLLM (B9.5 — auto-extracción de borradores
+    T5). Devuelve el contenido del mensaje. Usa el modelo de extracción por default
+    (Gemini 2.5 Flash, prefijo `gemini/` obligatorio). Import perezoso de litellm.
+    """
+    import litellm
+
+    model = model or extraction_model()
+    _require_key_for_model(model)
+    resp = litellm.completion(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=temperature,
+    )
+    return resp["choices"][0]["message"]["content"] or ""
+
+
+def complete_vision(prompt: str, image_b64: str, *, model: str | None = None) -> str:
+    """
+    Completion multimodal (texto + imagen) vía LiteLLM (B9.5 — auto-extracción de
+    etiquetas+coordenadas de figuras, T3). `image_b64` es PNG en base64. Gemini 2.5
+    Flash es multimodal; el prefijo `gemini/` es obligatorio. Import perezoso.
+    """
+    import litellm
+
+    model = model or extraction_model()
+    _require_key_for_model(model)
+    resp = litellm.completion(
+        model=model,
+        temperature=0.0,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                ],
+            }
+        ],
+    )
+    return resp["choices"][0]["message"]["content"] or ""
+
+
 def build_extractor_and_resolver(embedder=None, model: str | None = None):
     """
     Construye (extractor, resolver) para `GraphRAG.ingest()`, con el wiring exacto

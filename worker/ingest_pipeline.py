@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
 
 from app.graph.schemas.dkg_ontology import graph_name_for
 from app.jobs.job_models import IngestJob
@@ -41,11 +42,12 @@ FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT", "6379")
 # ── Conversión Docling ────────────────────────────────────────────────────────
 
 
-def convertir_a_markdown(path: str) -> str:
+def convertir(path: str):
     """
-    Convierte un documento (PDF/docx/xlsx/pptx/imagen/...) a Markdown con Docling,
-    preservando tablas complejas (TableFormer) y aplicando OCR cuando hace falta.
-    GraphRAG-SDK ingiere Markdown nativamente.
+    Convierte un documento (PDF/docx/xlsx/pptx/imagen/...) con Docling y devuelve
+    `(markdown, docling_document)`. El `docling_document` permite extraer figuras
+    para la auto-extracción de diagramas (B9.5 T3); `generate_picture_images=True`
+    hace que las figuras lleven su imagen.
 
     Pipeline OFFLINE (HF_HUB_OFFLINE en la imagen del worker): usa los modelos
     layout + TableFormer precargados en build y OCR vía el binario `tesseract`
@@ -62,6 +64,7 @@ def convertir_a_markdown(path: str) -> str:
     pdf_opts = PdfPipelineOptions()
     pdf_opts.do_table_structure = True  # TableFormer (tablas complejas, núcleo PoC)
     pdf_opts.ocr_options = TesseractCliOcrOptions()  # OCR con el tesseract de apt
+    pdf_opts.generate_picture_images = True  # B9.5 T3: figuras con imagen (auto-extracción)
     # artifacts_path: directorio donde `docling-tools models download` dejó los
     # modelos en build (layout + tableformer). Sin esto, convert() intenta
     # snapshot_download desde HF y con HF_HUB_OFFLINE=1 falla con
@@ -74,7 +77,12 @@ def convertir_a_markdown(path: str) -> str:
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)}
     )
     result = converter.convert(path)
-    return result.document.export_to_markdown()
+    return result.document.export_to_markdown(), result.document
+
+
+def convertir_a_markdown(path: str) -> str:
+    """Compat: solo el Markdown (GraphRAG-SDK lo ingiere nativamente)."""
+    return convertir(path)[0]
 
 
 def _contar_paginas(path: str) -> int | None:
@@ -131,9 +139,16 @@ def _build_graphrag(tenant_id: str, document_schema):
 class IngestPipeline:
     """Procesa un IngestJob: convierte, extrae al grafo, dedup, finaliza."""
 
-    def __init__(self, document_store=None, schema_registry=None):
+    def __init__(self, document_store=None, schema_registry=None, draft_store=None):
         self.document_store = document_store
         self.schema_registry = schema_registry
+        # Store COMPARTIDO de borradores de curación (Supabase en prod). El worker
+        # auto-extrae y persiste; el backend (editor) lo lee.
+        if draft_store is None:
+            from app.curacion.store import build_draft_store
+
+            draft_store = build_draft_store()
+        self.draft_store = draft_store
 
     def _resolver_schema(self, job: IngestJob, muestra: str = ""):
         """
@@ -201,7 +216,7 @@ class IngestPipeline:
         # FASE conversion — Docling convierte (opaco): inicio y, al terminar, el
         # conteo de páginas real.
         _emit("conversion", 0.0, {})
-        markdown = convertir_a_markdown(local_path)
+        markdown, docling_doc = convertir(local_path)
         paginas = _contar_paginas(local_path)
         pg_counters = {"pages": paginas, "page": paginas} if paginas else {}
         _emit("conversion", 1.0, pg_counters)
@@ -295,6 +310,11 @@ class IngestPipeline:
         except Exception as exc:  # noqa: BLE001 — el bridge no es gate del cobro
             logger.warning("bridge de procedencia falló (citas degradan): %s", exc)
 
+        # B9.5 §1.1 — Auto-extracción de borradores de curación (T3 diagramas, T5
+        # árboles). DOCYAN extrae el borrador del documento; el humano lo revisa en
+        # el editor antes de confirmar al grafo. Best-effort: no es gate del cobro.
+        borradores = self._auto_extraer_borradores(schema, markdown, docling_doc, job, doc_id)
+
         # Marca uso del schema (señal de utilidad para el registry vivo).
         if self.schema_registry is not None and schema is not None:
             try:
@@ -319,10 +339,64 @@ class IngestPipeline:
             "modelo_extraccion": modelo_usado,
             "cache_invalidadas": invalidadas,
             "bridge": bridge_counters,
+            "borradores_curacion": borradores,
             # F1.5: peso del resultado almacenado (markdown convertido) en bytes.
             "markdown_bytes": len(markdown.encode("utf-8")),
             "metadata": getattr(ingest_result, "metadata", {}),
         }
+
+    def _auto_extraer_borradores(self, schema, markdown, docling_doc, job, doc_id) -> dict:
+        """
+        Auto-extrae borradores de curación según los tipos de visualización del
+        schema (B9.5 decisión C): T5 (árbol) desde el texto, T3 (diagrama) desde las
+        figuras. Cada borrador se persiste en el draft_store COMPARTIDO con
+        `doc_id`/`entidad_id` para que el editor (backend) lo sirva y, al confirmar,
+        materialice la procedencia. Best-effort: nunca rompe la ingesta.
+
+        Devuelve contadores {arboles, diagramas}.
+        """
+        counters = {"arboles": 0, "diagramas": 0}
+        tipos = set(getattr(schema, "tipos_intencion_visualizacion", []) or []) if schema else set()
+        entidad_id = job.contexto.get("entidad_id")
+
+        def _persistir(draft) -> None:
+            draft_id = uuid.uuid4().hex
+            self.draft_store.save(job.tenant_id, draft_id, {
+                "draft_id": draft_id,
+                "draft": draft.model_dump(),
+                "doc_id": doc_id,
+                "entidad_id": entidad_id,
+            })
+
+        # T5 — árbol de diagnóstico (extracción de texto).
+        if 5 in tipos:
+            try:
+                from worker.extraction.tree_extractor import extraer_arbol_diagnostico
+
+                arbol = extraer_arbol_diagnostico(markdown)
+                if arbol is not None:
+                    _persistir(arbol)
+                    counters["arboles"] = 1
+            except Exception as exc:  # noqa: BLE001 — extracción no es gate
+                logger.warning("auto-extracción de árbol falló: %s", type(exc).__name__)
+
+        # T3 — diagramas (extracción de figuras + visión).
+        if 3 in tipos and docling_doc is not None:
+            try:
+                from worker.extraction.diagram_extractor import extraer_diagramas
+                from worker.extraction.docling_figures import extraer_figuras
+
+                figuras = extraer_figuras(docling_doc)
+                drafts = extraer_diagramas(job.tenant_id, figuras)
+                for d in drafts:
+                    _persistir(d)
+                counters["diagramas"] = len(drafts)
+            except Exception as exc:  # noqa: BLE001 — extracción no es gate
+                logger.warning("auto-extracción de diagramas falló: %s", type(exc).__name__)
+
+        if counters["arboles"] or counters["diagramas"]:
+            logger.info("borradores de curación auto-extraídos | tenant=%s | %s", job.tenant_id, counters)
+        return counters
 
     @staticmethod
     def _entidades_modificadas(ingest_result, document_id: str) -> list[str]:
