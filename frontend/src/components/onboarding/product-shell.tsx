@@ -32,6 +32,7 @@ export function ProductShell({
       .join("") || "DY";
 
   return (
+    <div className="onb-kit">
     <div className="app-stage">
       <div className="appbar">
         <BrandRow size={24} />
@@ -68,6 +69,7 @@ export function ProductShell({
         </div>
         {children}
       </div>
+    </div>
     </div>
   );
 }

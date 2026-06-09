@@ -67,6 +67,7 @@ export default function RedeemCodePage() {
   };
 
   return (
+    <div className="onb-kit">
     <div className="auth-stage">
       <div className="auth-split">
         <ValueAside
@@ -149,6 +150,7 @@ export default function RedeemCodePage() {
           </form>
         </div>
       </div>
+    </div>
     </div>
   );
 }

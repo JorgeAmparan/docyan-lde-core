@@ -72,6 +72,7 @@ export default function PlanFase2Page() {
   };
 
   return (
+    <div className="onb-kit">
     <div className="plan-stage">
       <div className="plan-wrap">
         <div className="plan-head">
@@ -248,6 +249,7 @@ export default function PlanFase2Page() {
           </>
         )}
       </div>
+    </div>
     </div>
   );
 }
