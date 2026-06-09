@@ -139,6 +139,12 @@ function LoginForm() {
             <div className="qa-m">Escanea el QR del equipo para consultar directo.</div>
           </div>
         </div>
+        <p className="auth-foot">
+          ¿Aún no tienes cuenta?{" "}
+          <Link className="link" href="/signup">
+            Empieza gratis
+          </Link>
+        </p>
       </form>
     </div>
   );

@@ -67,6 +67,11 @@ EXPECTED_TABLES = {
     "013b": "configuracion_grg",
     "015a": "pcl_metrics_daily",
     "015b": "pcl_cache_config",
+    "016a": "platform_admins",
+    "016b": "org_billing",
+    "016c": "access_codes",
+    "020a": "orgs",
+    "020b": "invitations",
 }
 
 # Errores de "ya existe" que tratamos como idempotentes.
