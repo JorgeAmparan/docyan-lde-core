@@ -1,11 +1,10 @@
 """
 B9.5 — Recorrido COMPLETO contra FalkorDB real:
-  documento → borrador AUTO-EXTRAÍDO → (revisión humana) → confirmar → grafo → consulta.
+  documento → AUTO-EXTRACCIÓN → materializar al grafo → consulta (sin revisión manual).
 
 El LLM/visión se mockea (sin claves); todo lo demás es real: el borrador que el
-extractor produce se confirma al grafo y el pipeline de lectura (B8) lo sirve. Es
-la prueba de que la auto-extracción alimenta el editor y cierra el recorrido — no
-curación manual.
+extractor produce se materializa al grafo y el pipeline de lectura (B8) lo sirve.
+Probado de punta a punta: la auto-extracción cierra el recorrido sin curación manual.
 """
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ import os
 
 import pytest
 
-from app.curacion.confirm import confirmar_arbol, confirmar_diagrama
+from worker.extraction.materializar import materializar_arbol, materializar_diagrama
 from app.pipelines import tipo3_graficos_diagramas, tipo5_troubleshooting
 from app.pipelines.base import ContextoPipeline
 from app.pipelines.dkg_reader import DKGReader
@@ -58,10 +57,10 @@ def test_recorrido_t5_autoextrae_confirma_consulta(client):
         ],
     })
     draft = extraer_arbol_diagnostico("…manual de troubleshooting…", complete=lambda _p: llm_out)
-    assert draft is not None  # el sistema PRODUJO el borrador (no el humano)
+    assert draft is not None  # el sistema PRODUJO la estructura automáticamente
 
-    # 2) (revisión humana en el editor — aquí el borrador pasa tal cual) → 3) confirmar al grafo.
-    confirmar_arbol(client, TENANT, draft, doc_id="docA")
+    # 2) Materializar DIRECTO al grafo (sin revisión manual).
+    materializar_arbol(client, TENANT, draft, doc_id="docA")
 
     # 4) CONSULTA: el pipeline T5 sirve el árbol navegable.
     pay = tipo5_troubleshooting.resolver(
@@ -87,8 +86,8 @@ def test_recorrido_t3_autoextrae_confirma_consulta_con_coordenadas(client):
     )
     assert len(drafts) == 1
 
-    # 2/3) confirmar al grafo.
-    confirmar_diagrama(client, TENANT, drafts[0], doc_id="docB")
+    # 2) Materializar DIRECTO al grafo.
+    materializar_diagrama(client, TENANT, drafts[0], doc_id="docB")
 
     # 4) CONSULTA: el pipeline T3 sirve el diagrama con etiquetas y COORDENADAS {x,y,w,h}.
     pay = tipo3_graficos_diagramas.resolver(

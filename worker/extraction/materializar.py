@@ -1,29 +1,27 @@
 """
-Materialización al grafo de borradores curados (B9.5 §1.2 / decisión C).
+Materialización al grafo de la estructura auto-extraída (B9.5).
 
-DOCYAN LDE™ by XCID.
+DOCYAN LDE™ by XCID — worker.
 
-Al confirmar un borrador (corregido por el humano), se escriben en el grafo del
-tenant los nodos/aristas EXACTOS que los pipelines de lectura (B8) esperan:
+Al cerrar la ingesta, la estructura AUTO-EXTRAÍDA de T3 (diagrama) y T5 (árbol) se
+escribe directo al grafo del tenant — sin revisión manual. Produce EXACTAMENTE los
+nodos/aristas que los pipelines de lectura (B8) esperan:
 
-  Tipo 3 → `:RecursoVisual` + `:Etiqueta{texto,x,y}` + `:LeyendaSimbolica` vía `:CONTIENE`.
+  Tipo 3 → `:RecursoVisual` + `:Etiqueta{texto,x,y,w,h}` + `:LeyendaSimbolica` vía `:CONTIENE`.
   Tipo 5 → `:ArbolDiagnostico` + `:NodoDecision{pregunta,orden}` vía `:CONTIENE`,
-           opciones como aristas `:OPCION{etiqueta}` entre nodos, y
-           `:CausaProbable`/`:AccionResolutoria` vía `:CONTIENE`.
+           opciones como aristas `:OPCION{etiqueta}`, y `:CausaProbable`/`:AccionResolutoria`.
 
 Todo se enlaza al `:DocumentoSource` (procedencia/citas) y, si hay `entidad_id`, a
-la `:EntidadOperativa`. Idempotente (`MERGE`): confirmar dos veces no duplica.
-
-NO se toca la lectura: estas funciones producen lo que el reader ya consulta.
+la `:EntidadOperativa`. Idempotente (`MERGE`).
 """
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from app.curacion.models import DraftArbol, DraftDiagrama
+from worker.extraction.models import DraftArbol, DraftDiagrama
 
-logger = logging.getLogger("docyan.curacion.confirm")
+logger = logging.getLogger("docyan.worker.materializar")
 
 
 def _vincular_doc_y_entidad(
@@ -43,18 +41,15 @@ def _vincular_doc_y_entidad(
         )
 
 
-def confirmar_diagrama(
+def materializar_diagrama(
     client: Any, tenant_id: str, draft: DraftDiagrama, *,
     doc_id: str | None = None, entidad_id: str | None = None,
 ) -> str:
-    """Materializa un `:RecursoVisual` con sus etiquetas y leyenda. Devuelve el id."""
+    """Escribe un `:RecursoVisual` con sus etiquetas (x,y,w,h) y leyenda. Devuelve el id."""
     recurso_id = draft.recurso_id or f"rv_{abs(hash((tenant_id, draft.titulo))) & 0xFFFFFFFF:x}"
     client.query(
         tenant_id,
-        """
-        MERGE (r:RecursoVisual {id:$id})
-        SET r.titulo = $titulo, r.url = $url
-        """,
+        "MERGE (r:RecursoVisual {id:$id}) SET r.titulo = $titulo, r.url = $url",
         {"id": recurso_id, "titulo": draft.titulo, "url": draft.recurso_url},
     )
     for i, et in enumerate(draft.etiquetas):
@@ -83,15 +78,15 @@ def confirmar_diagrama(
             {"rid": recurso_id, "lid": lid, "simbolo": ls.simbolo, "significado": ls.significado},
         )
     _vincular_doc_y_entidad(client, tenant_id, doc_id, entidad_id, recurso_id)
-    logger.info("diagrama curado materializado | tenant=%s recurso=%s", tenant_id, recurso_id)
+    logger.info("diagrama materializado | tenant=%s recurso=%s", tenant_id, recurso_id)
     return recurso_id
 
 
-def confirmar_arbol(
+def materializar_arbol(
     client: Any, tenant_id: str, draft: DraftArbol, *,
     doc_id: str | None = None, entidad_id: str | None = None,
 ) -> str:
-    """Materializa un `:ArbolDiagnostico` con nodos, opciones, causas y acciones."""
+    """Escribe un `:ArbolDiagnostico` con nodos, opciones, causas y acciones."""
     arbol_id = draft.arbol_id or f"ad_{abs(hash((tenant_id, draft.titulo))) & 0xFFFFFFFF:x}"
     client.query(
         tenant_id,
@@ -110,7 +105,6 @@ def confirmar_arbol(
             {"aid": arbol_id, "nid": n.id, "pregunta": n.pregunta, "orden": n.orden},
         )
         if n.causa_probable:
-            cid = f"{n.id}_causa"
             client.query(
                 tenant_id,
                 """
@@ -118,10 +112,9 @@ def confirmar_arbol(
                 MERGE (c:CausaProbable {id:$cid}) SET c.descripcion = $desc
                 MERGE (n)-[:CONTIENE]->(c)
                 """,
-                {"nid": n.id, "cid": cid, "desc": n.causa_probable},
+                {"nid": n.id, "cid": f"{n.id}_causa", "desc": n.causa_probable},
             )
         if n.accion_resolutoria:
-            aid2 = f"{n.id}_accion"
             client.query(
                 tenant_id,
                 """
@@ -129,9 +122,8 @@ def confirmar_arbol(
                 MERGE (a:AccionResolutoria {id:$aid}) SET a.descripcion = $desc
                 MERGE (n)-[:CONTIENE]->(a)
                 """,
-                {"nid": n.id, "aid": aid2, "desc": n.accion_resolutoria},
+                {"nid": n.id, "aid": f"{n.id}_accion", "desc": n.accion_resolutoria},
             )
-    # Aristas de opción entre nodos (etiqueta = texto de la opción).
     for n in draft.nodos:
         for o in n.opciones:
             if not o.siguiente_nodo_id:
@@ -145,5 +137,5 @@ def confirmar_arbol(
                 {"src": n.id, "dst": o.siguiente_nodo_id, "et": o.etiqueta},
             )
     _vincular_doc_y_entidad(client, tenant_id, doc_id, entidad_id, arbol_id)
-    logger.info("árbol curado materializado | tenant=%s arbol=%s", tenant_id, arbol_id)
+    logger.info("árbol materializado | tenant=%s arbol=%s", tenant_id, arbol_id)
     return arbol_id

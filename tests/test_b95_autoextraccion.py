@@ -1,23 +1,40 @@
 """
-B9.5 — Auto-extracción de borradores de curación (T5 árbol, T3 diagrama).
+B9.5 — Auto-extracción + materialización (T5 árbol, T3 diagrama).
 
-DOCYAN extrae el borrador del documento; el humano lo revisa. El LLM/visión se
-inyecta (mock) para correr sin claves — la extracción REAL con Gemini/Docling es
-autoridad de CI (ver test_b95_autoextraccion_real_ci.py, gated por claves).
+DOCYAN extrae automáticamente del documento y materializa al grafo (sin revisión
+manual). El LLM/visión se inyecta (mock) para correr sin claves — la extracción
+REAL con Gemini/Docling es autoridad de CI (ver test_b95_autoextraccion_real_ci.py).
 
-Cubre: extractores (parseo + estructura), wiring del worker (persistencia del
-borrador por tipo de schema), y el JSON tolerante.
+Cubre: extractores (parseo + estructura), wiring del worker (materialización al
+grafo por tipo de schema), y el JSON tolerante.
 """
 from __future__ import annotations
 
 import json
 
-from app.curacion.store import InMemoryDraftStore
 from app.jobs.job_models import IngestJob
 from worker.extraction._json import parse_llm_json
 from worker.extraction.diagram_extractor import extraer_diagramas
 from worker.extraction.docling_figures import FiguraExtraida
 from worker.extraction.tree_extractor import extraer_arbol_diagnostico
+
+
+class _FakeDKG:
+    """Cliente DKG falso: registra las queries (verifica materialización sin FalkorDB)."""
+
+    def __init__(self):
+        self.queries: list[tuple[str, str]] = []
+
+    def query(self, tenant_id, cypher, params=None):
+        self.queries.append((tenant_id, cypher))
+        return []
+
+    def labels_creadas(self) -> set[str]:
+        import re
+        labels: set[str] = set()
+        for _t, c in self.queries:
+            labels.update(re.findall(r"MERGE \(\w+:(\w+)", c))
+        return labels
 
 
 # ── Parser JSON tolerante ─────────────────────────────────────────────────────
@@ -108,46 +125,46 @@ def _job():
     return IngestJob(job_id="j1", tenant_id="tnt", documento_ref="r", nombre_archivo="d.pdf",
                      contexto={"entidad_id": "eq-1"})
 
-def test_worker_autoextrae_arbol_t5(monkeypatch):
+def test_worker_materializa_arbol_t5(monkeypatch):
     from worker import ingest_pipeline as ip
     import worker.extraction.tree_extractor as te
 
-    store = InMemoryDraftStore()
-    pipe = ip.IngestPipeline(draft_store=store)
+    dkg = _FakeDKG()
+    pipe = ip.IngestPipeline(dkg_client=dkg)
     draft = extraer_arbol_diagnostico(
         "x", complete=lambda _p: json.dumps(
             {"titulo": "T", "nodos": [{"id": "n1", "pregunta": "¿?", "orden": 0}]}))
     monkeypatch.setattr(te, "extraer_arbol_diagnostico", lambda *_a, **_k: draft)
 
-    counters = pipe._auto_extraer_borradores(_FakeSchema([5, 2]), "markdown", None, _job(), "doc1")
+    counters = pipe._auto_materializar_visuales(_FakeSchema([5, 2]), "markdown", None, _job(), "doc1")
     assert counters["arboles"] == 1
-    saved = store.list("tnt")
-    assert len(saved) == 1
-    assert saved[0]["draft"]["kind"] == "arbol"
-    assert saved[0]["doc_id"] == "doc1"
-    assert saved[0]["entidad_id"] == "eq-1"
+    # Materializó al grafo: creó :ArbolDiagnostico + :NodoDecision y enlazó al doc.
+    assert "ArbolDiagnostico" in dkg.labels_creadas()
+    assert "NodoDecision" in dkg.labels_creadas()
+    assert any("doc1" in c or "DocumentoSource" in c for _t, c in dkg.queries)
 
-def test_worker_autoextrae_diagrama_t3(monkeypatch):
+def test_worker_materializa_diagrama_t3(monkeypatch):
     from worker import ingest_pipeline as ip
     import worker.extraction.docling_figures as df
     import worker.extraction.diagram_extractor as de
-    from app.curacion.models import DraftDiagrama, EtiquetaBorrador
+    from worker.extraction.models import DraftDiagrama, EtiquetaBorrador
 
-    store = InMemoryDraftStore()
-    pipe = ip.IngestPipeline(draft_store=store)
+    dkg = _FakeDKG()
+    pipe = ip.IngestPipeline(dkg_client=dkg)
     monkeypatch.setattr(df, "extraer_figuras", lambda _doc: [FiguraExtraida("f", b"x")])
     monkeypatch.setattr(de, "extraer_diagramas", lambda *_a, **_k: [
         DraftDiagrama(titulo="D", recurso_url="u", etiquetas=[EtiquetaBorrador(texto="x", x=0.1, y=0.2, w=0.1, h=0.1)])
     ])
 
-    counters = pipe._auto_extraer_borradores(_FakeSchema([3]), "md", object(), _job(), "doc2")
+    counters = pipe._auto_materializar_visuales(_FakeSchema([3]), "md", object(), _job(), "doc2")
     assert counters["diagramas"] == 1
-    assert store.list("tnt")[0]["draft"]["kind"] == "diagrama"
+    assert "RecursoVisual" in dkg.labels_creadas()
+    assert "Etiqueta" in dkg.labels_creadas()
 
-def test_worker_no_extrae_para_tipos_sin_t3_t5(monkeypatch):
+def test_worker_no_materializa_para_tipos_sin_t3_t5():
     from worker import ingest_pipeline as ip
-    store = InMemoryDraftStore()
-    pipe = ip.IngestPipeline(draft_store=store)
-    counters = pipe._auto_extraer_borradores(_FakeSchema([1, 8]), "md", None, _job(), "doc3")
+    dkg = _FakeDKG()
+    pipe = ip.IngestPipeline(dkg_client=dkg)
+    counters = pipe._auto_materializar_visuales(_FakeSchema([1, 8]), "md", None, _job(), "doc3")
     assert counters == {"arboles": 0, "diagramas": 0}
-    assert store.list("tnt") == []
+    assert dkg.queries == []

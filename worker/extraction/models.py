@@ -1,15 +1,15 @@
 """
-Modelos de borrador de curación asistida (B9.5 §1.2 / decisión C).
+Modelos de la estructura extraída visual/decisional (B9.5).
 
-DOCYAN LDE™ by XCID.
+DOCYAN LDE™ by XCID — worker `docyan-lde-ingest`.
 
-Tipo 3 (diagramas) y Tipo 5 (árboles de troubleshooting) se ingieren por CURACIÓN
-ASISTIDA: la ingesta produce un BORRADOR (extracción automática), un humano lo
-corrige al ingerir, y al confirmar se materializa en el grafo. Estos modelos son el
-contrato del borrador editable; el `kind` discrimina el tipo de recurso.
+Tipo 3 (diagramas) y Tipo 5 (árboles de troubleshooting) se AUTO-EXTRAEN del
+documento (extracción del stack) y se materializan directo al grafo — sin revisión
+manual. Estos modelos son la salida tipada del extractor que el materializador
+escribe al DKG. (El editor de curación manual se retiró del alcance de B9.5: la
+extracción del stack es de calidad suficiente; ver reporte de cierre.)
 
-Pydantic v2 estricto → se exporta a OpenAPI (el editor del frontend deriva sus
-tipos de aquí).
+Pydantic v2 estricto.
 """
 from __future__ import annotations
 
@@ -74,9 +74,8 @@ class DraftArbol(_Base):
 
     def validar_conectividad(self) -> list[str]:
         """
-        Devuelve advertencias de conectividad (no rompe): referencias a nodos
-        inexistentes, nodos huérfanos. El editor las muestra para que el humano
-        corrija antes de confirmar.
+        Advertencias de conectividad (no rompe): referencias a nodos inexistentes,
+        nodos huérfanos. Se loguean en la extracción.
         """
         ids = {n.id for n in self.nodos}
         warns: list[str] = []
@@ -89,7 +88,6 @@ class DraftArbol(_Base):
                         warns.append(
                             f"nodo '{n.id}' apunta a '{o.siguiente_nodo_id}' inexistente"
                         )
-        # Nodo raíz = el de menor orden; los demás deberían ser referidos por alguien.
         for n in sorted(self.nodos, key=lambda x: x.orden)[1:]:
             if n.id not in referidos:
                 warns.append(f"nodo '{n.id}' es huérfano (nadie lo referencia)")

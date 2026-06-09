@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import logging
 import os
-import uuid
 
 from app.graph.schemas.dkg_ontology import graph_name_for
 from app.jobs.job_models import IngestJob
@@ -139,16 +138,16 @@ def _build_graphrag(tenant_id: str, document_schema):
 class IngestPipeline:
     """Procesa un IngestJob: convierte, extrae al grafo, dedup, finaliza."""
 
-    def __init__(self, document_store=None, schema_registry=None, draft_store=None):
+    def __init__(self, document_store=None, schema_registry=None, dkg_client=None):
         self.document_store = document_store
         self.schema_registry = schema_registry
-        # Store COMPARTIDO de borradores de curación (Supabase en prod). El worker
-        # auto-extrae y persiste; el backend (editor) lo lee.
-        if draft_store is None:
-            from app.curacion.store import build_draft_store
+        # Cliente DKG para materializar la estructura auto-extraída (T3/T5) directo
+        # al grafo. Inyectable para test; por default apunta al FalkorDB del tenant.
+        if dkg_client is None:
+            from app.graph.dkg_client import DKGClient
 
-            draft_store = build_draft_store()
-        self.draft_store = draft_store
+            dkg_client = DKGClient(host=FALKOR_HOST, port=FALKOR_PORT)
+        self.dkg_client = dkg_client
 
     def _resolver_schema(self, job: IngestJob, muestra: str = ""):
         """
@@ -310,10 +309,11 @@ class IngestPipeline:
         except Exception as exc:  # noqa: BLE001 — el bridge no es gate del cobro
             logger.warning("bridge de procedencia falló (citas degradan): %s", exc)
 
-        # B9.5 §1.1 — Auto-extracción de borradores de curación (T3 diagramas, T5
-        # árboles). DOCYAN extrae el borrador del documento; el humano lo revisa en
-        # el editor antes de confirmar al grafo. Best-effort: no es gate del cobro.
-        borradores = self._auto_extraer_borradores(schema, markdown, docling_doc, job, doc_id)
+        # B9.5 §1.1 — Auto-extracción + materialización directa al grafo (T3 diagramas,
+        # T5 árboles). DOCYAN extrae del documento y escribe el resultado al grafo sin
+        # revisión manual (la extracción del stack es de calidad suficiente).
+        # Best-effort: no es gate del cobro.
+        visuales = self._auto_materializar_visuales(schema, markdown, docling_doc, job, doc_id)
 
         # Marca uso del schema (señal de utilidad para el registry vivo).
         if self.schema_registry is not None and schema is not None:
@@ -339,19 +339,18 @@ class IngestPipeline:
             "modelo_extraccion": modelo_usado,
             "cache_invalidadas": invalidadas,
             "bridge": bridge_counters,
-            "borradores_curacion": borradores,
+            "visuales_materializados": visuales,
             # F1.5: peso del resultado almacenado (markdown convertido) en bytes.
             "markdown_bytes": len(markdown.encode("utf-8")),
             "metadata": getattr(ingest_result, "metadata", {}),
         }
 
-    def _auto_extraer_borradores(self, schema, markdown, docling_doc, job, doc_id) -> dict:
+    def _auto_materializar_visuales(self, schema, markdown, docling_doc, job, doc_id) -> dict:
         """
-        Auto-extrae borradores de curación según los tipos de visualización del
-        schema (B9.5 decisión C): T5 (árbol) desde el texto, T3 (diagrama) desde las
-        figuras. Cada borrador se persiste en el draft_store COMPARTIDO con
-        `doc_id`/`entidad_id` para que el editor (backend) lo sirva y, al confirmar,
-        materialice la procedencia. Best-effort: nunca rompe la ingesta.
+        Auto-extrae y materializa DIRECTO al grafo según los tipos de visualización
+        del schema: T5 (árbol) desde el texto, T3 (diagrama) desde las figuras. Sin
+        revisión manual — el resultado queda vivo para la consulta, con procedencia
+        (`doc_id`/`entidad_id`). Best-effort: nunca rompe la ingesta.
 
         Devuelve contadores {arboles, diagramas}.
         """
@@ -359,43 +358,38 @@ class IngestPipeline:
         tipos = set(getattr(schema, "tipos_intencion_visualizacion", []) or []) if schema else set()
         entidad_id = job.contexto.get("entidad_id")
 
-        def _persistir(draft) -> None:
-            draft_id = uuid.uuid4().hex
-            self.draft_store.save(job.tenant_id, draft_id, {
-                "draft_id": draft_id,
-                "draft": draft.model_dump(),
-                "doc_id": doc_id,
-                "entidad_id": entidad_id,
-            })
-
-        # T5 — árbol de diagnóstico (extracción de texto).
+        # T5 — árbol de diagnóstico (extracción de texto) → grafo.
         if 5 in tipos:
             try:
+                from worker.extraction.materializar import materializar_arbol
                 from worker.extraction.tree_extractor import extraer_arbol_diagnostico
 
                 arbol = extraer_arbol_diagnostico(markdown)
                 if arbol is not None:
-                    _persistir(arbol)
+                    materializar_arbol(self.dkg_client, job.tenant_id, arbol,
+                                       doc_id=doc_id, entidad_id=entidad_id)
                     counters["arboles"] = 1
             except Exception as exc:  # noqa: BLE001 — extracción no es gate
                 logger.warning("auto-extracción de árbol falló: %s", type(exc).__name__)
 
-        # T3 — diagramas (extracción de figuras + visión).
+        # T3 — diagramas (figuras + visión) → grafo.
         if 3 in tipos and docling_doc is not None:
             try:
                 from worker.extraction.diagram_extractor import extraer_diagramas
                 from worker.extraction.docling_figures import extraer_figuras
+                from worker.extraction.materializar import materializar_diagrama
 
                 figuras = extraer_figuras(docling_doc)
                 drafts = extraer_diagramas(job.tenant_id, figuras)
                 for d in drafts:
-                    _persistir(d)
+                    materializar_diagrama(self.dkg_client, job.tenant_id, d,
+                                          doc_id=doc_id, entidad_id=entidad_id)
                 counters["diagramas"] = len(drafts)
             except Exception as exc:  # noqa: BLE001 — extracción no es gate
                 logger.warning("auto-extracción de diagramas falló: %s", type(exc).__name__)
 
         if counters["arboles"] or counters["diagramas"]:
-            logger.info("borradores de curación auto-extraídos | tenant=%s | %s", job.tenant_id, counters)
+            logger.info("visuales materializados | tenant=%s | %s", job.tenant_id, counters)
         return counters
 
     @staticmethod

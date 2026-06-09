@@ -1,9 +1,10 @@
 """
-B9.5 — Curación asistida (T3/T5) + video (T4) contra FalkorDB REAL.
+B9.5 — Materialización de auto-extracción (T3/T5) + video (T4) contra FalkorDB REAL.
 
-Verifica el recorrido decisión-C: un borrador corregido se confirma y los pipelines
-de lectura (B8, sin tocar) devuelven el payload POBLADO. Para video (decisión B):
-adjuntar un recurso y que el Tipo 4 lo sirva.
+Verifica que la estructura auto-extraída, al materializarse al grafo, hace que los
+pipelines de lectura (B8, sin tocar) devuelvan el payload POBLADO. Para video
+(decisión B): adjuntar un recurso y que el Tipo 4 lo sirva. (Sin editor de curación
+manual — se retiró del alcance de B9.5.)
 """
 from __future__ import annotations
 
@@ -11,8 +12,12 @@ import os
 
 import pytest
 
-from app.curacion.confirm import confirmar_arbol, confirmar_diagrama
-from app.curacion.models import (
+from app.pipelines import tipo3_graficos_diagramas, tipo4_video, tipo5_troubleshooting
+from app.pipelines.base import ContextoPipeline
+from app.pipelines.dkg_reader import DKGReader
+from app.recursos.video import adjuntar_video
+from worker.extraction.materializar import materializar_arbol, materializar_diagrama
+from worker.extraction.models import (
     DraftArbol,
     DraftDiagrama,
     EtiquetaBorrador,
@@ -20,15 +25,10 @@ from app.curacion.models import (
     NodoBorrador,
     OpcionBorrador,
 )
-from app.curacion.store import InMemoryDraftStore
-from app.pipelines import tipo3_graficos_diagramas, tipo4_video, tipo5_troubleshooting
-from app.pipelines.base import ContextoPipeline
-from app.pipelines.dkg_reader import DKGReader
-from app.recursos.video import adjuntar_video
 
 FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT") or "6379")
 FALKOR_HOST = os.getenv("FALKOR_HOST") or os.getenv("FALKORDB_HOST") or "localhost"
-TENANT = "b95test_curacion"
+TENANT = "b95test_materializar"
 
 
 @pytest.fixture()
@@ -47,17 +47,17 @@ def client():
     c.drop_tenant_graph(TENANT)
 
 
-def test_curacion_diagrama_tipo3(client):
+def test_materializar_diagrama_tipo3(client):
     draft = DraftDiagrama(
         titulo="Rotor y cabezal",
         recurso_url="https://assets.docyan/rotor.png",
         etiquetas=[
-            EtiquetaBorrador(texto="Tapa del rotor", x=0.33, y=0.26),
+            EtiquetaBorrador(texto="Tapa del rotor", x=0.33, y=0.26, w=0.1, h=0.06),
             EtiquetaBorrador(texto="Acople motor-eje", x=0.44, y=0.72),
         ],
         leyenda_simbolica=[LeyendaBorrador(simbolo="⚠", significado="Punto caliente")],
     )
-    confirmar_diagrama(client, TENANT, draft)
+    materializar_diagrama(client, TENANT, draft)
 
     reader = DKGReader(client)
     ctx = ContextoPipeline(tenant_id=TENANT, pregunta="diagrama del rotor",
@@ -65,11 +65,12 @@ def test_curacion_diagrama_tipo3(client):
     pay = tipo3_graficos_diagramas.resolver(ctx, reader).payload
     assert pay.recurso_url == "https://assets.docyan/rotor.png"
     assert len(pay.etiquetas) == 2
-    assert any(e.texto == "Tapa del rotor" for e in pay.etiquetas)
+    tapa = next(e for e in pay.etiquetas if e.texto == "Tapa del rotor")
+    assert tapa.w == 0.1 and tapa.h == 0.06
     assert len(pay.leyenda_simbolica) == 1
 
 
-def test_curacion_arbol_tipo5(client):
+def test_materializar_arbol_tipo5(client):
     draft = DraftArbol(
         titulo="La centrífuga no arranca",
         nodos=[
@@ -84,8 +85,8 @@ def test_curacion_arbol_tipo5(client):
                          accion_resolutoria="Cerrar y asegurar la tapa"),
         ],
     )
-    assert draft.validar_conectividad() == [], "el borrador de test debe estar bien conectado"
-    confirmar_arbol(client, TENANT, draft)
+    assert draft.validar_conectividad() == [], "el árbol de test debe estar bien conectado"
+    materializar_arbol(client, TENANT, draft)
 
     reader = DKGReader(client)
     ctx = ContextoPipeline(tenant_id=TENANT, pregunta="no arranca",
@@ -113,15 +114,6 @@ def test_video_tipo4(client):
     assert len(pay.capitulos) == 2
     # Bandera honesta: no se generan subtítulos por traducción.
     assert pay.subtitulos_disponibles_en_par_activo is False
-
-
-def test_store_borrador_save_get_delete():
-    store = InMemoryDraftStore()
-    store.save("t1", "d1", {"kind": "diagrama", "titulo": "x"})
-    assert store.get("t1", "d1")["titulo"] == "x"
-    assert store.get("t2", "d1") is None  # aislamiento por tenant
-    store.delete("t1", "d1")
-    assert store.get("t1", "d1") is None
 
 
 def test_arbol_detecta_conectividad_rota():

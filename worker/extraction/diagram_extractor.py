@@ -3,10 +3,10 @@ Auto-extracción de diagramas: figuras + etiquetas con coordenadas (B9.5 §1.1 T
 
 DOCYAN LDE™ by XCID — worker `docyan-lde-ingest`.
 
-DOCYAN extrae el BORRADOR del diagrama: cada figura del documento se almacena como
-asset servible y se le piden al LLM de VISIÓN las etiquetas/callouts con su caja
-normalizada `{x,y,w,h}` (0..1) y la leyenda simbólica. El humano revisa/corrige en
-el editor antes de confirmar. NO es manual: el sistema produce las etiquetas.
+DOCYAN extrae automáticamente el diagrama: cada figura del documento se almacena
+como asset servible y se le piden al LLM de VISIÓN las etiquetas/callouts con su
+caja normalizada `{x,y,w,h}` (0..1) y la leyenda simbólica. El resultado se
+materializa directo al grafo (sin revisión manual; el editor se retiró de B9.5).
 
 Inyectables para test sin claves/stack:
   - `complete_vision(prompt, image_b64) -> str` (prod: worker.llm_config.complete_vision)
@@ -18,7 +18,7 @@ import base64
 import logging
 from typing import Callable
 
-from app.curacion.models import DraftDiagrama, EtiquetaBorrador, LeyendaBorrador
+from worker.extraction.models import DraftDiagrama, EtiquetaBorrador, LeyendaBorrador
 from worker.extraction._json import parse_llm_json
 from worker.extraction.docling_figures import FiguraExtraida
 
@@ -54,8 +54,8 @@ def extraer_diagramas(
     put_asset: Callable[[str, str, bytes], str] | None = None,
 ) -> list[DraftDiagrama]:
     """
-    Extrae un `DraftDiagrama` borrador por figura con rótulos. Best-effort: figuras
-    sin etiquetas se omiten; nunca lanza (la auto-extracción no es gate).
+    Extrae un `DraftDiagrama` por figura con rótulos. Best-effort: figuras sin
+    etiquetas se omiten; nunca lanza (la auto-extracción no es gate).
     """
     if complete_vision is None:
         from worker import llm_config
@@ -80,7 +80,7 @@ def extraer_diagramas(
             continue
         etiquetas_raw = data.get("etiquetas") or []
         if not etiquetas_raw:
-            continue  # figura sin rótulos → no es diagrama curable
+            continue  # figura sin rótulos → no es un diagrama señalable
 
         # Almacena el asset servible (solo si hay etiquetas que valga la pena curar).
         try:

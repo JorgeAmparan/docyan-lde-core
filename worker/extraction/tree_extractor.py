@@ -3,10 +3,10 @@ Auto-extracción del árbol de diagnóstico (B9.5 §1.1 Tipo 5 / decisión C).
 
 DOCYAN LDE™ by XCID — worker `docyan-lde-ingest`.
 
-DOCYAN extrae el BORRADOR del árbol (nodos, opciones, causas, acciones) desde el
-documento de troubleshooting; el humano lo revisa/corrige en el editor de curación
-antes de confirmarlo al grafo. NO es curación manual: el sistema produce el árbol,
-el usuario no lo crea desde cero.
+DOCYAN extrae automáticamente el árbol (nodos, opciones, causas, acciones) desde el
+documento de troubleshooting y lo materializa directo al grafo. La extracción del
+stack es de calidad suficiente; no hay revisión manual (el editor de curación se
+retiró del alcance de B9.5).
 
 Extracción por LLM de texto (Gemini 2.5 Flash vía LiteLLM, igual que el resto de
 la ingesta). El LLM se inyecta (`complete`) para test sin claves; en producción y
@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
-from app.curacion.models import DraftArbol, NodoBorrador, OpcionBorrador
+from worker.extraction.models import DraftArbol, NodoBorrador, OpcionBorrador
 from worker.extraction._json import parse_llm_json
 
 logger = logging.getLogger("docyan.worker.extraccion.arbol")
