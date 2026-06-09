@@ -43,7 +43,7 @@ export default function SignupFreemiumPage() {
         org_id: res.org_id,
         org_name: orgName || undefined,
       };
-      setSession(res.tokens.access_token, user);
+      setSession(res.tokens.access_token, user, res.tokens.refresh_token ?? null);
       router.push("/onboarding");
     } catch (e) {
       setErr(

@@ -23,6 +23,15 @@ export type DeleteDocumentoResponse = S["DeleteDocumentoResponse"];
 export type TokenBundle = S["TokenBundle"];
 export type UsuarioOut = S["UsuarioOut"];
 export type UsuariosList = S["UsuariosList"];
+export type CodoOut = S["CodoOut"];
+export type CodosResponse = S["CodosResponse"];
+export type CodoContextoOut = S["CodoContextoOut"];
+export type CuentaResumen = S["CuentaResumen"];
+
+/** Resumen REAL de la cuenta (plan, cupo, saldo) — reemplaza el FALLBACK enlatado. */
+export function getCuenta(token: string): Promise<CuentaResumen> {
+  return api.get<CuentaResumen>("/onboarding/cuenta", { token });
+}
 
 /** Payload de rechazo de conversión (HTTP 402) del gate de tamaño freemium. */
 export interface FreemiumExcedePayload {
@@ -77,6 +86,38 @@ export function acceptInvitation(
   body: AcceptInvitationRequest,
 ): Promise<AcceptInvitationResponse> {
   return api.post<AcceptInvitationResponse>("/invitations/accept", body);
+}
+
+// ── Cuenta / sesión (B3/B5) ──────────────────────────────────────────────────
+
+/** Cierra sesión en el servidor revocando el refresh token (denylist real). */
+export function logout(refreshToken: string | null, token?: string | null, todos = false): Promise<unknown> {
+  return api.post("/auth/logout", { refresh_token: refreshToken, todos }, { token });
+}
+
+/** Cambia la contraseña (verifica la actual; revoca las demás sesiones). */
+export function changePassword(
+  body: { current_password: string; new_password: string },
+  token: string,
+): Promise<unknown> {
+  return api.post("/auth/change-password", body, { token });
+}
+
+/** Actualiza el perfil del usuario (nombre). */
+export function updateProfile(name: string, token: string): Promise<{ id: string; email: string; name: string; role: string }> {
+  return api.patch<{ id: string; email: string; name: string; role: string }>("/auth/me", { name }, { token });
+}
+
+// ── CoDos consultables (cierre del ciclo de consulta) ─────────────────────────
+
+/** Lista los CoDos consultables del tenant (entidades + documentos sueltos). REAL. */
+export function listCodos(token: string): Promise<CodosResponse> {
+  return api.get<CodosResponse>("/mo/codos", { token });
+}
+
+/** Contexto real de un CoDo (lo que antes fingía CANNED_CTX). */
+export function getCodoContexto(codoId: string, token: string): Promise<CodoContextoOut> {
+  return api.get<CodoContextoOut>(`/mo/codos/${encodeURIComponent(codoId)}`, { token });
 }
 
 // ── Gestión de documentos vivos ──────────────────────────────────────────────

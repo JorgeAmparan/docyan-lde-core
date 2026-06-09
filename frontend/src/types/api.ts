@@ -66,6 +66,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description Cierra sesión revocando el refresh token en el SERVIDOR (denylist real, no solo
+         *     descarte en cliente). Tras esto, `/auth/refresh` con ese token responde 401.
+         *
+         *     - `refresh_token`: revoca ese token. Idempotente (200 aunque no exista: no se
+         *       filtra existencia).
+         *     - `todos=true` (con sesión válida): revoca TODOS los refresh tokens del usuario
+         *       (cerrar sesión en todos los dispositivos).
+         *     El access token se descarta en cliente; su TTL corto cierra la ventana restante.
+         */
+        post: operations["logout_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Password
+         * @description Cambia la contraseña del usuario autenticado. Verifica la actual, fija la nueva
+         *     y REVOCA todos los refresh tokens del usuario (las demás sesiones quedan muertas;
+         *     el dispositivo actual sigue con su access token vigente hasta su TTL).
+         */
+        post: operations["change_password_auth_change_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -83,7 +132,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Me
+         * @description Actualiza el perfil del usuario autenticado (nombre).
+         */
+        patch: operations["update_me_auth_me_patch"];
         trace?: never;
     };
     "/documents/process": {
@@ -815,6 +868,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mo/codos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Codos
+         * @description Lista los CoDos consultables del tenant autenticado: entidades operativas (QR) +
+         *     documentos sueltos (onboarding freemium). Datos REALES del grafo del tenant; sin
+         *     fallback enlatado. Aislamiento multi-tenant: solo el grafo del `org_id` del JWT.
+         */
+        get: operations["listar_codos_mo_codos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mo/codos/{codo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Contexto Codo
+         * @description Contexto de consulta de un CoDo del tenant (entidad o documento suelto). 404 si el
+         *     id no existe en el grafo del tenant — sin filtrar existencia de otros tenants.
+         */
+        get: operations["contexto_codo_mo_codos__codo_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mo/ingesta": {
         parameters: {
             query?: never;
@@ -1396,6 +1492,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/onboarding/cuenta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resumen Cuenta
+         * @description Resumen REAL de la cuenta del tenant: plan, cupo de documentos (contado del grafo)
+         *     y saldo de ingesta (del budget). Sin datos enlatados. Aislado por org_id del JWT.
+         */
+        get: operations["resumen_cuenta_onboarding_cuenta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/onboarding/usuarios": {
         parameters: {
             query?: never;
@@ -1786,6 +1903,13 @@ export interface components {
              */
             reason: string;
         };
+        /** ChangePasswordRequest */
+        ChangePasswordRequest: {
+            /** Current Password */
+            current_password: string;
+            /** New Password */
+            new_password: string;
+        };
         /** ChatRequest */
         ChatRequest: {
             /** Query */
@@ -1832,6 +1956,62 @@ export interface components {
             span_inicio?: number | null;
             /** Span Fin */
             span_fin?: number | null;
+        };
+        /**
+         * CodoContextoOut
+         * @description Contexto de consulta de un CoDo (lo que antes fingía `CANNED_CTX` en el frontend).
+         *     `entidad_id` es el id real de la entidad cuando el CoDo es una entidad; None para
+         *     un documento suelto (la consulta corre con scope de tenant).
+         */
+        CodoContextoOut: {
+            /** Id */
+            id: string;
+            /** Tipo */
+            tipo: string;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Titulo */
+            titulo: string;
+            /** Meta */
+            meta: string;
+            /**
+             * Documentos
+             * @default []
+             */
+            documentos: components["schemas"]["DocumentoRefOut"][];
+        };
+        /**
+         * CodoOut
+         * @description Un CoDo consultable del tenant (entidad operativa o documento suelto).
+         */
+        CodoOut: {
+            /** Id */
+            id: string;
+            /** Tipo */
+            tipo: string;
+            /** Nombre */
+            nombre: string;
+            /** Tipo Documento */
+            tipo_documento?: string | null;
+            /**
+             * Documentos
+             * @default 0
+             */
+            documentos: number;
+            /**
+             * Estado
+             * @default ok
+             */
+            estado: string;
+        };
+        /** CodosResponse */
+        CodosResponse: {
+            /** Items */
+            items: components["schemas"]["CodoOut"][];
+            /** Total */
+            total: number;
         };
         /** ComparativeViewPayload */
         ComparativeViewPayload: {
@@ -2086,6 +2266,56 @@ export interface components {
             /** Motivo */
             motivo: string;
         };
+        /**
+         * CuentaResumen
+         * @description Resumen REAL de la cuenta para la superficie /cuenta (B13/D4). Reemplaza el
+         *     FALLBACK enlatado ("Plan Profesional MXN 10,191" para un freemium era dato falso).
+         *     Datos del tenant del JWT: plan, cupo de documentos (del grafo) y saldo de ingesta.
+         */
+        CuentaResumen: {
+            /** Org Id */
+            org_id: string;
+            /** Nombre */
+            nombre?: string | null;
+            /**
+             * Plan
+             * @default freemium
+             */
+            plan: string;
+            /**
+             * Plan Nombre
+             * @default Plan gratuito
+             */
+            plan_nombre: string;
+            /** Criticidad Segmento */
+            criticidad_segmento?: string | null;
+            /**
+             * Fase2 Completada
+             * @default false
+             */
+            fase2_completada: boolean;
+            /** Doc Limit */
+            doc_limit?: number | null;
+            /**
+             * Docs Usados
+             * @default 0
+             */
+            docs_usados: number;
+            /** Docs Disponibles */
+            docs_disponibles?: number | null;
+            /**
+             * Saldo Actual Usd
+             * @default 0
+             */
+            saldo_actual_usd: number;
+            /**
+             * Moneda
+             * @default USD
+             */
+            moneda: string;
+            /** Freemium Expira */
+            freemium_expira?: string | null;
+        };
         /** DeleteDocumentoResponse */
         DeleteDocumentoResponse: {
             /**
@@ -2279,6 +2509,15 @@ export interface components {
              * @default 0
              */
             contenido_directo: number;
+        };
+        /** DocumentoRefOut */
+        DocumentoRefOut: {
+            /** Id */
+            id: string;
+            /** Nombre */
+            nombre?: string | null;
+            /** Tipo */
+            tipo?: string | null;
         };
         /** DocumentosResponse */
         DocumentosResponse: {
@@ -2535,6 +2774,16 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** LogoutRequest */
+        LogoutRequest: {
+            /** Refresh Token */
+            refresh_token?: string | null;
+            /**
+             * Todos
+             * @default false
+             */
+            todos: boolean;
         };
         /**
          * MetricasCCP
@@ -3409,6 +3658,11 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** UpdateProfileRequest */
+        UpdateProfileRequest: {
+            /** Name */
+            name: string;
+        };
         /** UsuarioOut */
         UsuarioOut: {
             /** Id */
@@ -3584,6 +3838,72 @@ export interface operations {
             };
         };
     };
+    logout_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_password_auth_change_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_auth_me_get: {
         parameters: {
             query?: never;
@@ -3600,6 +3920,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    update_me_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4704,6 +5057,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_codos_mo_codos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodosResponse"];
+                };
+            };
+        };
+    };
+    contexto_codo_mo_codos__codo_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                codo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodoContextoOut"];
                 };
             };
             /** @description Validation Error */
@@ -5852,6 +6256,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgOut"];
+                };
+            };
+        };
+    };
+    resumen_cuenta_onboarding_cuenta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuentaResumen"];
                 };
             };
         };

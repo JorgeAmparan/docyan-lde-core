@@ -3,44 +3,39 @@
 import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 
+import { Icon } from "@/components/icon";
 import { api } from "@/lib/api-client";
 import { ConsultView, type ConsultContext } from "@/app/(app)/consult/consult-view";
-import { CANNED_CTX } from "@/app/(app)/consult/consult-data";
 
 /**
  * PUBLIC collaborator entry — the QR is the credential, no auth (this route lives
- * OUTSIDE the middleware PROTECTED list). Resolves the [token] to CoDo + entity
- * context and renders the full consult view pre-loaded with it.
- *
- * DESIGN: GET /qr/{token} defaults to a 307 redirect; we request `?format=json`
- * to get the resolved context. Its shape is untyped in the OpenAPI, so we map
- * defensively across likely field names. On ANY failure (404/network) we render
- * the canned CODO-LAB-04 · Centrífuga Hettich context so the demo always works.
+ * OUTSIDE the middleware PROTECTED list). Resuelve el [token] al contexto REAL de
+ * CoDo + entidad (`GET /qr/{token}?format=json` → ResolvedQr) y renderiza la vista
+ * de consulta precargada. Sin contexto enlatado: si el token no resuelve (404/red)
+ * se muestra un estado honesto, no una entidad falsa (fake-success).
  */
+interface QrEntidad {
+  id?: string;
+  nombre?: string;
+  tipo?: string;
+}
 interface QrResolved {
-  codo?: string;
-  codo_id?: string;
-  doco_id?: string;
-  entidad?: { id?: string; nombre?: string; titulo?: string; meta?: string };
+  tenant_id?: string;
   entidad_id?: string;
-  entidad_nombre?: string;
-  entidad_titulo?: string;
-  documentos?: number;
+  entidad?: QrEntidad;
+  documentos?: unknown[];
 }
 
-function toContext(token: string, data?: QrResolved): ConsultContext {
-  if (!data) return { ...CANNED_CTX, tokenQr: token };
+function toContext(token: string, data: QrResolved): ConsultContext {
   const ent = data.entidad ?? {};
-  const name = ent.nombre ?? data.entidad_nombre ?? CANNED_CTX.entityName;
-  const docs = typeof data.documentos === "number" ? data.documentos : undefined;
+  const name = ent.nombre ?? ent.tipo ?? data.entidad_id ?? "Entidad";
+  const nDocs = Array.isArray(data.documentos) ? data.documentos.length : 0;
   return {
-    codo: data.codo ?? data.codo_id ?? data.doco_id ?? CANNED_CTX.codo,
+    codo: data.entidad_id ?? ent.id ?? token,
+    entityId: data.entidad_id ?? ent.id,
     entityName: name,
-    entityTitle: ent.titulo ?? data.entidad_titulo ?? name,
-    entityMeta:
-      ent.meta ??
-      (docs !== undefined ? `QR escaneado · ${docs} documentos vivos` : CANNED_CTX.entityMeta),
-    entityId: ent.id ?? data.entidad_id,
+    entityTitle: name,
+    entityMeta: `QR escaneado · ${nDocs} documento${nDocs === 1 ? "" : "s"} vivo${nDocs === 1 ? "" : "s"}`,
     tokenQr: token,
   };
 }
@@ -48,12 +43,32 @@ function toContext(token: string, data?: QrResolved): ConsultContext {
 export default function QrEntryPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
 
-  const { data } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["qr", token],
     queryFn: () => api.get<QrResolved>(`/qr/${token}`, { query: { format: "json" } }),
     retry: false,
     staleTime: 5 * 60_000,
   });
+
+  if (isLoading) {
+    return (
+      <div className="consult-empty" style={{ minHeight: "60vh", display: "grid", placeItems: "center" }}>
+        <Icon name="loader-2" size={22} style={{ animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div
+        className="consult-empty"
+        style={{ minHeight: "60vh", display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}
+      >
+        <Icon name="triangle-alert" size={26} />
+        <p>Este código QR no es válido o ya no está disponible.</p>
+      </div>
+    );
+  }
 
   return <ConsultView context={toContext(token, data)} />;
 }

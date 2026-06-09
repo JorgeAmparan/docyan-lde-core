@@ -22,6 +22,12 @@ import {
   acceptInvitation,
   listDocumentos,
   deleteDocumento,
+  listCodos,
+  getCodoContexto,
+  getCuenta,
+  logout,
+  changePassword,
+  updateProfile,
 } from "@/lib/onboarding";
 
 beforeEach(() => {
@@ -75,5 +81,44 @@ describe("B13 onboarding data layer", () => {
 
     deleteDocumento("doc 1/x", "T");
     expect(calls.del).toHaveBeenCalledWith("/mis-documentos/doc%201%2Fx", { token: "T" });
+  });
+
+  it("codos: listar (token) y contexto por id (encodeURIComponent)", () => {
+    listCodos("T");
+    expect(calls.get).toHaveBeenCalledWith("/mo/codos", { token: "T" });
+
+    getCodoContexto("ent A/1", "T");
+    expect(calls.get).toHaveBeenCalledWith("/mo/codos/ent%20A%2F1", { token: "T" });
+  });
+
+  it("cuenta: resumen real → GET /onboarding/cuenta con token", () => {
+    getCuenta("T");
+    expect(calls.get).toHaveBeenCalledWith("/onboarding/cuenta", { token: "T" });
+  });
+
+  it("auth: logout revoca refresh; change-password; updateProfile (PATCH /auth/me)", () => {
+    logout("ref-1", "T");
+    expect(calls.post).toHaveBeenCalledWith(
+      "/auth/logout",
+      { refresh_token: "ref-1", todos: false },
+      { token: "T" },
+    );
+
+    logout("ref-1", "T", true);
+    expect(calls.post).toHaveBeenCalledWith(
+      "/auth/logout",
+      { refresh_token: "ref-1", todos: true },
+      { token: "T" },
+    );
+
+    changePassword({ current_password: "old12345", new_password: "new12345" }, "T");
+    expect(calls.post).toHaveBeenCalledWith(
+      "/auth/change-password",
+      { current_password: "old12345", new_password: "new12345" },
+      { token: "T" },
+    );
+
+    updateProfile("Jorge", "T");
+    expect(calls.patch).toHaveBeenCalledWith("/auth/me", { name: "Jorge" }, { token: "T" });
   });
 });

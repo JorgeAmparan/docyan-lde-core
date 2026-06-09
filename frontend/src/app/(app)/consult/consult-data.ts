@@ -48,26 +48,6 @@ export interface Answer {
   errorMsg?: string;
 }
 
-/** Suggested questions: [icon, question]. Each hits the REAL MO (`/mo/query`). */
-export const SUGGESTIONS: Array<[string, string]> = [
-  ["gauge", "¿Torque del perno B?"],
-  ["wrench", "¿Cómo cambio el filtro de refrigerante?"],
-  ["activity", "La centrífuga vibra al arrancar"],
-  ["image", "Muéstrame el diagrama del rotor"],
-  ["play-circle", "Video: montaje del rotor"],
-  ["history", "Historial de esta centrífuga"],
-  ["bell", "¿Qué alertas tengo pendientes?"],
-  ["git-compare", "Compara la rev. C y D del manual"],
-];
-
-/** Default CoDo/entity context for the strip when no QR/entity is resolved. */
-export const CANNED_CTX = {
-  codo: "CODO-LAB-04",
-  entityName: "Centrífuga Hettich",
-  entityTitle: "Centrífuga Hettich Rotina 380",
-  entityMeta: "QR escaneado · documentos vivos",
-};
-
 const KIND_BY_PAYLOAD: Record<string, AnswerKind> = {
   info_card: "info",
   procedure_card: "steps",

@@ -8,7 +8,7 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Security, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from supabase import Client, create_client
 
 from app.core.supabase_client import require_supabase_config
@@ -86,6 +86,22 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    # El refresh token a revocar (el access token se descarta en cliente; su TTL
+    # corto cierra la ventana). Opcional: si falta, se revocan TODOS los del usuario.
+    refresh_token: str | None = None
+    todos: bool = False  # cerrar sesión en TODOS los dispositivos
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)
+
+
+class UpdateProfileRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
 
 
 # ── Auth unificado (JWT + API Key) ───────────────────────────────────────────
@@ -347,6 +363,83 @@ async def refresh(request: RefreshRequest):
         "token_type": "bearer",
         "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     }
+
+
+@router.post("/logout")
+async def logout(
+    request: LogoutRequest,
+    ctx: dict | None = Depends(verificar_credenciales_opcional),
+):
+    """
+    Cierra sesión revocando el refresh token en el SERVIDOR (denylist real, no solo
+    descarte en cliente). Tras esto, `/auth/refresh` con ese token responde 401.
+
+    - `refresh_token`: revoca ese token. Idempotente (200 aunque no exista: no se
+      filtra existencia).
+    - `todos=true` (con sesión válida): revoca TODOS los refresh tokens del usuario
+      (cerrar sesión en todos los dispositivos).
+    El access token se descarta en cliente; su TTL corto cierra la ventana restante.
+    """
+    sb = _supabase()
+    revocados = 0
+
+    if request.todos and ctx and ctx.get("user_id"):
+        res = sb.table("refresh_tokens").update({"revoked": True}).eq(
+            "user_id", ctx["user_id"]
+        ).eq("revoked", False).execute()
+        revocados = len(res.data or [])
+    elif request.refresh_token:
+        res = sb.table("refresh_tokens").update({"revoked": True}).eq(
+            "token_hash", _hash_token(request.refresh_token)
+        ).eq("revoked", False).execute()
+        revocados = len(res.data or [])
+
+    return {"status": "logged_out", "revocados": revocados}
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    ctx: dict = Depends(verificar_credenciales),
+):
+    """
+    Cambia la contraseña del usuario autenticado. Verifica la actual, fija la nueva
+    y REVOCA todos los refresh tokens del usuario (las demás sesiones quedan muertas;
+    el dispositivo actual sigue con su access token vigente hasta su TTL).
+    """
+    if not ctx.get("user_id"):
+        raise HTTPException(status_code=403, detail="Solo cuentas de usuario pueden cambiar contraseña.")
+    sb = _supabase()
+    res = sb.table("users").select("id, password_hash").eq("id", ctx["user_id"]).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    user = res.data[0]
+    if not bcrypt.checkpw(request.current_password.encode(), user["password_hash"].encode()):
+        raise HTTPException(status_code=401, detail="La contraseña actual no es correcta.")
+
+    nuevo_hash = bcrypt.hashpw(request.new_password.encode(), bcrypt.gensalt()).decode()
+    sb.table("users").update({"password_hash": nuevo_hash}).eq("id", ctx["user_id"]).execute()
+    # Invalida todas las sesiones (refresh tokens) del usuario tras cambiar credenciales.
+    sb.table("refresh_tokens").update({"revoked": True}).eq(
+        "user_id", ctx["user_id"]
+    ).eq("revoked", False).execute()
+    return {"status": "password_changed"}
+
+
+@router.patch("/me")
+async def update_me(
+    request: UpdateProfileRequest,
+    ctx: dict = Depends(verificar_credenciales),
+):
+    """Actualiza el perfil del usuario autenticado (nombre)."""
+    if not ctx.get("user_id"):
+        raise HTTPException(status_code=403, detail="Solo cuentas de usuario pueden editar perfil.")
+    sb = _supabase()
+    res = sb.table("users").update({"name": request.name}).eq("id", ctx["user_id"]).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+    user = res.data[0]
+    return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]}
 
 
 @router.get("/me")

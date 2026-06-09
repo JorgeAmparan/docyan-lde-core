@@ -15,9 +15,11 @@ export interface AuthUser {
 
 interface AuthState {
   token: string | null;
+  /** Refresh token (B5): habilita renovar el access token y revocar en logout. */
+  refreshToken: string | null;
   user: AuthUser | null;
   docoId: string | null;
-  setSession: (token: string, user: AuthUser) => void;
+  setSession: (token: string, user: AuthUser, refreshToken?: string | null) => void;
   setDoco: (docoId: string) => void;
   clear: () => void;
 }
@@ -41,11 +43,12 @@ export const useAuth = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
+      refreshToken: null,
       user: null,
       docoId: null,
-      setSession: (token, user) => {
+      setSession: (token, user, refreshToken = null) => {
         writeCookie(AUTH_COOKIE, "1");
-        set({ token, user });
+        set({ token, user, refreshToken });
       },
       setDoco: (docoId) => {
         writeCookie(DOCO_COOKIE, docoId);
@@ -54,7 +57,7 @@ export const useAuth = create<AuthState>()(
       clear: () => {
         deleteCookie(AUTH_COOKIE);
         deleteCookie(DOCO_COOKIE);
-        set({ token: null, user: null, docoId: null });
+        set({ token: null, refreshToken: null, user: null, docoId: null });
       },
     }),
     { name: "docyan-auth" },

@@ -116,6 +116,27 @@ class AcceptInvitationResponse(BaseModel):
     tokens: TokenBundle
 
 
+class CuentaResumen(BaseModel):
+    """
+    Resumen REAL de la cuenta para la superficie /cuenta (B13/D4). Reemplaza el
+    FALLBACK enlatado ("Plan Profesional MXN 10,191" para un freemium era dato falso).
+    Datos del tenant del JWT: plan, cupo de documentos (del grafo) y saldo de ingesta.
+    """
+
+    org_id: str
+    nombre: str | None = None
+    plan: str = "freemium"
+    plan_nombre: str = "Plan gratuito"
+    criticidad_segmento: str | None = None
+    fase2_completada: bool = False
+    doc_limit: int | None = None
+    docs_usados: int = 0
+    docs_disponibles: int | None = None
+    saldo_actual_usd: float = 0.0
+    moneda: str = "USD"
+    freemium_expira: datetime | None = None
+
+
 class UsuarioOut(BaseModel):
     id: str
     email: str

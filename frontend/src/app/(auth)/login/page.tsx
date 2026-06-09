@@ -31,6 +31,7 @@ type LoginValues = z.infer<typeof loginSchema>;
 interface LoginResponse {
   access_token?: string;
   token?: string;
+  refresh_token?: string;
   user?: Partial<AuthUser> & { name?: string; nombre?: string };
 }
 
@@ -70,7 +71,7 @@ function LoginForm() {
         org_id: u.org_id,
         org_name: u.org_name,
       };
-      setSession(token, user);
+      setSession(token, user, res.refresh_token ?? null);
       const next = params.get("next");
       router.push(next && next.startsWith("/") ? next : "/select-codo");
     } catch (err) {

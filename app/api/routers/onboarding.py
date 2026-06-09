@@ -11,6 +11,7 @@ from app.api.auth import requiere_rol, verificar_credenciales
 from app.onboarding import providers, service
 from app.onboarding.models import (
     ActivarPlanRequest,
+    CuentaResumen,
     OrgOut,
     SignupRequest,
     SignupResponse,
@@ -18,6 +19,7 @@ from app.onboarding.models import (
     UsuarioOut,
     UsuariosList,
 )
+from app.onboarding.limites import estado_cupo
 from app.onboarding.service import OnboardingError
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -81,6 +83,46 @@ async def mi_org(ctx: dict = Depends(verificar_credenciales)) -> OrgOut:
     if org is None:
         raise HTTPException(status_code=404, detail="Organización no encontrada.")
     return _org_out(org)
+
+
+_PLAN_NOMBRE = {
+    "freemium": "Plan gratuito",
+    "piloto": "Plan piloto",
+    "esencial": "Plan Esencial",
+    "profesional": "Plan Profesional",
+    "empresarial": "Plan Empresarial",
+}
+
+
+@router.get("/cuenta", response_model=CuentaResumen)
+async def resumen_cuenta(ctx: dict = Depends(verificar_credenciales)) -> CuentaResumen:
+    """
+    Resumen REAL de la cuenta del tenant: plan, cupo de documentos (contado del grafo)
+    y saldo de ingesta (del budget). Sin datos enlatados. Aislado por org_id del JWT.
+    """
+    org_id = ctx["org_id"]
+    store = providers.get_store()
+    org = store.get_org(org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organización no encontrada.")
+
+    cupo = estado_cupo(store, providers.get_dkg(), org_id)
+    budget = store.get_budget(org_id) or {}
+    plan = org.get("plan") or "freemium"
+    return CuentaResumen(
+        org_id=org_id,
+        nombre=org.get("nombre"),
+        plan=plan,
+        plan_nombre=_PLAN_NOMBRE.get(plan, plan.capitalize()),
+        criticidad_segmento=org.get("criticidad_segmento"),
+        fase2_completada=bool(org.get("fase2_completada", False)),
+        doc_limit=cupo["limit"],
+        docs_usados=cupo["usados"],
+        docs_disponibles=cupo["disponibles"],
+        saldo_actual_usd=float(budget.get("saldo_actual_usd") or 0.0),
+        moneda=budget.get("moneda") or "USD",
+        freemium_expira=org.get("freemium_expira"),
+    )
 
 
 @router.get("/usuarios", response_model=UsuariosList)

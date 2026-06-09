@@ -9,6 +9,7 @@ import { api, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import type { FreemiumExcedePayload } from "@/lib/onboarding";
 import { ConsultView, type ConsultContext } from "@/app/(app)/consult/consult-view";
+import { IngestProgressRow } from "@/components/ingesta/ingest-progress-row";
 
 /**
  * Pantalla 4 (B13) — Onboarding Fase 1 (el momento "ájá"): bienvenida → sube tu
@@ -254,11 +255,19 @@ export default function OnboardingFase1Page() {
                 consultable. El procesamiento corre en segundo plano; puedes seguir mientras termina.
               </p>
               <div className="onb-body">
-                <div className="note info">
+                {/* Estado REAL del worker (D6): procesando / completado / error con
+                    causa. Si la ingesta falla, el usuario lo ve aquí y puede reintentar. */}
+                <IngestProgressRow
+                  jobId={jobId}
+                  name={fileName}
+                  token={token}
+                  onError={(d) => setErr(d.error?.message ?? "La ingesta falló. Puedes reintentar.")}
+                />
+                <div className="note info" style={{ marginTop: 12 }}>
                   <Icon name="cpu" size={16} />
                   <span>
-                    Tu documento está en la cola de ingesta. Cuando termine aparecerá como <b>vivo</b>{" "}
-                    en Mis documentos, listo para consultar. No necesitas esperar aquí.
+                    Cuando termine aparecerá como <b>vivo</b> en Mis documentos, listo para consultar.
+                    No necesitas esperar aquí.
                   </span>
                 </div>
               </div>

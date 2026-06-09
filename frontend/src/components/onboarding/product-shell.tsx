@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { BrandRow } from "@/components/brand/brand-row";
+import { AccountMenu } from "@/components/onboarding/account-menu";
 import { useAuth } from "@/lib/auth";
 
 /**
@@ -53,7 +54,7 @@ export function ProductShell({
               </Link>
             </span>
           )}
-          <span className="avatar">{initials}</span>
+          <AccountMenu initials={initials} />
         </div>
       </div>
       <div className="app-wrap">
@@ -65,6 +66,12 @@ export function ProductShell({
           <Link href="/usuarios" className={active === "invite" ? "on" : ""}>
             <Icon name="users" size={15} style={{ verticalAlign: "-3px", marginRight: 7 }} />
             Usuarios
+          </Link>
+          {/* Salida a la superficie de consulta (B13/D5): el shell de gestión ya no
+              es un callejón sin salida — se llega a consultar los CoDos del tenant. */}
+          <Link href="/select-codo">
+            <Icon name="scan-line" size={15} style={{ verticalAlign: "-3px", marginRight: 7 }} />
+            Consultar
           </Link>
         </div>
         {children}
