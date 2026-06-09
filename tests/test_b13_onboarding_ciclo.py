@@ -59,14 +59,14 @@ class FakeDkg:
         if "DETACH DELETE d" in cypher:
             docs.pop(doc_id, None)
             return []
-        if "DETACH DELETE x" in cypher:
+        if "DETACH DELETE x" in cypher:        # borrado de contenido exclusivo (no-op)
             return []
-        if "count(DISTINCT x) AS c" in cypher:
+        if "RETURN count(x) AS c" in cypher:   # conteo de contenido exclusivo del doc
             d = docs.get(doc_id)
             return [{"c": d["contenido"] if d else 0}]
-        if "count(d) AS c" in cypher:
+        if "count(d) AS c" in cypher:          # total de documentos vivos
             return [{"c": len(docs)}]
-        if "count(x) AS contenido_directo" in cypher or "AS contenido_directo" in cypher:
+        if "AS contenido_directo" in cypher:   # listado de documentos
             return [
                 {"id": d["id"], "nombre_archivo": d["nombre_archivo"],
                  "tipo_documento": d["tipo_documento"], "version": d["version"],

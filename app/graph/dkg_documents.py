@@ -77,31 +77,30 @@ def eliminar_documento(client: Any, tenant_id: str, doc_id: str) -> dict[str, in
 
     Devuelve contadores {contenido_eliminado, documento_eliminado}.
     """
-    # Filtro de exclusividad: el nodo de contenido x no está contenido por ningún
-    # OTRO documento (pattern comprehension con WHERE → size()==0).
-    _exclusivo = (
-        "WHERE NOT 'DocumentoSource' IN labels(x) "
-        "AND size([ (o:DocumentoSource)-[:CONTIENE]->(x) WHERE o.id <> $doc_id | o ]) = 0"
-    )
+    # Selección del contenido EXCLUSIVO del documento: nodos alcanzables vía
+    # :CONTIENE* que NO estén contenidos por ningún OTRO :DocumentoSource. Se hace
+    # con OPTIONAL MATCH + count (FalkorDB no soporta el filtro `| o` dentro de una
+    # pattern comprehension con WHERE). `otros = 0` ⇒ el nodo es exclusivo.
+    _seleccion_exclusiva = """
+        MATCH (d:DocumentoSource {id: $doc_id})-[:CONTIENE*1..]->(x)
+        WHERE NOT 'DocumentoSource' IN labels(x)
+        WITH DISTINCT x
+        OPTIONAL MATCH (o:DocumentoSource)-[:CONTIENE]->(x)
+        WHERE o.id <> $doc_id
+        WITH x, count(o) AS otros
+        WHERE otros = 0
+    """
 
     rows = client.query(
         tenant_id,
-        f"""
-        MATCH (d:DocumentoSource {{id: $doc_id}})-[:CONTIENE*1..]->(x)
-        {_exclusivo}
-        RETURN count(DISTINCT x) AS c
-        """,
+        _seleccion_exclusiva + "RETURN count(x) AS c",
         {"doc_id": doc_id},
     )
     contenido = int((rows[0].get("c") if rows else 0) or 0)
 
     client.query(
         tenant_id,
-        f"""
-        MATCH (d:DocumentoSource {{id: $doc_id}})-[:CONTIENE*1..]->(x)
-        {_exclusivo}
-        DETACH DELETE x
-        """,
+        _seleccion_exclusiva + "DETACH DELETE x",
         {"doc_id": doc_id},
     )
 
