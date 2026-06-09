@@ -15,7 +15,13 @@ capa de texto), el cotizador lo reporta como advertencia y el worker re-mide.
 """
 from __future__ import annotations
 
+import math
 import pathlib
+
+# Cota densa de caracteres por página para ESTIMAR páginas cuando no hay conteo
+# físico (formatos no-PDF en el backend ligero). Es el mismo orden del conteo que
+# ya deriva el cotizador del texto. El conteo físico exacto (PDF) tiene prioridad.
+CHARS_POR_PAGINA = 3000
 
 
 def extraer_texto(data: bytes, nombre_archivo: str) -> tuple[str, bool]:
@@ -54,3 +60,33 @@ def _extraer_pdf(data: bytes) -> tuple[str, bool]:
     # PDF sin capa de texto (escaneado): poco texto → no confiable, requiere OCR.
     confiable = len(texto.strip()) > 100
     return texto, confiable
+
+
+def contar_paginas(data: bytes, nombre_archivo: str, texto: str | None = None) -> int:
+    """
+    Cuenta (o estima) las páginas del documento para el gate de tamaño freemium.
+
+    PDF → conteo físico exacto (pdfminer, sin torch). Otros formatos → estimación
+    por longitud de texto (~CHARS_POR_PAGINA por página); el parseo rico con Docling
+    vive en el worker, pero esta cota previa basta para el tope de páginas freemium.
+    Nunca devuelve < 1.
+    """
+    ext = pathlib.Path(nombre_archivo).suffix.lower()
+    if ext == ".pdf":
+        n = _contar_paginas_pdf(data)
+        if n is not None:
+            return max(1, n)
+    if texto is None:
+        texto, _ = extraer_texto(data, nombre_archivo)
+    return max(1, math.ceil(len(texto) / CHARS_POR_PAGINA))
+
+
+def _contar_paginas_pdf(data: bytes) -> int | None:
+    import io
+
+    try:
+        from pdfminer.pdfpage import PDFPage
+
+        return sum(1 for _ in PDFPage.get_pages(io.BytesIO(data)))
+    except Exception:
+        return None

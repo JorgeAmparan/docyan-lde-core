@@ -7,9 +7,14 @@ Eliminar un documento libera cupo automáticamente (baja el conteo del grafo).
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from app.graph.dkg_documents import contar_documentos
+
+# Tope de páginas POR DOCUMENTO en cuentas freemium. Solo aplica a freemium; los
+# planes pagados no tienen tope de páginas (solo el gate financiero del cotizador).
+FREEMIUM_MAX_PAGINAS = int(os.getenv("FREEMIUM_MAX_PAGINAS", "100"))
 
 
 class LimiteDocumentosError(RuntimeError):
@@ -51,3 +56,56 @@ def verificar_limite_documentos(store: Any, dkg: Any, tenant_id: str) -> None:
     usados = contar_documentos(dkg, tenant_id)
     if usados >= int(limit):
         raise LimiteDocumentosError(int(limit), usados)
+
+
+class DocumentoFreemiumExcedeError(RuntimeError):
+    """
+    Un documento supera el tope de páginas de la cuenta freemium. El rechazo NO es
+    un "saldo insuficiente" seco: lleva un payload orientado a CONVERSIÓN que el
+    frontend muestra como invitación a subir uno más pequeño o pasar a plan pagado.
+    """
+
+    def __init__(self, paginas: int, limite: int) -> None:
+        self.paginas = paginas
+        self.limite = limite
+        super().__init__(
+            f"Documento de {paginas} páginas: supera el tope de {limite} de la "
+            "cuenta gratuita."
+        )
+
+    def payload(self) -> dict:
+        return {
+            "error": "freemium_documento_excede_paginas",
+            "plan": "freemium",
+            "paginas": self.paginas,
+            "limite_paginas": self.limite,
+            "mensaje": (
+                f"Este documento tiene {self.paginas} páginas y supera el límite de "
+                f"{self.limite} páginas por documento de tu cuenta gratuita."
+            ),
+            "salidas": [
+                {
+                    "accion": "subir_documento_mas_pequeno",
+                    "label": f"Sube un documento de {self.limite} páginas o menos",
+                },
+                {
+                    "accion": "upgrade_plan",
+                    "label": "Pasa a un plan pagado para procesar documentos sin tope de páginas",
+                },
+            ],
+        }
+
+
+def verificar_tamano_freemium(store: Any, tenant_id: str, paginas: int) -> None:
+    """
+    Lanza `DocumentoFreemiumExcedeError` si una cuenta FREEMIUM intenta ingerir un
+    documento de más de `FREEMIUM_MAX_PAGINAS` páginas. No-op para planes pagados
+    o si la org no está formalizada (ahí solo opera el gate financiero del cotizador).
+    """
+    org = store.get_org(tenant_id)
+    if org is None:
+        return
+    if org.get("plan") != "freemium":
+        return
+    if paginas > FREEMIUM_MAX_PAGINAS:
+        raise DocumentoFreemiumExcedeError(paginas, FREEMIUM_MAX_PAGINAS)

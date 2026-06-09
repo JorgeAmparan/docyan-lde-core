@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.auth import requiere_rol
 from app.ingesta import providers
-from app.ingesta.text_extract import extraer_texto
+from app.ingesta.text_extract import contar_paginas, extraer_texto
 from app.jobs.job_models import CotizacionSnapshot, IngestJob, JobStatus
 from app.jobs.progress import DocProgress, build_doc_progress
 
@@ -63,6 +63,31 @@ def _chequear_limite_documentos(tenant_id: str) -> None:
                        tenant_id, type(exc).__name__)
 
 
+def _chequear_tamano_freemium(tenant_id: str, paginas: int) -> None:
+    """
+    Gate de TAMAÑO freemium (B13): rechaza documentos de >100 páginas en cuentas
+    freemium con un payload orientado a CONVERSIÓN (HTTP 402). No aplica a planes
+    pagados. Fail-open ante errores de infraestructura (org sin formalizar): el gate
+    financiero del cotizador protege el costo por separado.
+    """
+    from app.onboarding import providers as onboarding_providers
+    from app.onboarding.limites import (
+        DocumentoFreemiumExcedeError,
+        verificar_tamano_freemium,
+    )
+
+    try:
+        verificar_tamano_freemium(onboarding_providers.get_store(), tenant_id, paginas)
+    except DocumentoFreemiumExcedeError as e:
+        # 402 Payment Required: el detalle estructurado es la invitación a convertir.
+        raise HTTPException(status_code=402, detail=e.payload())
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning("tamaño freemium no verificable (%s): %s",
+                       tenant_id, type(exc).__name__)
+
+
 @router.post("/documents")
 async def cotizar_documento(
     file: UploadFile = File(...),
@@ -84,6 +109,12 @@ async def cotizar_documento(
     data = await file.read()
 
     texto, confiable = extraer_texto(data, file.filename)
+
+    # B13 — Gate de TAMAÑO freemium: documentos de >100 páginas se rechazan en
+    # cuentas freemium con un payload de conversión (no un "saldo insuficiente"
+    # seco). Planes pagados: sin tope de páginas. Antes del gate financiero.
+    paginas = contar_paginas(data, file.filename, texto=texto)
+    _chequear_tamano_freemium(tenant_id, paginas)
 
     # Clasificación SOLO heurística en el backend (sin generación dinámica: esa usa
     # litellm/Gemini y vive en el worker, para mantener el backend <1 GB y sin
@@ -142,6 +173,7 @@ async def cotizar_documento(
             "heuristica" if tipo_heuristico else "worker_generara"
         ),
         "cotizacion": cotizacion.to_dict(),
+        "paginas_estimadas": paginas,
         "extraccion_confiable": confiable,
         "advertencia": None if confiable else (
             "El extractor ligero pudo subestimar el texto (¿PDF escaneado?). "
