@@ -6,9 +6,6 @@ El canje es alta CONTROLADA (provisiona una org nueva), NO acceso cross-tenant.
 """
 from __future__ import annotations
 
-import hashlib
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import verificar_credenciales
@@ -21,18 +18,8 @@ from app.platform_admin.models import (
     SupportMessageOut,
     SupportThreadOut,
 )
-from app.platform_admin.security import hash_password
 
 router = APIRouter(tags=["platform-tenant"])
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _org_id_for(email: str) -> str:
-    # Mismo esquema de derivación que auth.register (sha256(email)[:16]).
-    return hashlib.sha256(email.encode()).hexdigest()[:16]
 
 
 # ── (B) Canje de código de acceso (provisiona org) ───────────────────────────
@@ -43,45 +30,24 @@ async def redeem_access_code(
     code: str,
     body: RedeemAccessCodeRequest,
 ) -> RedeemAccessCodeResponse:
+    # Reusa el canje compartido (B13): provisiona user+budget+billing+fila `orgs`
+    # formalizada y marca el código usado. Misma lógica que el signup con código.
+    from app.onboarding.service import OnboardingError, canjear_codigo
+
     store = providers.get_store()
     audit = providers.get_audit()
-    row = store.get_access_code(code)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Código no encontrado.")
-    if row["status"] == "used":
-        raise HTTPException(status_code=409, detail="Código ya canjeado.")
-    if row["status"] in ("revoked", "expired"):
-        raise HTTPException(status_code=409, detail=f"Código {row['status']}, no canjeable.")
-    expires = row.get("expires_at")
-    if expires and str(expires) < _now().isoformat():
-        store.update_access_code(code, status="expired")
-        raise HTTPException(status_code=409, detail="Código expirado.")
-    if store.email_exists(body.email):
-        raise HTTPException(status_code=409, detail="Email ya registrado.")
-
-    org_id = _org_id_for(body.email)
-    if store.org_has_users(org_id):
-        raise HTTPException(status_code=409, detail="La organización ya existe.")
-
-    user = store.create_user(
-        org_id=org_id, email=body.email, password_hash=hash_password(body.password),
-        name=body.name, role="admin",
-    )
-    store.ensure_budget(org_id, float(row["cuota_saldo_usd"]))
-    store.upsert_org_billing(
-        org_id, display_name=body.org_name, plan=row["tipo"], lifecycle_status="active",
-    )
-    store.update_access_code(
-        code, status="used", org_generada=org_id, redeemed_at=_now().isoformat(),
-    )
-    audit.record("access_code_redeemed", body.email, {
-        "code": code, "org_id": org_id, "plan": row["tipo"],
-    }, org_id=org_id)
+    try:
+        prov = canjear_codigo(
+            store, audit, code=code, email=body.email, password=body.password,
+            name=body.name, org_name=body.org_name,
+        )
+    except OnboardingError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
 
     return RedeemAccessCodeResponse(
-        org_id=org_id, user_id=str(user["id"]), plan=row["tipo"],
-        cuota_documentos=row["cuota_documentos"], cuota_saldo_usd=float(row["cuota_saldo_usd"]),
-        expires_at=row.get("expires_at"),
+        org_id=prov["org_id"], user_id=str(prov["user"]["id"]), plan=prov["plan"],
+        cuota_documentos=prov["cuota_documentos"], cuota_saldo_usd=prov["cuota_saldo_usd"],
+        expires_at=prov["expires_at"],
     )
 
 

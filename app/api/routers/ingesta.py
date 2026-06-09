@@ -23,6 +23,7 @@ B2). El activo en B2 es el modo manual (usuario sube archivo).
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -34,6 +35,32 @@ from app.jobs.job_models import CotizacionSnapshot, IngestJob, JobStatus
 from app.jobs.progress import DocProgress, build_doc_progress
 
 router = APIRouter(prefix="/ingesta", tags=["ingesta"])
+
+logger = logging.getLogger("docyan.api.ingesta")
+
+
+def _chequear_limite_documentos(tenant_id: str) -> None:
+    """
+    Aplica el límite de documentos vivos del plan (B13). Lanza HTTP 409 si la cuenta
+    está en su tope. Fail-open ante errores de infraestructura (org sin formalizar /
+    grafo inalcanzable): no bloquea la cotización por una incertidumbre operativa.
+    """
+    from app.onboarding import providers as onboarding_providers
+    from app.onboarding.limites import LimiteDocumentosError, verificar_limite_documentos
+
+    try:
+        verificar_limite_documentos(
+            onboarding_providers.get_store(),
+            onboarding_providers.get_dkg(),
+            tenant_id,
+        )
+    except LimiteDocumentosError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — fail-open: el gate financiero protege el costo
+        logger.warning("límite de documentos no verificable (%s): %s",
+                       tenant_id, type(exc).__name__)
 
 
 @router.post("/documents")
@@ -47,6 +74,13 @@ async def cotizar_documento(
     estimación + job_id pendiente de confirmación, o el rechazo con motivo.
     """
     tenant_id = ctx["org_id"]
+
+    # B13 §1.2/§1.5 — Gate de LÍMITE DE DOCUMENTOS VIVOS del plan (freemium = 3).
+    # Antes del gate financiero: una cuenta en su límite no debe poder cotizar otra
+    # ingesta. Fail-open ante incertidumbre (org sin formalizar / grafo inalcanzable):
+    # el gate financiero del cotizador sigue protegiendo el costo.
+    _chequear_limite_documentos(tenant_id)
+
     data = await file.read()
 
     texto, confiable = extraer_texto(data, file.filename)

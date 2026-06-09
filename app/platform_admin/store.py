@@ -47,7 +47,20 @@ class PlatformStore(Protocol):
     def email_exists(self, email: str) -> bool: ...
     def org_has_users(self, org_id: str) -> bool: ...
     def create_user(self, org_id: str, email: str, password_hash: str, name: str, role: str) -> dict: ...
+    def get_user_by_email(self, email: str) -> dict | None: ...
     def ensure_budget(self, org_id: str, saldo_usd: float) -> dict: ...
+
+    # ── orgs (entidad de primer nivel, B13) ───────────────────────────────────
+    def create_org(self, org_id: str, **fields: Any) -> dict: ...
+    def get_org(self, org_id: str) -> dict | None: ...
+    def update_org(self, org_id: str, **fields: Any) -> dict: ...
+
+    # ── invitations (B13) ─────────────────────────────────────────────────────
+    def create_invitation(self, row: dict) -> dict: ...
+    def get_invitation(self, invitation_id: str) -> dict | None: ...
+    def get_invitation_by_token_hash(self, token_hash: str) -> dict | None: ...
+    def list_invitations(self, org_id: str, status: str | None = None) -> list[dict]: ...
+    def update_invitation(self, invitation_id: str, **fields: Any) -> dict: ...
 
     # ── access_codes ──────────────────────────────────────────────────────────
     def create_access_code(self, row: dict) -> dict: ...
@@ -92,6 +105,8 @@ class InMemoryPlatformStore:
         self.budgets: dict[str, dict] = {}  # org_id -> budget dict
         self.consultas: dict[str, int] = {}  # org_id -> total consultas
         self.pcl_daily: list[dict] = []  # {tenant_id, fecha, consultas_totales} (series)
+        self.orgs: dict[str, dict] = {}      # org_id -> org dict (B13)
+        self.invitations: list[dict] = []    # invitaciones (B13)
 
     # admins
     def get_admin_by_email(self, email: str) -> dict | None:
@@ -185,11 +200,66 @@ class InMemoryPlatformStore:
         self.users.append(u)
         return u
 
+    def get_user_by_email(self, email: str) -> dict | None:
+        return next((u for u in self.users if u["email"] == email), None)
+
     def ensure_budget(self, org_id: str, saldo_usd: float) -> dict:
         b = {"tenant_id": org_id, "saldo_actual_usd": float(saldo_usd),
              "hard_cap_por_documento": 5.0, "hard_cap_por_sesion": 20.0, "moneda": "USD"}
         self.budgets[org_id] = b
         return b
+
+    # orgs (B13)
+    def create_org(self, org_id: str, **fields: Any) -> dict:
+        row = {
+            "id": org_id, "nombre": None, "banda_mercado": "A", "idioma": "es",
+            "lifecycle_status": "active", "plan": "freemium", "doc_limit": None,
+            "freemium_inicio": None, "freemium_expira": None,
+            "criticidad_segmento": None, "fase2_completada": False,
+            "created_at": _now(), "updated_at": _now(),
+        }
+        row.update({k: v for k, v in fields.items() if v is not None})
+        self.orgs[org_id] = row
+        return row
+
+    def get_org(self, org_id: str) -> dict | None:
+        return self.orgs.get(org_id)
+
+    def update_org(self, org_id: str, **fields: Any) -> dict:
+        row = self.orgs.get(org_id)
+        if row is None:
+            raise KeyError(org_id)
+        # None es un valor válido al actualizar (p.ej. limpiar ventana freemium):
+        # aquí sí se aplican (a diferencia de create, que ignora None para defaults).
+        row.update(fields)
+        row["updated_at"] = _now()
+        return row
+
+    # invitations (B13)
+    def create_invitation(self, row: dict) -> dict:
+        row = {"id": _uid(), "status": "pending", "created_at": _now(),
+               "accepted_at": None, "accepted_user_id": None, **row}
+        self.invitations.append(row)
+        return row
+
+    def get_invitation(self, invitation_id: str) -> dict | None:
+        return next((i for i in self.invitations if i["id"] == invitation_id), None)
+
+    def get_invitation_by_token_hash(self, token_hash: str) -> dict | None:
+        return next((i for i in self.invitations if i["token_hash"] == token_hash), None)
+
+    def list_invitations(self, org_id: str, status: str | None = None) -> list[dict]:
+        rows = [i for i in self.invitations if i["org_id"] == org_id]
+        if status:
+            rows = [i for i in rows if i["status"] == status]
+        return list(reversed(rows))
+
+    def update_invitation(self, invitation_id: str, **fields: Any) -> dict:
+        inv = self.get_invitation(invitation_id)
+        if inv is None:
+            raise KeyError(invitation_id)
+        inv.update(fields)
+        return inv
 
     # access codes
     def create_access_code(self, row: dict) -> dict:
@@ -381,11 +451,58 @@ class SupabasePlatformStore:
         }).execute()
         return r.data[0]
 
+    def get_user_by_email(self, email: str) -> dict | None:
+        r = self.sb().table("users").select(
+            "id, org_id, email, name, role, is_active"
+        ).eq("email", email).limit(1).execute()
+        return r.data[0] if r.data else None
+
     def ensure_budget(self, org_id: str, saldo_usd: float) -> dict:
         r = self.sb().table("tenant_budget").upsert(
             {"tenant_id": org_id, "saldo_actual_usd": saldo_usd}, on_conflict="tenant_id"
         ).execute()
         return r.data[0] if r.data else {"tenant_id": org_id, "saldo_actual_usd": saldo_usd}
+
+    # orgs (B13)
+    def create_org(self, org_id: str, **fields: Any) -> dict:
+        payload = {"id": org_id, **{k: v for k, v in fields.items() if v is not None}}
+        r = self.sb().table("orgs").insert(payload).execute()
+        return r.data[0] if r.data else payload
+
+    def get_org(self, org_id: str) -> dict | None:
+        r = self.sb().table("orgs").select("*").eq("id", org_id).limit(1).execute()
+        return r.data[0] if r.data else None
+
+    def update_org(self, org_id: str, **fields: Any) -> dict:
+        # None es válido al actualizar (limpiar ventana freemium, etc.).
+        payload = {**fields, "updated_at": _now()}
+        r = self.sb().table("orgs").update(payload).eq("id", org_id).execute()
+        return r.data[0] if r.data else {"id": org_id, **payload}
+
+    # invitations (B13)
+    def create_invitation(self, row: dict) -> dict:
+        r = self.sb().table("invitations").insert(row).execute()
+        return r.data[0]
+
+    def get_invitation(self, invitation_id: str) -> dict | None:
+        r = self.sb().table("invitations").select("*").eq("id", invitation_id).execute()
+        return r.data[0] if r.data else None
+
+    def get_invitation_by_token_hash(self, token_hash: str) -> dict | None:
+        r = self.sb().table("invitations").select("*").eq(
+            "token_hash", token_hash
+        ).limit(1).execute()
+        return r.data[0] if r.data else None
+
+    def list_invitations(self, org_id: str, status: str | None = None) -> list[dict]:
+        q = self.sb().table("invitations").select("*").eq("org_id", org_id)
+        if status:
+            q = q.eq("status", status)
+        return q.order("created_at", desc=True).execute().data or []
+
+    def update_invitation(self, invitation_id: str, **fields: Any) -> dict:
+        r = self.sb().table("invitations").update(fields).eq("id", invitation_id).execute()
+        return r.data[0] if r.data else {}
 
     # access codes
     def create_access_code(self, row: dict) -> dict:
