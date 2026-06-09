@@ -41,11 +41,12 @@ FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT", "6379")
 # ── Conversión Docling ────────────────────────────────────────────────────────
 
 
-def convertir_a_markdown(path: str) -> str:
+def convertir(path: str):
     """
-    Convierte un documento (PDF/docx/xlsx/pptx/imagen/...) a Markdown con Docling,
-    preservando tablas complejas (TableFormer) y aplicando OCR cuando hace falta.
-    GraphRAG-SDK ingiere Markdown nativamente.
+    Convierte un documento (PDF/docx/xlsx/pptx/imagen/...) con Docling y devuelve
+    `(markdown, docling_document)`. El `docling_document` permite extraer figuras
+    para la auto-extracción de diagramas (B9.5 T3); `generate_picture_images=True`
+    hace que las figuras lleven su imagen.
 
     Pipeline OFFLINE (HF_HUB_OFFLINE en la imagen del worker): usa los modelos
     layout + TableFormer precargados en build y OCR vía el binario `tesseract`
@@ -62,6 +63,7 @@ def convertir_a_markdown(path: str) -> str:
     pdf_opts = PdfPipelineOptions()
     pdf_opts.do_table_structure = True  # TableFormer (tablas complejas, núcleo PoC)
     pdf_opts.ocr_options = TesseractCliOcrOptions()  # OCR con el tesseract de apt
+    pdf_opts.generate_picture_images = True  # B9.5 T3: figuras con imagen (auto-extracción)
     # artifacts_path: directorio donde `docling-tools models download` dejó los
     # modelos en build (layout + tableformer). Sin esto, convert() intenta
     # snapshot_download desde HF y con HF_HUB_OFFLINE=1 falla con
@@ -74,7 +76,12 @@ def convertir_a_markdown(path: str) -> str:
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)}
     )
     result = converter.convert(path)
-    return result.document.export_to_markdown()
+    return result.document.export_to_markdown(), result.document
+
+
+def convertir_a_markdown(path: str) -> str:
+    """Compat: solo el Markdown (GraphRAG-SDK lo ingiere nativamente)."""
+    return convertir(path)[0]
 
 
 def _contar_paginas(path: str) -> int | None:
@@ -131,9 +138,16 @@ def _build_graphrag(tenant_id: str, document_schema):
 class IngestPipeline:
     """Procesa un IngestJob: convierte, extrae al grafo, dedup, finaliza."""
 
-    def __init__(self, document_store=None, schema_registry=None):
+    def __init__(self, document_store=None, schema_registry=None, dkg_client=None):
         self.document_store = document_store
         self.schema_registry = schema_registry
+        # Cliente DKG para materializar la estructura auto-extraída (T3/T5) directo
+        # al grafo. Inyectable para test; por default apunta al FalkorDB del tenant.
+        if dkg_client is None:
+            from app.graph.dkg_client import DKGClient
+
+            dkg_client = DKGClient(host=FALKOR_HOST, port=FALKOR_PORT)
+        self.dkg_client = dkg_client
 
     def _resolver_schema(self, job: IngestJob, muestra: str = ""):
         """
@@ -201,7 +215,7 @@ class IngestPipeline:
         # FASE conversion — Docling convierte (opaco): inicio y, al terminar, el
         # conteo de páginas real.
         _emit("conversion", 0.0, {})
-        markdown = convertir_a_markdown(local_path)
+        markdown, docling_doc = convertir(local_path)
         paginas = _contar_paginas(local_path)
         pg_counters = {"pages": paginas, "page": paginas} if paginas else {}
         _emit("conversion", 1.0, pg_counters)
@@ -272,6 +286,35 @@ class IngestPipeline:
                 f"chain {chain}. Último error: {last_exc}"
             ) from last_exc
 
+        # B9.5 §1.0 — Bridge de procedencia + normalización: crea el :DocumentoSource
+        # y las aristas/propiedades que los pipelines de lectura (B8) esperan para
+        # CITAS y para los tipos 1/2/6/8. Corre sobre el MISMO grafo del tenant, tras
+        # el cierre del SDK. Best-effort acotado: es parte del cierre de la ingesta,
+        # no un gate del cobro — si fallara, se loguea y el documento queda ingerido
+        # (las citas degradan, no se pierde contenido).
+        bridge_counters: dict = {}
+        try:
+            from app.graph.dkg_client import DKGClient
+            from app.graph.dkg_provenance import bridge_and_normalize
+
+            bridge_counters = bridge_and_normalize(
+                DKGClient(host=FALKOR_HOST, port=FALKOR_PORT),
+                job.tenant_id,
+                doc_id=doc_id,
+                tipo_documento=(schema.tipo_documento if schema else job.tipo_documento) or "documento",
+                nombre_archivo=job.nombre_archivo,
+                content_sha256=job.content_sha256,
+                entidad_id=job.contexto.get("entidad_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 — el bridge no es gate del cobro
+            logger.warning("bridge de procedencia falló (citas degradan): %s", exc)
+
+        # B9.5 §1.1 — Auto-extracción + materialización directa al grafo (T3 diagramas,
+        # T5 árboles). DOCYAN extrae del documento y escribe el resultado al grafo sin
+        # revisión manual (la extracción del stack es de calidad suficiente).
+        # Best-effort: no es gate del cobro.
+        visuales = self._auto_materializar_visuales(schema, markdown, docling_doc, job, doc_id)
+
         # Marca uso del schema (señal de utilidad para el registry vivo).
         if self.schema_registry is not None and schema is not None:
             try:
@@ -295,10 +338,59 @@ class IngestPipeline:
             "duplicados_resueltos": duplicados_resueltos,
             "modelo_extraccion": modelo_usado,
             "cache_invalidadas": invalidadas,
+            "bridge": bridge_counters,
+            "visuales_materializados": visuales,
             # F1.5: peso del resultado almacenado (markdown convertido) en bytes.
             "markdown_bytes": len(markdown.encode("utf-8")),
             "metadata": getattr(ingest_result, "metadata", {}),
         }
+
+    def _auto_materializar_visuales(self, schema, markdown, docling_doc, job, doc_id) -> dict:
+        """
+        Auto-extrae y materializa DIRECTO al grafo según los tipos de visualización
+        del schema: T5 (árbol) desde el texto, T3 (diagrama) desde las figuras. Sin
+        revisión manual — el resultado queda vivo para la consulta, con procedencia
+        (`doc_id`/`entidad_id`). Best-effort: nunca rompe la ingesta.
+
+        Devuelve contadores {arboles, diagramas}.
+        """
+        counters = {"arboles": 0, "diagramas": 0}
+        tipos = set(getattr(schema, "tipos_intencion_visualizacion", []) or []) if schema else set()
+        entidad_id = job.contexto.get("entidad_id")
+
+        # T5 — árbol de diagnóstico (extracción de texto) → grafo.
+        if 5 in tipos:
+            try:
+                from worker.extraction.materializar import materializar_arbol
+                from worker.extraction.tree_extractor import extraer_arbol_diagnostico
+
+                arbol = extraer_arbol_diagnostico(markdown)
+                if arbol is not None:
+                    materializar_arbol(self.dkg_client, job.tenant_id, arbol,
+                                       doc_id=doc_id, entidad_id=entidad_id)
+                    counters["arboles"] = 1
+            except Exception as exc:  # noqa: BLE001 — extracción no es gate
+                logger.warning("auto-extracción de árbol falló: %s", type(exc).__name__)
+
+        # T3 — diagramas (figuras + visión) → grafo.
+        if 3 in tipos and docling_doc is not None:
+            try:
+                from worker.extraction.diagram_extractor import extraer_diagramas
+                from worker.extraction.docling_figures import extraer_figuras
+                from worker.extraction.materializar import materializar_diagrama
+
+                figuras = extraer_figuras(docling_doc)
+                drafts = extraer_diagramas(job.tenant_id, figuras)
+                for d in drafts:
+                    materializar_diagrama(self.dkg_client, job.tenant_id, d,
+                                          doc_id=doc_id, entidad_id=entidad_id)
+                counters["diagramas"] = len(drafts)
+            except Exception as exc:  # noqa: BLE001 — extracción no es gate
+                logger.warning("auto-extracción de diagramas falló: %s", type(exc).__name__)
+
+        if counters["arboles"] or counters["diagramas"]:
+            logger.info("visuales materializados | tenant=%s | %s", job.tenant_id, counters)
+        return counters
 
     @staticmethod
     def _entidades_modificadas(ingest_result, document_id: str) -> list[str]:

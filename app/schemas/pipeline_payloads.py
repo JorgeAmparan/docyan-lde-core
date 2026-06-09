@@ -97,8 +97,11 @@ class ProcedureCardPayload(_Base):
 
 class EtiquetaDiagrama(_Base):
     texto: str
+    # Caja normalizada (0..1) del rótulo sobre la figura (B9.5 T3, auto-extraída).
     x: float | None = None
     y: float | None = None
+    w: float | None = None
+    h: float | None = None
     lookup_dtm: str | None = None  # forma léxica en el par activo (no traducción)
 
 

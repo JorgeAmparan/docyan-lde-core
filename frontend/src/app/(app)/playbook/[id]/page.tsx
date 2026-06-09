@@ -10,7 +10,20 @@ import { ConsultaSpanOverlay, type SourceSpan } from "@/components/brand/consult
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import type { components } from "@/types/api";
-import { CANNED_SOURCE } from "@/app/(app)/consult/consult-data";
+
+/** Local example source for the playbook step overlay (saved-playbook view, not
+ *  the consult PWA). The live citation threading lands when playbook steps carry
+ *  their `Cita` from the backend. */
+const PLAYBOOK_SOURCE: SourceSpan = {
+  title: "Manual del equipo",
+  ref: "§ del paso · fuente",
+  paragraphs: [
+    {
+      text: "Fragmento citado de la fuente del paso. El resaltado al span exacto se habilita cuando el playbook aporta la cita del backend.",
+      highlight: true,
+    },
+  ],
+};
 
 type DispararPlaybook = components["schemas"]["DispararPlaybookResponse"];
 type PasoVista = components["schemas"]["PasoVistaUnificada"];
@@ -93,7 +106,7 @@ export default function PlaybookRunPage({ params }: { params: Promise<{ id: stri
                 </div>
               ) : null}
               <div className="acard-foot">
-                <CitationChip label={`Manual VF-2 · §${(paso.orden ?? i + 1) + 1}.1`} onOpen={() => setSource(CANNED_SOURCE)} />
+                <CitationChip label={`Manual VF-2 · §${(paso.orden ?? i + 1) + 1}.1`} onOpen={() => setSource(PLAYBOOK_SOURCE)} />
               </div>
             </div>
           );

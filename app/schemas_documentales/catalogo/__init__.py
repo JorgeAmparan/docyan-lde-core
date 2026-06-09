@@ -11,6 +11,7 @@ from app.schemas_documentales.catalogo import (
     ficha_tecnica,
     manual_tecnico,
     msds,
+    troubleshooting,
 )
 
 # Catálogo indexado por tipo_documento.
@@ -20,6 +21,7 @@ CATALOGO: dict[str, DocumentSchema] = {
     calibracion.SCHEMA.tipo_documento: calibracion.SCHEMA,
     especificacion.SCHEMA.tipo_documento: especificacion.SCHEMA,
     ficha_tecnica.SCHEMA.tipo_documento: ficha_tecnica.SCHEMA,
+    troubleshooting.SCHEMA.tipo_documento: troubleshooting.SCHEMA,
 }
 
 __all__ = ["CATALOGO"]

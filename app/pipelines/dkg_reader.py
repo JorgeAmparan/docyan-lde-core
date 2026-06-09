@@ -90,16 +90,19 @@ class DKGReader:
             """
             MATCH (p:Procedimiento)
             WHERE $t = '' OR toLower(p.nombre) CONTAINS toLower($t)
+            OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(p)
             OPTIONAL MATCH (p)-[:CONTIENE]->(paso:Paso)
             OPTIONAL MATCH (paso)-->(epp:EPP)
             OPTIONAL MATCH (paso)-->(h:Herramienta)
             OPTIONAL MATCH (paso)-->(adv:Advertencia)
-            WITH p, paso,
+            WITH p, d, paso,
                  collect(DISTINCT epp.nombre) AS epps,
                  collect(DISTINCT h.nombre) AS herrs,
                  collect(DISTINCT adv.texto) AS advs
             ORDER BY paso.orden
             RETURN p.id AS procedimiento_id, p.nombre AS titulo,
+                   head(collect(DISTINCT d.id)) AS documento_id,
+                   head(collect(DISTINCT d.tipo_documento)) AS documento_nombre,
                    collect({orden: paso.orden, descripcion: paso.descripcion,
                             epp: epps, herramientas: herrs, advertencias: advs,
                             precondiciones: paso.precondiciones,
@@ -121,7 +124,7 @@ class DKGReader:
             OPTIONAL MATCH (r)-[:CONTIENE]->(et:Etiqueta)
             OPTIONAL MATCH (r)-[:CONTIENE]->(ls:LeyendaSimbolica)
             WITH r,
-                 collect(DISTINCT {texto: et.texto, x: et.x, y: et.y}) AS etiquetas,
+                 collect(DISTINCT {texto: et.texto, x: et.x, y: et.y, w: et.w, h: et.h}) AS etiquetas,
                  collect(DISTINCT {simbolo: ls.simbolo, significado: ls.significado}) AS leyenda
             RETURN r.id AS recurso_id, coalesce(r.titulo, r.nombre) AS titulo,
                    r.url AS recurso_url, etiquetas, leyenda

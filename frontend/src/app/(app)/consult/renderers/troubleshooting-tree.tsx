@@ -1,82 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
 import { CitationChip } from "@/components/brand/citation-chip";
+import { citaLabel, citaToSource, type DiagnosticTreePayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
 /**
- * Tipo 5 · Troubleshooting — interactive decision tree, one node at a time, with
- * decision history. State persists in the component. Ported & extended from
- * consult.jsx TroubleshootAnswer (added a visible decision-history trail).
+ * Tipo 5 · Troubleshooting — un nodo del árbol curado a la vez. Las opciones
+ * navegan re-consultando el siguiente nodo (`onNavigate`). Si el payload es hoja,
+ * muestra causa probable + acción resolutoria. Línea ANSI: tono warn, nunca rojo.
  */
-type NodeId = "root" | "vacio" | "carga";
-
-const NODES: Record<
-  NodeId,
-  {
-    question?: string;
-    answer?: string;
-    options?: Array<{ label: string; next: NodeId }>;
-  }
-> = {
-  root: {
-    question: "¿La vibración aparece solo en vacío o también con carga?",
-    options: [
-      { label: "Solo en vacío", next: "vacio" },
-      { label: "También con carga", next: "carga" },
-    ],
-  },
-  vacio: {
-    answer:
-      "Causa probable: desbalance del rotor. Revisa el asiento de los tubos y verifica que las masas estén pareadas antes de continuar.",
-  },
-  carga: {
-    answer:
-      "Causa probable: holgura en el acople motor-eje. Inspecciona el acople y el par de apriete de la base.",
-  },
-};
-
-export function TroubleshootingTree({ saved, onSave, onCite }: { saved: boolean; onSave: () => void; onCite: () => void }) {
-  const [node, setNode] = useState<NodeId>("root");
-  const [trail, setTrail] = useState<string[]>([]);
-  const cur = NODES[node];
-
-  const choose = (label: string, next: NodeId) => {
-    setTrail((t) => [...t, label]);
-    setNode(next);
-  };
-  const reset = () => {
-    setTrail([]);
-    setNode("root");
-  };
+export function TroubleshootingTree({
+  payload,
+  saved,
+  onSave,
+  onCite,
+  onNavigate,
+}: {
+  payload: DiagnosticTreePayload;
+  saved: boolean;
+  onSave: () => void;
+  onCite: (s: SourceSpan | null) => void;
+  onNavigate?: (nodoId: string) => void;
+}) {
+  const opciones = payload.opciones ?? [];
+  const cita = (payload.citas ?? [])[0] ?? null;
+  const label = citaLabel(cita);
 
   return (
     <div className="acard">
-      <div className="q">Diagnóstico · vibración al arrancar</div>
+      <div className="q">{payload.titulo || "Diagnóstico"}</div>
 
-      {trail.length > 0 && (
-        <div className="ppe" style={{ marginTop: 8 }}>
-          {trail.map((t, i) => (
-            <span className="chip" key={i}>
-              {t}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {cur.question && (
+      {payload.pregunta && (
         <>
-          <p style={{ color: "var(--fg)", fontSize: 14, marginTop: 8 }}>{cur.question}</p>
+          <p style={{ color: "var(--fg)", fontSize: 14, marginTop: 8 }}>{payload.pregunta}</p>
           <div className="ppe" style={{ marginTop: 12, gap: 8 }}>
-            {cur.options?.map((o) => (
+            {opciones.map((o, i) => (
               <button
                 type="button"
-                key={o.next}
+                key={i}
                 className="sug"
                 style={{ background: "var(--surface)" }}
-                onClick={() => choose(o.label, o.next)}
+                disabled={!o.siguiente_nodo_id || !onNavigate}
+                onClick={() => o.siguiente_nodo_id && onNavigate?.(o.siguiente_nodo_id)}
               >
-                {o.label}
+                {o.etiqueta}
                 <span className="ar">→</span>
               </button>
             ))}
@@ -84,24 +52,28 @@ export function TroubleshootingTree({ saved, onSave, onCite }: { saved: boolean;
         </>
       )}
 
-      {cur.answer && (
-        <>
-          <p style={{ color: "var(--fg)", fontSize: 14, marginTop: 8 }}>
-            <strong>{cur.answer.split(":")[0]}:</strong>
-            {cur.answer.slice(cur.answer.indexOf(":") + 1)}
-          </p>
-          <div className="ppe" style={{ marginTop: 12 }}>
-            <button type="button" className="sug" style={{ background: "var(--surface)" }} onClick={reset}>
-              Empezar de nuevo
-              <span className="ar">↺</span>
-            </button>
-          </div>
-        </>
+      {(payload.es_hoja || payload.causa_probable || payload.accion_resolutoria) && (
+        <div style={{ marginTop: 8 }}>
+          {payload.causa_probable && (
+            <p style={{ color: "var(--fg)", fontSize: 14 }}>
+              <strong>Causa probable:</strong> {payload.causa_probable}
+            </p>
+          )}
+          {payload.accion_resolutoria && (
+            <p style={{ color: "var(--fg)", fontSize: 14, marginTop: 4 }}>
+              <strong>Acción resolutoria:</strong> {payload.accion_resolutoria}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="acard-foot">
-        <CitationChip label="Guía de fallas · §3.5" onOpen={onCite} />
-        {node !== "root" && <SaveBtn saved={saved} onSave={onSave} />}
+        {label ? (
+          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Árbol de diagnóstico</span>
+        )}
+        <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>
   );

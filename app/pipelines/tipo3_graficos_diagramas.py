@@ -29,6 +29,8 @@ def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPip
             texto=e.get("texto") or "",
             x=e.get("x"),
             y=e.get("y"),
+            w=e.get("w"),
+            h=e.get("h"),
             lookup_dtm=e.get("lookup_dtm"),
         )
         for e in (data.get("etiquetas") or [])

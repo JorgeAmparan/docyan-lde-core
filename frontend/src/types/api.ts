@@ -1316,6 +1316,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recursos/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adjuntar Recurso Video
+         * @description Adjunta un video como recurso de apoyo (Tipo 4; no se analiza ni transcribe).
+         */
+        post: operations["adjuntar_recurso_video_recursos_video_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -1427,6 +1447,23 @@ export interface components {
         AddMessageRequest: {
             /** Cuerpo */
             cuerpo: string;
+        };
+        /** AdjuntarVideoRequest */
+        AdjuntarVideoRequest: {
+            /** Titulo */
+            titulo: string;
+            /** Video Url */
+            video_url: string;
+            /** Doc Id */
+            doc_id?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Acompana Procedimiento Id */
+            acompana_procedimiento_id?: string | null;
+            /** Capitulos */
+            capitulos?: {
+                [key: string]: unknown;
+            }[];
         };
         /** AlertaItem */
         AlertaItem: {
@@ -2004,6 +2041,10 @@ export interface components {
             x?: number | null;
             /** Y */
             y?: number | null;
+            /** W */
+            w?: number | null;
+            /** H */
+            h?: number | null;
             /** Lookup Dtm */
             lookup_dtm?: string | null;
         };
@@ -5248,6 +5289,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adjuntar_recurso_video_recursos_video_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjuntarVideoRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
