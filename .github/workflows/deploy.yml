@@ -5,9 +5,31 @@ on:
     branches: [main]
 
 jobs:
+  # ── GATE de migraciones: el deploy NO puede declararse verde con la DB de prod
+  # desfasada. Compara las migraciones en disco contra el ledger `schema_migrations`
+  # de Supabase prod (scripts/apply_migrations.py --check) y FALLA si hay pendientes,
+  # de modo que deploy-backend y deploy-frontend NO corren.
+  # Razón: el encendido de B13 se reportó verde con la migración 018 (budget RPC)
+  # sin aplicar → /confirm daba 500. Esto lo hace imposible de repetir.
+  check-migrations:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar psycopg
+        run: pip install "psycopg[binary]"
+      - name: Verificar que no haya migraciones pendientes en prod
+        run: python scripts/apply_migrations.py --check
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
   deploy-backend:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    needs: check-migrations  # no desplegar si la DB de prod está desfasada
 
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +49,7 @@ jobs:
   deploy-frontend:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    needs: check-migrations  # no desplegar si la DB de prod está desfasada
     steps:
       - name: Trigger Vercel deploy
         run: |

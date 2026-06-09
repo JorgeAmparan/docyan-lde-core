@@ -60,3 +60,31 @@ fly deploy --app docyan-lde-ingest --dockerfile worker/Dockerfile
 Requiere saldo en el proveedor de extracción (Gemini, o el override a Sonnet
 documentado en el reporte de B2). Si no hay saldo, el smoke no puede correr: es
 acción operativa externa, no deuda de código.
+
+---
+
+## Gate de migraciones (encendido NO puede ir verde con la DB desfasada)
+
+**Lección B13 (2026-06-09):** el encendido se reportó "todo verde" con la
+migración `018_budget_rpc.sql` (función `budget_reservar`) sin aplicar en prod →
+`/ingesta/.../confirm` daba **500** (`PGRST202: Could not find the function
+public.budget_reservar`) y la ingesta nunca completaba. Causa de fondo: el viejo
+`--verify` solo comprobaba una lista de **tablas** escrita a mano; nunca vio las
+**funciones** de la 018.
+
+**Mecanismo permanente:**
+- `scripts/apply_migrations.py` mantiene un **ledger** `schema_migrations`
+  (una fila por archivo aplicado) y registra cada migración al aplicarla.
+- `python scripts/apply_migrations.py --check` compara los `migrations/*.sql` en
+  disco contra el ledger y **sale 1 si hay pendientes** (drift exacto y
+  auto-mantenido — no depende de una lista de objetos a mano).
+- El workflow **Deploy** (`.github/workflows/deploy.yml`) tiene un job
+  `check-migrations` que corre `--check` contra Supabase prod (secret de Actions
+  `SUPABASE_DB_URL`); `deploy-backend` y `deploy-frontend` lo tienen como `needs`,
+  así que **si hay migraciones pendientes el deploy no corre** (no puede ir verde).
+
+**Checklist de encendido / deploy:**
+1. Aplicar pendientes: `SUPABASE_DB_URL=… python scripts/apply_migrations.py`
+   (idempotente; registra en el ledger).
+2. Confirmar sin drift: `… --check` → "✅ Sin migraciones pendientes (DB al día)".
+3. Merge a `main`: el job `check-migrations` re-valida antes de desplegar.

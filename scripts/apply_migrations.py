@@ -124,6 +124,43 @@ def verify(conn) -> bool:
     return ok
 
 
+LEDGER_TABLE = "schema_migrations"
+
+
+def _ensure_ledger(conn) -> None:
+    """Crea el registro de migraciones aplicadas (idempotente)."""
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute(
+            f"CREATE TABLE IF NOT EXISTS {LEDGER_TABLE} ("
+            "filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+        )
+
+
+def _record_applied(conn, name: str) -> None:
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute(
+            f"INSERT INTO {LEDGER_TABLE} (filename) VALUES (%s) ON CONFLICT (filename) DO NOTHING",
+            (name,),
+        )
+
+
+def _ledger_applied(conn) -> set[str]:
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT filename FROM {LEDGER_TABLE}")
+        return {r[0] for r in cur.fetchall()}
+
+
+def check_pending(conn) -> list[str]:
+    """
+    Migraciones presentes en disco que NO están registradas como aplicadas.
+    Detección de DRIFT exacta y auto-mantenida (no depende de una lista de tablas
+    escrita a mano — esa es justo la razón por la que 018 pasó inadvertida).
+    """
+    applied = _ledger_applied(conn)
+    files = [os.path.basename(f) for f in sorted(glob.glob(os.path.join(MIGRATIONS_DIR, "*.sql")))]
+    return [f for f in files if f not in applied]
+
+
 def apply_file(conn, path: str) -> str:
     name = os.path.basename(path)
     with open(path, encoding="utf-8") as fh:
@@ -142,11 +179,29 @@ def apply_file(conn, path: str) -> str:
 
 def main(argv: list[str]) -> int:
     verify_only = "--verify" in argv
+    check_only = "--check" in argv
     args = [a for a in argv if not a.startswith("--")]
 
     conn_str = _conn_str()
     print(f"Conectando a Postgres… (host: {conn_str.split('@')[-1].split('/')[0]})")
     with psycopg.connect(conn_str, connect_timeout=15) as conn:
+        _ensure_ledger(conn)
+
+        # ── --check: GATE de drift (usado por el pipeline de deploy) ────────────
+        # Falla (exit 1) si HAY migraciones en disco no aplicadas. Así un deploy
+        # NO puede declararse verde con la DB desfasada (la 018 sin aplicar habría
+        # roto este check). No aplica nada: solo reporta.
+        if check_only:
+            pending = check_pending(conn)
+            for f in pending:
+                print(f"  PENDING  {f}")
+            if pending:
+                print(f"\n❌ {len(pending)} migración(es) pendiente(s) — la DB de prod está desfasada.")
+                print("   Aplica con: python scripts/apply_migrations.py")
+                return 1
+            print("\n✅ Sin migraciones pendientes (DB al día).")
+            return 0
+
         if verify_only:
             return 0 if verify(conn) else 1
 
@@ -161,13 +216,18 @@ def main(argv: list[str]) -> int:
             print(f"  {result}")
             if result.startswith("FAILED"):
                 any_failed = True
+            else:
+                _record_applied(conn, os.path.basename(path))  # registra en el ledger
 
         print("\nVerificación final:")
         ok = verify(conn)
-        if any_failed or not ok:
-            print("\n❌ Migraciones con errores o tablas faltantes.")
+        pending = check_pending(conn)
+        for f in pending:
+            print(f"  PENDING  {f}")
+        if any_failed or not ok or pending:
+            print("\n❌ Migraciones con errores, tablas faltantes o pendientes.")
             return 1
-        print("\n✅ Migraciones aplicadas y verificadas.")
+        print("\n✅ Migraciones aplicadas, registradas y verificadas (sin drift).")
         return 0
 
 
