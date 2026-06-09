@@ -250,6 +250,21 @@ def test_fase2_activa_plan_y_criticidad(ctx):
     assert store.get_org(org_id)["freemium_expira"] is None
 
 
+def test_fase2_acepta_niveles_canonicos_de_segmento(ctx):
+    # Decisión #15: los 5 niveles canónicos del modelo comercial (no solo alta/media/baja).
+    client = ctx["client"]
+    for i, nivel in enumerate(
+        ("seguridad", "regulatorio", "calidad", "operacional", "informativa")
+    ):
+        org_id = client.post("/onboarding/signup", json={
+            "email": f"seg{i}@lab.com", "password": "pass1234", "name": "S", "org_name": "L",
+        }).json()["org_id"]
+        r = client.post("/onboarding/plan", headers=_tenant_jwt(org_id, "admin"), json={
+            "plan": "profesional", "criticidad_segmento": nivel})
+        assert r.status_code == 200, r.text
+        assert r.json()["criticidad_segmento"] == nivel
+
+
 def test_fase2_requiere_admin(ctx):
     client = ctx["client"]
     org_id = client.post("/onboarding/signup", json={
@@ -296,6 +311,34 @@ def test_invitacion_generar_aceptar_rol_correcto(ctx):
     # La invitación queda aceptada y el usuario existe en la org.
     assert store.list_invitations(org_id, "accepted")
     assert store.get_user_by_email("colab@org.com")["org_id"] == org_id
+
+
+def test_listar_usuarios_de_la_org(ctx):
+    client = ctx["client"]
+    admin = _signup(client, "owner@org.com", "Org U")
+    org_id = admin["org_id"]
+    # Invita y acepta un editor → debe aparecer junto al admin en /onboarding/usuarios.
+    inv = client.post("/invitations", headers=_tenant_jwt(org_id, "admin"), json={
+        "email": "miembro@org.com", "role": "editor"}).json()
+    token = inv["invite_url"].split("token=")[1]
+    client.post("/invitations/accept", json={
+        "token": token, "password": "newpass123", "name": "Miembro"})
+
+    r = client.get("/onboarding/usuarios", headers=_tenant_jwt(org_id, "admin"))
+    assert r.status_code == 200, r.text
+    emails = {u["email"] for u in r.json()["items"]}
+    assert {"owner@org.com", "miembro@org.com"} <= emails
+    roles = {u["email"]: u["role"] for u in r.json()["items"]}
+    assert roles["owner@org.com"] == "admin" and roles["miembro@org.com"] == "editor"
+
+
+def test_listar_usuarios_aislado_por_org(ctx):
+    client = ctx["client"]
+    a = _signup(client, "a2@iso.com", "Org A2")["org_id"]
+    _signup(client, "b2@iso.com", "Org B2")
+    r = client.get("/onboarding/usuarios", headers=_tenant_jwt(a, "admin"))
+    emails = {u["email"] for u in r.json()["items"]}
+    assert emails == {"a2@iso.com"}  # no ve usuarios de otra org
 
 
 def test_invitacion_token_invalido(ctx):

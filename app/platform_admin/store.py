@@ -48,6 +48,7 @@ class PlatformStore(Protocol):
     def org_has_users(self, org_id: str) -> bool: ...
     def create_user(self, org_id: str, email: str, password_hash: str, name: str, role: str) -> dict: ...
     def get_user_by_email(self, email: str) -> dict | None: ...
+    def list_org_users(self, org_id: str) -> list[dict]: ...
     def ensure_budget(self, org_id: str, saldo_usd: float) -> dict: ...
 
     # ── orgs (entidad de primer nivel, B13) ───────────────────────────────────
@@ -202,6 +203,9 @@ class InMemoryPlatformStore:
 
     def get_user_by_email(self, email: str) -> dict | None:
         return next((u for u in self.users if u["email"] == email), None)
+
+    def list_org_users(self, org_id: str) -> list[dict]:
+        return [u for u in self.users if u["org_id"] == org_id]
 
     def ensure_budget(self, org_id: str, saldo_usd: float) -> dict:
         b = {"tenant_id": org_id, "saldo_actual_usd": float(saldo_usd),
@@ -456,6 +460,12 @@ class SupabasePlatformStore:
             "id, org_id, email, name, role, is_active"
         ).eq("email", email).limit(1).execute()
         return r.data[0] if r.data else None
+
+    def list_org_users(self, org_id: str) -> list[dict]:
+        r = self.sb().table("users").select(
+            "id, email, name, role, is_active, created_at"
+        ).eq("org_id", org_id).order("created_at").execute()
+        return r.data or []
 
     def ensure_budget(self, org_id: str, saldo_usd: float) -> dict:
         r = self.sb().table("tenant_budget").upsert(

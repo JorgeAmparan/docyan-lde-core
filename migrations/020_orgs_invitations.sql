@@ -36,9 +36,15 @@ CREATE TABLE orgs (
     freemium_inicio TIMESTAMPTZ,
     freemium_expira TIMESTAMPTZ,
     -- Criticidad del segmento (decisión #15) — se fija en la FASE 2 del onboarding.
-    -- NULL hasta que el cliente activa/elige plan (o lo infiere el pipeline).
+    -- NULL hasta que el cliente activa/elige plan (o lo infiere el pipeline). Los 5
+    -- niveles canónicos del modelo comercial fijan el umbral de confianza del caché
+    -- (seguridad ≥0.95 · regulatorio ≥0.90 · calidad ≥0.85 · operacional ≥0.75 ·
+    -- informativa ≥0.60). Se aceptan también alta/media/baja por compatibilidad.
     criticidad_segmento TEXT
-        CHECK (criticidad_segmento IS NULL OR criticidad_segmento IN ('alta', 'media', 'baja')),
+        CHECK (criticidad_segmento IS NULL OR criticidad_segmento IN (
+            'seguridad', 'regulatorio', 'calidad', 'operacional', 'informativa',
+            'alta', 'media', 'baja'
+        )),
     -- Bandera: la fase 2 (config de plan + criticidad) está completa.
     fase2_completada BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),

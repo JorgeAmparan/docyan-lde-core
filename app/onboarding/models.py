@@ -50,7 +50,11 @@ class SignupResponse(BaseModel):
 
 class ActivarPlanRequest(BaseModel):
     plan: str  # tier elegido (freemium→pagado, o ajuste de piloto)
-    criticidad_segmento: str = Field(pattern="^(alta|media|baja)$")
+    # Criticidad del segmento (decisión #15): los 5 niveles canónicos del modelo
+    # comercial fijan el umbral de confianza. alta/media/baja se aceptan por compat.
+    criticidad_segmento: str = Field(
+        pattern="^(seguridad|regulatorio|calidad|operacional|informativa|alta|media|baja)$"
+    )
     doc_limit: int | None = None  # límite del plan; None = ilimitado
     banda_mercado: str | None = None
     idioma: str | None = None
@@ -110,6 +114,20 @@ class AcceptInvitationResponse(BaseModel):
     email: str
     role: str
     tokens: TokenBundle
+
+
+class UsuarioOut(BaseModel):
+    id: str
+    email: str
+    name: str | None = None
+    role: str
+    is_active: bool = True
+    created_at: datetime | None = None
+
+
+class UsuariosList(BaseModel):
+    items: list[UsuarioOut]
+    total: int
 
 
 # ── Gestión de documentos vivos ───────────────────────────────────────────────

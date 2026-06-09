@@ -15,6 +15,8 @@ from app.onboarding.models import (
     SignupRequest,
     SignupResponse,
     TokenBundle,
+    UsuarioOut,
+    UsuariosList,
 )
 from app.onboarding.service import OnboardingError
 
@@ -79,3 +81,20 @@ async def mi_org(ctx: dict = Depends(verificar_credenciales)) -> OrgOut:
     if org is None:
         raise HTTPException(status_code=404, detail="Organización no encontrada.")
     return _org_out(org)
+
+
+@router.get("/usuarios", response_model=UsuariosList)
+async def usuarios_de_la_org(
+    ctx: dict = Depends(requiere_rol("admin", "editor")),
+) -> UsuariosList:
+    """Usuarios activos de la org (aislado por org_id del JWT). Solo metadata."""
+    rows = providers.get_store().list_org_users(ctx["org_id"])
+    items = [
+        UsuarioOut(
+            id=str(u["id"]), email=u["email"], name=u.get("name"),
+            role=u["role"], is_active=bool(u.get("is_active", True)),
+            created_at=u.get("created_at"),
+        )
+        for u in rows
+    ]
+    return UsuariosList(items=items, total=len(items))

@@ -1336,6 +1336,172 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/onboarding/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Signup
+         * @description Fase 1: crea la cuenta (Freemium o, con `codigo_acceso`, Piloto) y entra.
+         */
+        post: operations["signup_onboarding_signup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/onboarding/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activar Plan
+         * @description Fase 2: el admin de la org activa/elige plan + fija criticidad (decisión #15).
+         */
+        post: operations["activar_plan_onboarding_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/onboarding/org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mi Org
+         * @description Devuelve la org del usuario autenticado (estado de onboarding/plan/cupo).
+         */
+        get: operations["mi_org_onboarding_org_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/onboarding/usuarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usuarios De La Org
+         * @description Usuarios activos de la org (aislado por org_id del JWT). Solo metadata.
+         */
+        get: operations["usuarios_de_la_org_onboarding_usuarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Invitaciones
+         * @description Lista las invitaciones de la org (pendientes / aceptadas / etc.).
+         */
+        get: operations["listar_invitaciones_invitations_get"];
+        put?: never;
+        /**
+         * Crear Invitacion
+         * @description Crea + envía una invitación. Pueden invitar admin y editor (no viewer/Consulta).
+         *     Regla de rol-destino: el editor solo puede invitar Consulta (viewer); el admin
+         *     puede invitar cualquier rol. La regla se valida también en el service.
+         */
+        post: operations["crear_invitacion_invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aceptar Invitacion
+         * @description El invitado acepta: establece contraseña → entra como usuario de la org (público).
+         */
+        post: operations["aceptar_invitacion_invitations_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mis-documentos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Documentos
+         * @description Lista los documentos vivos del tenant + estado del cupo del plan.
+         */
+        get: operations["listar_documentos_mis_documentos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mis-documentos/{doc_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Eliminar Documento
+         * @description Elimina un documento del grafo (sin residuo) y libera cupo. FAT conserva el evento.
+         */
+        delete: operations["eliminar_documento_mis_documentos__doc_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -1391,6 +1557,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcceptInvitationRequest */
+        AcceptInvitationRequest: {
+            /** Token */
+            token: string;
+            /** Password */
+            password: string;
+            /** Name */
+            name?: string | null;
+        };
+        /** AcceptInvitationResponse */
+        AcceptInvitationResponse: {
+            /** Org Id */
+            org_id: string;
+            /** User Id */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Role */
+            role: string;
+            tokens: components["schemas"]["TokenBundle"];
+        };
         /** AccessCodeList */
         AccessCodeList: {
             /** Items */
@@ -1433,6 +1620,19 @@ export interface components {
             /** Sugerencia Id */
             sugerencia_id: string;
             playbook: components["schemas"]["PlaybookOut"];
+        };
+        /** ActivarPlanRequest */
+        ActivarPlanRequest: {
+            /** Plan */
+            plan: string;
+            /** Criticidad Segmento */
+            criticidad_segmento: string;
+            /** Doc Limit */
+            doc_limit?: number | null;
+            /** Banda Mercado */
+            banda_mercado?: string | null;
+            /** Idioma */
+            idioma?: string | null;
         };
         /** ActualizarPlaybookRequest */
         ActualizarPlaybookRequest: {
@@ -1839,6 +2039,19 @@ export interface components {
             /** Nota */
             nota?: string | null;
         };
+        /** CreateInvitationRequest */
+        CreateInvitationRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /**
+             * Role
+             * @default viewer
+             */
+            role: string;
+        };
         /** CreatePaymentRequest */
         CreatePaymentRequest: {
             /** Org Id */
@@ -1872,6 +2085,30 @@ export interface components {
             etiqueta: string;
             /** Motivo */
             motivo: string;
+        };
+        /** DeleteDocumentoResponse */
+        DeleteDocumentoResponse: {
+            /**
+             * Status
+             * @default deleted
+             */
+            status: string;
+            /** Doc Id */
+            doc_id: string;
+            /**
+             * Contenido Eliminado
+             * @default 0
+             */
+            contenido_eliminado: number;
+            /** Doc Limit */
+            doc_limit?: number | null;
+            /**
+             * Usados
+             * @default 0
+             */
+            usados: number;
+            /** Disponibles */
+            disponibles?: number | null;
         };
         /** DiagnosticTreePayload */
         DiagnosticTreePayload: {
@@ -2023,6 +2260,42 @@ export interface components {
          * @enum {string}
          */
         DocumentSource: "google_drive" | "onedrive" | "ftp" | "notion";
+        /** DocumentoOut */
+        DocumentoOut: {
+            /** Id */
+            id: string;
+            /** Nombre Archivo */
+            nombre_archivo?: string | null;
+            /** Tipo Documento */
+            tipo_documento?: string | null;
+            /** Version */
+            version?: string | null;
+            /** Hash Contenido */
+            hash_contenido?: string | null;
+            /** Idioma Origen */
+            idioma_origen?: string | null;
+            /**
+             * Contenido Directo
+             * @default 0
+             */
+            contenido_directo: number;
+        };
+        /** DocumentosResponse */
+        DocumentosResponse: {
+            /** Items */
+            items: components["schemas"]["DocumentoOut"][];
+            /** Total */
+            total: number;
+            /** Doc Limit */
+            doc_limit?: number | null;
+            /**
+             * Usados
+             * @default 0
+             */
+            usados: number;
+            /** Disponibles */
+            disponibles?: number | null;
+        };
         /** EspecificacionItem */
         EspecificacionItem: {
             /** Nombre */
@@ -2168,6 +2441,36 @@ export interface components {
             canal: components["schemas"]["Canal"];
             /** Session Id */
             session_id?: string | null;
+        };
+        /** InvitationList */
+        InvitationList: {
+            /** Items */
+            items: components["schemas"]["InvitationOut"][];
+            /** Total */
+            total: number;
+        };
+        /** InvitationOut */
+        InvitationOut: {
+            /** Id */
+            id: string;
+            /** Org Id */
+            org_id: string;
+            /** Email */
+            email: string;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Accepted At */
+            accepted_at?: string | null;
+            /** Invite Url */
+            invite_url?: string | null;
+            /** Email Enviado */
+            email_enviado?: boolean | null;
         };
         /** JobList */
         JobList: {
@@ -2435,6 +2738,46 @@ export interface components {
             consultas_total: number;
             grafo?: components["schemas"]["GraphMetrics"];
             presupuesto?: components["schemas"]["BudgetMetrics"];
+        };
+        /** OrgOut */
+        OrgOut: {
+            /** Org Id */
+            org_id: string;
+            /** Nombre */
+            nombre?: string | null;
+            /**
+             * Banda Mercado
+             * @default A
+             */
+            banda_mercado: string;
+            /**
+             * Idioma
+             * @default es
+             */
+            idioma: string;
+            /**
+             * Plan
+             * @default freemium
+             */
+            plan: string;
+            /**
+             * Lifecycle Status
+             * @default active
+             */
+            lifecycle_status: string;
+            /** Doc Limit */
+            doc_limit?: number | null;
+            /** Criticidad Segmento */
+            criticidad_segmento?: string | null;
+            /**
+             * Fase2 Completada
+             * @default false
+             */
+            fase2_completada: boolean;
+            /** Freemium Inicio */
+            freemium_inicio?: string | null;
+            /** Freemium Expira */
+            freemium_expira?: string | null;
         };
         /**
          * OrgSummary
@@ -2821,6 +3164,56 @@ export interface components {
          * @enum {string}
          */
         SessionType: "consulta" | "troubleshooting" | "revision" | "onboarding";
+        /**
+         * SignupRequest
+         * @description Registro autoservicio. Credenciales mínimas — NADA de plan/fiscal/pago en la
+         *     puerta (modelo nuevo B13). `codigo_acceso` opcional: si viene, canjea un código
+         *     de piloto y la cuenta entra con plan piloto activo en vez de freemium.
+         *     Banda de mercado e idioma se HEREDAN (default A / es; geolocalización vive en la
+         *     capa pública, sprint posterior).
+         */
+        SignupRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /** Name */
+            name: string;
+            /** Org Name */
+            org_name?: string | null;
+            /** Banda Mercado */
+            banda_mercado?: string | null;
+            /** Idioma */
+            idioma?: string | null;
+            /** Codigo Acceso */
+            codigo_acceso?: string | null;
+        };
+        /** SignupResponse */
+        SignupResponse: {
+            /** Org Id */
+            org_id: string;
+            /** User Id */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Role */
+            role: string;
+            /** Plan */
+            plan: string;
+            /** Doc Limit */
+            doc_limit?: number | null;
+            /** Freemium Expira */
+            freemium_expira?: string | null;
+            /**
+             * Fase2 Completada
+             * @default false
+             */
+            fase2_completada: boolean;
+            tokens: components["schemas"]["TokenBundle"];
+        };
         /** SimboloLeyenda */
         SimboloLeyenda: {
             /** Simbolo */
@@ -2985,6 +3378,23 @@ export interface components {
             /** Citas */
             citas?: components["schemas"]["Cita"][];
         };
+        /** TokenBundle */
+        TokenBundle: {
+            /** Access Token */
+            access_token: string;
+            /** Refresh Token */
+            refresh_token?: string | null;
+            /**
+             * Token Type
+             * @default bearer
+             */
+            token_type: string;
+            /**
+             * Expires In
+             * @default 0
+             */
+            expires_in: number;
+        };
         /** TransferirSesionRequest */
         TransferirSesionRequest: {
             canal: components["schemas"]["Canal"];
@@ -2998,6 +3408,31 @@ export interface components {
             label: string;
             /** Value */
             value: number;
+        };
+        /** UsuarioOut */
+        UsuarioOut: {
+            /** Id */
+            id: string;
+            /** Email */
+            email: string;
+            /** Name */
+            name?: string | null;
+            /** Role */
+            role: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** UsuariosList */
+        UsuariosList: {
+            /** Items */
+            items: components["schemas"]["UsuarioOut"][];
+            /** Total */
+            total: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -5322,6 +5757,260 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signup_onboarding_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activar_plan_onboarding_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivarPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mi_org_onboarding_org_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgOut"];
+                };
+            };
+        };
+    };
+    usuarios_de_la_org_onboarding_usuarios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsuariosList"];
+                };
+            };
+        };
+    };
+    listar_invitaciones_invitations_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_invitacion_invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    aceptar_invitacion_invitations_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptInvitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_documentos_mis_documentos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentosResponse"];
+                };
+            };
+        };
+    };
+    eliminar_documento_mis_documentos__doc_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteDocumentoResponse"];
                 };
             };
             /** @description Validation Error */
