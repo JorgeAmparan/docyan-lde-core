@@ -20,7 +20,6 @@ from app.pipelines import (
     tipo1_informativa,
     tipo2_guia_paso_a_paso,
     tipo6_historial,
-    tipo8_comparativa,
 )
 from app.pipelines.base import ContextoPipeline
 from app.pipelines.dkg_reader import DKGReader

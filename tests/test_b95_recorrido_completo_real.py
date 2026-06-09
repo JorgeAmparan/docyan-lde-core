@@ -13,12 +13,12 @@ import os
 
 import pytest
 
-from worker.extraction.materializar import materializar_arbol, materializar_diagrama
 from app.pipelines import tipo3_graficos_diagramas, tipo5_troubleshooting
 from app.pipelines.base import ContextoPipeline
 from app.pipelines.dkg_reader import DKGReader
 from worker.extraction.diagram_extractor import extraer_diagramas
 from worker.extraction.docling_figures import FiguraExtraida
+from worker.extraction.materializar import materializar_arbol, materializar_diagrama
 from worker.extraction.tree_extractor import extraer_arbol_diagnostico
 
 FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT") or "6379")

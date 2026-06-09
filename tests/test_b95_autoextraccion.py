@@ -93,7 +93,6 @@ def test_extraer_diagrama_desde_vision():
         "leyenda_simbolica": [{"simbolo": "⚠", "significado": "Punto caliente"}],
     })
     figuras = [FiguraExtraida(titulo="Fig 1", png_bytes=b"\x89PNGfake")]
-    assets: list = []
     drafts = extraer_diagramas(
         "tenantX", figuras,
         complete_vision=lambda _p, _img: salida,
@@ -126,8 +125,8 @@ def _job():
                      contexto={"entidad_id": "eq-1"})
 
 def test_worker_materializa_arbol_t5(monkeypatch):
-    from worker import ingest_pipeline as ip
     import worker.extraction.tree_extractor as te
+    from worker import ingest_pipeline as ip
 
     dkg = _FakeDKG()
     pipe = ip.IngestPipeline(dkg_client=dkg)
@@ -144,9 +143,9 @@ def test_worker_materializa_arbol_t5(monkeypatch):
     assert any("doc1" in c or "DocumentoSource" in c for _t, c in dkg.queries)
 
 def test_worker_materializa_diagrama_t3(monkeypatch):
-    from worker import ingest_pipeline as ip
-    import worker.extraction.docling_figures as df
     import worker.extraction.diagram_extractor as de
+    import worker.extraction.docling_figures as df
+    from worker import ingest_pipeline as ip
     from worker.extraction.models import DraftDiagrama, EtiquetaBorrador
 
     dkg = _FakeDKG()
