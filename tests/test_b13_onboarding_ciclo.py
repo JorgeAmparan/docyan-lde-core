@@ -332,12 +332,51 @@ def test_invitacion_expirada_rechaza(ctx, monkeypatch):
     assert r.status_code == 409
 
 
-def test_invitar_requiere_admin(ctx):
+def test_invitar_viewer_sin_acceso(ctx):
+    # Consulta (viewer) no tiene acceso al endpoint de invitaciones.
     client = ctx["client"]
     org_id = _signup(client, "admin4@org.com", "Org D")["org_id"]
     r = client.post("/invitations", headers=_tenant_jwt(org_id, "viewer"), json={
         "email": "x@org.com", "role": "viewer"})
     assert r.status_code == 403
+
+
+def test_admin_invita_cualquier_rol(ctx):
+    client = ctx["client"]
+    org_id = _signup(client, "adminroles@org.com", "Org R")["org_id"]
+    for i, role in enumerate(("admin", "editor", "viewer")):
+        r = client.post("/invitations", headers=_tenant_jwt(org_id, "admin"), json={
+            "email": f"dest{i}@org.com", "role": role})
+        assert r.status_code == 200, r.text
+        assert r.json()["role"] == role
+
+
+def test_editor_solo_invita_consulta(ctx):
+    client = ctx["client"]
+    org_id = _signup(client, "admined@org.com", "Org Ed")["org_id"]
+    # Editor invita viewer (Consulta) → OK.
+    ok = client.post("/invitations", headers=_tenant_jwt(org_id, "editor"), json={
+        "email": "consulta@org.com", "role": "viewer"})
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["role"] == "viewer"
+    # Editor invita editor o admin → 403 (regla de rol-destino, aplicada en backend).
+    assert client.post("/invitations", headers=_tenant_jwt(org_id, "editor"), json={
+        "email": "otro-editor@org.com", "role": "editor"}).status_code == 403
+    assert client.post("/invitations", headers=_tenant_jwt(org_id, "editor"), json={
+        "email": "otro-admin@org.com", "role": "admin"}).status_code == 403
+
+
+def test_editor_no_evade_regla_por_el_service(ctx):
+    # Defensa en profundidad: el service rechaza aunque se llame fuera del endpoint.
+    from app.onboarding import service
+    from app.onboarding.service import OnboardingError
+    org_id = _signup(ctx["client"], "svc@org.com", "Org Svc")["org_id"]
+    with pytest.raises(OnboardingError) as exc:
+        service.crear_invitacion(
+            ctx["store"], ctx["audit"], ctx["email"],
+            org_id=org_id, invited_by="editor@org.com", invited_by_role="editor",
+            email="nuevo@org.com", role="editor")
+    assert exc.value.status_code == 403
 
 
 def test_invitar_email_existente_rechaza(ctx):

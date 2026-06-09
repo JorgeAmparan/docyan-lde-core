@@ -37,14 +37,18 @@ def _inv_out(inv: dict, *, invite_url: str | None = None,
 @router.post("", response_model=InvitationOut)
 async def crear_invitacion(
     req: CreateInvitationRequest,
-    ctx: dict = Depends(requiere_rol("admin")),
+    ctx: dict = Depends(requiere_rol("admin", "editor")),
 ) -> InvitationOut:
-    """Crea + envía una invitación. Solo el admin de la org puede invitar."""
+    """
+    Crea + envía una invitación. Pueden invitar admin y editor (no viewer/Consulta).
+    Regla de rol-destino: el editor solo puede invitar Consulta (viewer); el admin
+    puede invitar cualquier rol. La regla se valida también en el service.
+    """
     invited_by = ctx.get("email") or ctx.get("user_id") or ctx["org_id"]
     try:
         inv = service.crear_invitacion(
             providers.get_store(), providers.get_audit(), providers.get_email_sender(),
-            org_id=ctx["org_id"], invited_by=invited_by,
+            org_id=ctx["org_id"], invited_by=invited_by, invited_by_role=ctx.get("role"),
             email=str(req.email), role=req.role,
         )
     except OnboardingError as e:

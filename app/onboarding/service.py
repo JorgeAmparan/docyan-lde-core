@@ -240,13 +240,23 @@ def activar_plan(store: Any, audit: Any, *, org_id: str, actor: str, req: Any) -
 
 def crear_invitacion(
     store: Any, audit: Any, email_sender: Any, *,
-    org_id: str, invited_by: str, email: str, role: str,
+    org_id: str, invited_by: str, invited_by_role: str, email: str, role: str,
 ) -> dict:
     """
     Genera una invitación (token + vencimiento) y envía el correo. Si el envío
     falla (SMTP no configurado / error), NO rompe: la invitación queda creada y el
     `invite_url` se devuelve para reenvío manual (con `email_enviado=False`).
+
+    Regla de rol-destino (modelo Admin/Editor/Consulta): un `editor` solo puede
+    invitar `viewer` (Consulta); un `admin` puede invitar cualquier rol. Se aplica
+    aquí (service) además del gate del endpoint — el backend rechaza aunque el
+    frontend oculte opciones.
     """
+    if invited_by_role == "editor" and role != "viewer":
+        raise OnboardingError(
+            403, "Un editor solo puede invitar usuarios de Consulta (viewer)."
+        )
+
     if store.email_exists(email):
         raise OnboardingError(409, "Ese email ya tiene una cuenta.")
 
