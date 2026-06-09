@@ -14,6 +14,7 @@ import {
 } from "@/lib/onboarding";
 import { api, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
+import { IngestProgressRow } from "@/components/ingesta/ingest-progress-row";
 
 /**
  * Pantalla 6 (B13) — Gestión de documentos vivos. Lista real (`GET /mis-documentos`),
@@ -48,6 +49,9 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [convert, setConvert] = useState<FreemiumExcedePayload | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Job en ingesta activa: se sondea su estado real (D6) hasta término. No se
+  // adivina con un timeout: el documento aparece cuando el worker termina.
+  const [activeJob, setActiveJob] = useState<{ id: string; name: string } | null>(null);
 
   const isFreemium = limit !== null;
   const atLimit = limit !== null && usados >= limit;
@@ -90,9 +94,9 @@ export default function DocumentsPage() {
         await api
           .post(`/ingesta/documents/${res.job_id}/confirm`, undefined, { token })
           .catch(() => null);
+        // Sondeo real del estado hasta término (D6); la lista se recarga al completar.
+        setActiveJob({ id: res.job_id, name: file.name });
       }
-      setNotice("Documento en cola de procesamiento. Aparecerá aquí cuando termine de ingerirse.");
-      setTimeout(reload, 2000);
     } catch (err) {
       // 402 = gate de tamaño freemium → payload de conversión (no muro seco).
       if (err instanceof ApiError && err.status === 402) {
@@ -165,6 +169,24 @@ export default function DocumentsPage() {
         <div className="note" style={{ marginBottom: 12 }}>
           <Icon name="info" size={16} />
           <span>{notice}</span>
+        </div>
+      )}
+
+      {activeJob && (
+        <div style={{ marginBottom: 12 }}>
+          <IngestProgressRow
+            jobId={activeJob.id}
+            name={activeJob.name}
+            token={token}
+            onCompleted={() => {
+              setNotice(`“${activeJob.name}” quedó vivo y consultable.`);
+              setActiveJob(null);
+              reload();
+            }}
+            onError={(d) => {
+              setNotice(d.error?.message ?? "La ingesta falló. Puedes reintentar.");
+            }}
+          />
         </div>
       )}
 

@@ -88,3 +88,37 @@ public.budget_reservar`) y la ingesta nunca completaba. Causa de fondo: el viejo
    (idempotente; registra en el ledger).
 2. Confirmar sin drift: `… --check` → "✅ Sin migraciones pendientes (DB al día)".
 3. Merge a `main`: el job `check-migrations` re-valida antes de desplegar.
+
+---
+
+## La capa de grafo SOLO es verificable post-deploy (e2e de grafo OBLIGATORIO)
+
+**Lección B13 (sprint de corrección de frontend, 2026-06-09):** `docyan-lde-graph`
+(FalkorDB) y `docyan-lde-redis` son apps Fly **privadas** (`.internal` / flycast):
+**inalcanzables desde una laptop**. Solo Supabase es público (pooler aws). Por eso,
+booteando la API local contra el `.env` de prod, **solo** se pueden ejercitar los
+endpoints que tocan únicamente Supabase (auth: `signup`/`login`/`logout`/`refresh`/
+`change-password`/`me`). Cualquier endpoint que toque el grafo NO es verificable
+localmente:
+
+- `GET /mo/codos`, `GET /mo/codos/{id}` (CoDos del tenant)
+- `GET /onboarding/cuenta` (cuenta documentos del grafo)
+- `GET /mis-documentos` (lista `:DocumentoSource`)
+- el ciclo de ingesta (`/ingesta/documents` → worker → polling `/status`)
+- `POST /mo/query` (consulta + cita)
+
+**Regla de encendido (no opcional):** todo encendido / deploy futuro incluye un
+**e2e de grafo post-deploy** como paso obligatorio, contra el API público ya
+desplegado (`docyan-lde-api.fly.dev`). Secuencia mínima con cuenta freemium nueva:
+
+```
+signup → ingerir documento real → polling /ingesta/documents/{job}/status hasta
+"completado" → aparece en GET /mis-documentos → GET /mo/codos (CoDos del tenant,
+NO enlatados) → GET /mo/codos/{id} (entidad_id real) → POST /mo/query (respuesta
+citada) → POST /auth/logout → POST /auth/refresh debe dar 401 (revocado).
+```
+
+Verificar la auth contra Supabase en local es un smoke parcial útil, **pero no
+sustituye** el e2e de grafo: la mitad del producto vive en FalkorDB y esa mitad
+solo se prueba con el backend desplegado. "Verde" sin e2e de grafo post-deploy =
+encendido NO verificado.

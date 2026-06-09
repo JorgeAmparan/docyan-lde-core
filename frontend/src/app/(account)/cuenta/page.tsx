@@ -3,61 +3,69 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
-import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
+import { getCuenta } from "@/lib/onboarding";
 
-interface AccountSummary {
-  plan_name: string;
-  billing_period: string;
-  next_invoice_date: string;
-  next_invoice_amount: string;
-  usage: {
-    docs: { used: number; limit: number };
-    storage_gb: { used: number; limit: number };
-    ingest_balance: { remaining_usd: number; total_usd: number };
-  };
-  recent: Array<{ date: string; concept: string; amount: string }>;
-}
-
-/** Canned fallback mirrors the design kit figures; replaced by the real GET when up. */
-const FALLBACK: AccountSummary = {
-  plan_name: "Plan Profesional",
-  billing_period: "anual",
-  next_invoice_date: "12 jul 2026",
-  next_invoice_amount: "MXN 10,191/mes",
-  usage: {
-    docs: { used: 218, limit: 300 },
-    storage_gb: { used: 12.4, limit: 20 },
-    ingest_balance: { remaining_usd: 184, total_usd: 500 },
-  },
-  recent: [
-    { date: "12 jun 2026", concept: "Suscripción Profesional", amount: "MXN 10,191" },
-    { date: "12 may 2026", concept: "Suscripción Profesional", amount: "MXN 10,191" },
-    { date: "28 abr 2026", concept: "Recarga de saldo", amount: "MXN 5,000" },
-  ],
-};
-
+/**
+ * /cuenta — resumen REAL de la cuenta (B13/D4). Antes mostraba un FALLBACK enlatado
+ * ("Plan Profesional · MXN 10,191" para un freemium = dato falso). Ahora consume
+ * `GET /onboarding/cuenta`: plan, cupo de documentos (contado del grafo) y saldo de
+ * ingesta reales del tenant. Sin storage/facturación inventados: lo que el backend
+ * aún no expone no se finge.
+ */
 function pct(used: number, limit: number): number {
   if (limit <= 0) return 0;
   return Math.min(100, Math.round((used / limit) * 100));
 }
 
+function fmtDate(iso?: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return null;
+  }
+}
+
 export default function ResumenPage() {
   const token = useAuth((s) => s.token);
 
-  const { data } = useQuery({
-    queryKey: ["account-summary"],
-    queryFn: () => api.get<AccountSummary>("/admin/account/summary", { token }),
-    placeholderData: FALLBACK,
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["cuenta"],
+    queryFn: () => getCuenta(token as string),
+    enabled: !!token,
     retry: false,
   });
 
-  const s = data ?? FALLBACK;
-  const docsPct = pct(s.usage.docs.used, s.usage.docs.limit);
-  const storagePct = pct(s.usage.storage_gb.used, s.usage.storage_gb.limit);
-  const consumed = s.usage.ingest_balance.total_usd - s.usage.ingest_balance.remaining_usd;
-  const balancePct = pct(s.usage.ingest_balance.remaining_usd, s.usage.ingest_balance.total_usd);
-  const nearLimit = docsPct >= 85 || storagePct >= 85 || balancePct <= 15;
+  if (isLoading) {
+    return (
+      <>
+        <h1>Resumen de cuenta</h1>
+        <p style={{ color: "var(--fg-muted)" }}>Cargando tu cuenta…</p>
+      </>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <>
+        <h1>Resumen de cuenta</h1>
+        <div className="card" style={{ padding: 16, display: "flex", gap: 12, alignItems: "center" }}>
+          <Icon name="triangle-alert" size={20} color="var(--danger-600)" />
+          <span style={{ fontSize: 13.5, color: "var(--fg-muted)" }}>
+            No pudimos cargar tu cuenta. Reintenta en unos segundos.
+          </span>
+        </div>
+      </>
+    );
+  }
+
+  const s = data;
+  const isFreemium = s.plan === "freemium";
+  const docLimit = s.doc_limit ?? 0;
+  const docsPct = s.doc_limit ? pct(s.docs_usados, docLimit) : 0;
+  const expira = fmtDate(s.freemium_expira);
+  const nearLimit = !!s.doc_limit && docsPct >= 85;
 
   return (
     <>
@@ -78,10 +86,10 @@ export default function ResumenPage() {
         >
           <Icon name="triangle-alert" size={20} color="var(--warning-600, var(--cinnabar-600))" />
           <div style={{ fontSize: 13.5, color: "var(--fg-muted)" }}>
-            Estás cerca de un límite de tu plan. Considera subir de plan o recargar saldo de ingesta.
+            Estás cerca del límite de documentos de tu plan. Elige un plan para cargar más.
           </div>
-          <Link href="/cuenta/recharge" className="btn sec" style={{ marginLeft: "auto" }}>
-            Recargar
+          <Link href="/plan" className="btn sec" style={{ marginLeft: "auto" }}>
+            Ver planes
           </Link>
         </div>
       )}
@@ -102,15 +110,19 @@ export default function ResumenPage() {
           <Icon name="badge-check" size={22} />
         </div>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 15 }}>
-            {s.plan_name} · {s.billing_period}
-          </div>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>{s.plan_nombre}</div>
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-            Próxima factura: {s.next_invoice_date} · {s.next_invoice_amount}
+            {isFreemium
+              ? expira
+                ? `Cuenta gratuita · vigente hasta el ${expira}`
+                : "Cuenta gratuita"
+              : s.criticidad_segmento
+                ? `Criticidad del segmento: ${s.criticidad_segmento}`
+                : "Plan activo"}
           </div>
         </div>
-        <Link href="/cuenta/facturacion" className="btn sec" style={{ marginLeft: "auto" }}>
-          Cambiar plan
+        <Link href="/plan" className="btn sec" style={{ marginLeft: "auto" }}>
+          {isFreemium ? "Elegir plan" : "Cambiar plan"}
         </Link>
       </div>
 
@@ -118,63 +130,36 @@ export default function ResumenPage() {
         <div className="ucard">
           <div className="ul">Documentos vivos</div>
           <div className="uv">
-            {s.usage.docs.used} / {s.usage.docs.limit}
+            {s.docs_usados}
+            {s.doc_limit != null ? ` / ${s.doc_limit}` : ""}
           </div>
           <div className="bar">
             <i style={{ width: `${docsPct}%` }} />
           </div>
-          <div className="ud">{docsPct}% del plan usado</div>
-        </div>
-        <div className="ucard">
-          <div className="ul">Almacenamiento</div>
-          <div className="uv">
-            {s.usage.storage_gb.used} / {s.usage.storage_gb.limit} GB
+          <div className="ud">
+            {s.doc_limit != null
+              ? `${docsPct}% del plan usado`
+              : `${s.docs_usados} documento${s.docs_usados === 1 ? "" : "s"} · sin límite`}
           </div>
-          <div className="bar">
-            <i style={{ width: `${storagePct}%` }} />
-          </div>
-          <div className="ud">{storagePct}% usado</div>
         </div>
         <div className="ucard">
           <div className="ul">Saldo de ingesta</div>
-          <div className="uv">${s.usage.ingest_balance.remaining_usd} USD</div>
-          <div className="bar">
-            <i style={{ width: `${balancePct}%` }} />
+          <div className="uv">
+            ${s.saldo_actual_usd.toFixed(2)} {s.moneda}
           </div>
-          <div className="ud">
-            Consumido ${consumed} de ${s.usage.ingest_balance.total_usd}
+          <div className="ud" style={{ marginTop: 8 }}>
+            {isFreemium ? "Saldo de cortesía de tu cuenta gratuita" : "Saldo disponible para ingesta"}
           </div>
         </div>
-      </div>
-
-      <div className="card" style={{ marginBottom: 22 }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Facturación reciente</h2>
-          <Link
-            href="/cuenta/facturacion"
-            style={{ marginLeft: "auto", fontSize: 13, color: "var(--accent-fg)", fontWeight: 500 }}
-          >
-            Ver todo
-          </Link>
-        </div>
-        {s.recent.map((b, i) => (
-          <div className="billrow" key={i}>
-            <span className="bd">{b.date}</span>
-            <span>{b.concept}</span>
-            <span className="amt">{b.amount}</span>
-            <a href="#" aria-label={`Descargar factura ${b.date}`}>
-              <Icon name="download" size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-              PDF
-            </a>
-          </div>
-        ))}
       </div>
 
       <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <Icon name="wallet" size={20} color="var(--cinnabar-600)" />
         <div>
           <div style={{ fontWeight: 600, fontSize: 14 }}>Recargar saldo de ingesta</div>
-          <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>Presets: $50 · $100 · $250 · $500</div>
+          <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+            Para procesar más documentos cuando lo necesites.
+          </div>
         </div>
         <Link href="/cuenta/recharge" className="btn primary" style={{ marginLeft: "auto" }}>
           Recargar

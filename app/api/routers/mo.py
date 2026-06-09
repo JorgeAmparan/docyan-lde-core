@@ -109,6 +109,47 @@ class IngestaRequest(BaseModel):
     session_id: str | None = None
 
 
+# ── CoDos consultables (cierre del ciclo de consulta, B13) ─────────────────────
+
+
+class CodoOut(BaseModel):
+    """Un CoDo consultable del tenant (entidad operativa o documento suelto)."""
+
+    id: str
+    tipo: str  # "entidad" | "documento"
+    nombre: str
+    tipo_documento: str | None = None
+    documentos: int = 0
+    estado: str = "ok"  # "ok" | "warn" (warn = alertas administrativas pendientes)
+
+
+class CodosResponse(BaseModel):
+    items: list[CodoOut]
+    total: int
+
+
+class DocumentoRefOut(BaseModel):
+    id: str
+    nombre: str | None = None
+    tipo: str | None = None
+
+
+class CodoContextoOut(BaseModel):
+    """
+    Contexto de consulta de un CoDo (lo que antes fingía `CANNED_CTX` en el frontend).
+    `entidad_id` es el id real de la entidad cuando el CoDo es una entidad; None para
+    un documento suelto (la consulta corre con scope de tenant).
+    """
+
+    id: str
+    tipo: str
+    entidad_id: str | None = None
+    nombre: str
+    titulo: str
+    meta: str
+    documentos: list[DocumentoRefOut] = []
+
+
 # ── Sesiones ────────────────────────────────────────────────────────────────────
 
 
@@ -205,6 +246,50 @@ async def consultar(
         servido=resp.servido,
         session_id=resp.session_id,
         resultado=ConsultaResuelta(**resp.data),
+    )
+
+
+# ── CoDos consultables ──────────────────────────────────────────────────────────
+
+
+@router.get("/codos", response_model=CodosResponse)
+async def listar_codos(
+    ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
+) -> CodosResponse:
+    """
+    Lista los CoDos consultables del tenant autenticado: entidades operativas (QR) +
+    documentos sueltos (onboarding freemium). Datos REALES del grafo del tenant; sin
+    fallback enlatado. Aislamiento multi-tenant: solo el grafo del `org_id` del JWT.
+    """
+    from app.graph import dkg_codos
+    from app.onboarding import providers as onb
+
+    tenant_id = ctx["org_id"]
+    rows = dkg_codos.listar_codos(onb.get_dkg(), tenant_id)
+    items = [CodoOut(**r) for r in rows]
+    return CodosResponse(items=items, total=len(items))
+
+
+@router.get("/codos/{codo_id}", response_model=CodoContextoOut)
+async def contexto_codo(
+    codo_id: str,
+    ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
+) -> CodoContextoOut:
+    """
+    Contexto de consulta de un CoDo del tenant (entidad o documento suelto). 404 si el
+    id no existe en el grafo del tenant — sin filtrar existencia de otros tenants.
+    """
+    from app.graph import dkg_codos
+    from app.onboarding import providers as onb
+
+    tenant_id = ctx["org_id"]
+    ctxd = dkg_codos.contexto_codo(onb.get_dkg(), tenant_id, codo_id)
+    if ctxd is None:
+        raise HTTPException(status_code=404, detail="CoDo no encontrado.")
+    return CodoContextoOut(
+        id=ctxd["id"], tipo=ctxd["tipo"], entidad_id=ctxd.get("entidad_id"),
+        nombre=ctxd["nombre"], titulo=ctxd["titulo"], meta=ctxd["meta"],
+        documentos=[DocumentoRefOut(**d) for d in ctxd.get("documentos", [])],
     )
 
 

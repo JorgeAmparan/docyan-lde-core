@@ -1,43 +1,114 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
-import { api } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
-import { Switch } from "@/components/ui/switch";
+import { changePassword, updateProfile, logout as apiLogout } from "@/lib/onboarding";
 
-interface Session {
-  id: string;
-  device: string;
-  location: string;
-  last_active: string;
-  current: boolean;
-}
-
-const FALLBACK_SESSIONS: Session[] = [
-  { id: "1", device: "Chrome · macOS", location: "Ciudad Juárez, MX", last_active: "Ahora", current: true },
-  { id: "2", device: "Safari · iPhone", location: "Ciudad Juárez, MX", last_active: "Hace 2 h", current: false },
-  { id: "3", device: "Edge · Windows", location: "El Paso, US", last_active: "Hace 3 días", current: false },
-];
-
+/**
+ * /cuenta/seguridad — Perfil + Seguridad, datos y acciones REALES (B13/D4):
+ *  · Editar nombre  → PATCH /auth/me.
+ *  · Cambiar contraseña → POST /auth/change-password (verifica la actual; revoca
+ *    las demás sesiones en el servidor).
+ *  · Cerrar sesión en todos los dispositivos → POST /auth/logout (todos=true):
+ *    revoca TODOS los refresh tokens y cierra la sesión local.
+ * Se eliminó la lista de sesiones y el toggle 2FA enlatados (no había backend que
+ * los respaldara: UI decorativa = fake-success).
+ */
 export default function SeguridadPage() {
+  const router = useRouter();
   const token = useAuth((s) => s.token);
-  const [twoFa, setTwoFa] = useState(false);
-  const [pwd, setPwd] = useState({ current: "", next: "", confirm: "" });
+  const refreshToken = useAuth((s) => s.refreshToken);
+  const user = useAuth((s) => s.user);
+  const setSession = useAuth((s) => s.setSession);
+  const clear = useAuth((s) => s.clear);
 
-  const { data } = useQuery({
-    queryKey: ["account-sessions"],
-    queryFn: () => api.get<Session[]>("/admin/account/sessions", { token }),
-    placeholderData: FALLBACK_SESSIONS,
-    retry: false,
-  });
-  const sessions = data ?? FALLBACK_SESSIONS;
+  const [name, setName] = useState(user?.name ?? "");
+  const [nameMsg, setNameMsg] = useState<string | null>(null);
+  const [nameBusy, setNameBusy] = useState(false);
+
+  const [pwd, setPwd] = useState({ current: "", next: "", confirm: "" });
+  const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pwdBusy, setPwdBusy] = useState(false);
+
+  const [outBusy, setOutBusy] = useState(false);
+
   const pwdValid = pwd.next.length >= 8 && pwd.next === pwd.confirm && pwd.current.length > 0;
+
+  const saveName = async () => {
+    if (!token || !name.trim() || nameBusy) return;
+    setNameBusy(true);
+    setNameMsg(null);
+    try {
+      const u = await updateProfile(name.trim(), token);
+      if (user) setSession(token, { ...user, name: u.name }, refreshToken);
+      setNameMsg("Nombre actualizado.");
+    } catch (e) {
+      setNameMsg(e instanceof ApiError ? e.message : "No pudimos actualizar tu nombre.");
+    } finally {
+      setNameBusy(false);
+    }
+  };
+
+  const savePassword = async () => {
+    if (!token || !pwdValid || pwdBusy) return;
+    setPwdBusy(true);
+    setPwdMsg(null);
+    try {
+      await changePassword({ current_password: pwd.current, new_password: pwd.next }, token);
+      setPwd({ current: "", next: "", confirm: "" });
+      setPwdMsg({ ok: true, text: "Contraseña actualizada. Las demás sesiones se cerraron." });
+    } catch (e) {
+      setPwdMsg({
+        ok: false,
+        text:
+          e instanceof ApiError && e.status === 401
+            ? "La contraseña actual no es correcta."
+            : e instanceof ApiError
+              ? e.message
+              : "No pudimos actualizar la contraseña.",
+      });
+    } finally {
+      setPwdBusy(false);
+    }
+  };
+
+  const logoutEverywhere = async () => {
+    setOutBusy(true);
+    try {
+      await apiLogout(refreshToken, token, true);
+    } catch {
+      /* descarte local de todos modos */
+    }
+    clear();
+    router.replace("/login");
+  };
 
   return (
     <>
-      <h1>Seguridad</h1>
+      <h1>Perfil y seguridad</h1>
+
+      <div className="card" style={{ marginBottom: 22 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 12px" }}>Tu perfil</h2>
+        <div className="field">
+          <label>Nombre</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" />
+        </div>
+        {user?.email && (
+          <div className="field">
+            <label>Correo</label>
+            <input value={user.email} disabled />
+          </div>
+        )}
+        {nameMsg && (
+          <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "4px 0 10px" }}>{nameMsg}</p>
+        )}
+        <button className="btn primary" type="button" disabled={!name.trim() || nameBusy} onClick={saveName}>
+          {nameBusy ? "Guardando…" : "Guardar nombre"}
+        </button>
+      </div>
 
       <div className="card" style={{ marginBottom: 22 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 12px" }}>Cambiar contraseña</h2>
@@ -70,53 +141,37 @@ export default function SeguridadPage() {
             />
           </div>
         </div>
-        <button className="btn primary" type="button" disabled={!pwdValid}>
-          Actualizar contraseña
+        {pwdMsg && (
+          <p
+            className={pwdMsg.ok ? undefined : "warn"}
+            style={{ fontSize: 13, color: pwdMsg.ok ? "var(--success-600)" : undefined, margin: "0 0 10px" }}
+            role={pwdMsg.ok ? undefined : "alert"}
+          >
+            {pwdMsg.text}
+          </p>
+        )}
+        <button className="btn primary" type="button" disabled={!pwdValid || pwdBusy} onClick={savePassword}>
+          {pwdBusy ? "Actualizando…" : "Actualizar contraseña"}
         </button>
       </div>
 
-      <div className="card" style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 22 }}>
-        <Icon name="shield-check" size={20} color="var(--cinnabar-600)" />
+      <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <Icon name="log-out" size={20} color="var(--danger-600)" />
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Autenticación en dos pasos (2FA)</div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Cerrar sesión en todos los dispositivos</div>
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-            Añade una capa extra con una app de autenticación.
+            Revoca todas tus sesiones activas. Tendrás que iniciar sesión de nuevo.
           </div>
         </div>
-        <div style={{ marginLeft: "auto" }}>
-          <Switch checked={twoFa} onCheckedChange={setTwoFa} aria-label="Activar 2FA" />
-        </div>
-      </div>
-
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Sesiones activas</h2>
-          <button className="btn sec" style={{ marginLeft: "auto", height: 30 }} type="button">
-            Cerrar las demás
-          </button>
-        </div>
-        {sessions.map((s) => (
-          <div className="billrow" key={s.id}>
-            <span className="bd" style={{ fontVariantNumeric: "normal" }}>
-              {s.device}
-            </span>
-            <span>{s.location}</span>
-            <span className="amt" style={{ fontWeight: 500 }}>
-              {s.last_active}
-            </span>
-            {s.current ? (
-              <span style={{ fontSize: 12, color: "var(--success-600)", fontWeight: 600 }}>Esta sesión</span>
-            ) : (
-              <button
-                type="button"
-                aria-label="Cerrar sesión"
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger-600)" }}
-              >
-                <Icon name="log-out" size={15} />
-              </button>
-            )}
-          </div>
-        ))}
+        <button
+          className="btn sec"
+          type="button"
+          style={{ marginLeft: "auto" }}
+          disabled={outBusy}
+          onClick={logoutEverywhere}
+        >
+          {outBusy ? "Cerrando…" : "Cerrar todas"}
+        </button>
       </div>
     </>
   );

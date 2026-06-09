@@ -13,8 +13,6 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 
 import {
-  CANNED_CTX,
-  SUGGESTIONS,
   errorAnswer,
   mapResueltaToAnswer,
   type Answer,
@@ -142,7 +140,9 @@ export function ConsultView({
   embedded = false,
   onFirstAnswer,
 }: {
-  context?: ConsultContext;
+  /** Contexto REAL del CoDo/entidad. Requerido: el llamador lo resuelve del backend
+   *  (`/mo/codos/{id}` o `/qr/{token}`). No hay contexto enlatado de respaldo. */
+  context: ConsultContext;
   /** Embebido (p.ej. en el wizard de onboarding): en flujo, sin ocupar toda la
    *  pantalla ni navegar fuera. Mismo motor real (/mo/query), inline. */
   embedded?: boolean;
@@ -150,7 +150,7 @@ export function ConsultView({
    *  El wizard de onboarding lo usa para confirmar el "ájá" y habilitar Continuar. */
   onFirstAnswer?: () => void;
 }) {
-  const ctx = context ?? CANNED_CTX;
+  const ctx = context;
   const router = useRouter();
   const token = useAuth((s) => s.token);
   const firstAnswerRef = useRef(false);
@@ -278,14 +278,25 @@ export function ConsultView({
           </div>
         </div>
         {!embedded && (
-          <button
-            type="button"
-            className="icon-btn"
-            onClick={() => router.push("/saved")}
-            aria-label="Mis consultas"
-          >
-            <Icon name="bookmark" size={19} />
-          </button>
+          <>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => router.push("/saved")}
+              aria-label="Mis consultas"
+            >
+              <Icon name="bookmark" size={19} />
+            </button>
+            {/* Vuelta a gestión (B13/D5): consulta ⇄ gestión es bidireccional. */}
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => router.push("/documentos")}
+              aria-label="Ir a gestión"
+            >
+              <Icon name="layout-grid" size={19} />
+            </button>
+          </>
         )}
       </div>
 
@@ -300,25 +311,14 @@ export function ConsultView({
               <div className="meta">{ctx.entityMeta}</div>
             </div>
           </div>
-          {/* Embebido (onboarding): NO mostramos sugerencias precargadas (son del
-              CoDo de demo, no del documento del usuario). El usuario escribe su
-              propia pregunta sobre lo que acaba de ingerir. */}
-          {!embedded && (
-            <div className="sugs">
-              {SUGGESTIONS.map(([ic, q]) => (
-                <button type="button" className="sug" key={q} onClick={() => askFree(q)} disabled={busy}>
-                  <Icon name={ic} size={15} />
-                  {q}
-                  <span className="ar">→</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {embedded && (
-            <p className="meta" style={{ marginTop: 10 }}>
-              Escribe abajo una pregunta sobre tu documento para ver la respuesta con cita a la fuente.
-            </p>
-          )}
+          {/* Sin sugerencias estáticas (D2): las preguntas precargadas eran de un
+              CoDo de demo, no del documento real del usuario — fake-success. El
+              usuario escribe su propia pregunta sobre SU documento/entidad y la
+              respuesta llega citada a la fuente real. */}
+          <p className="meta" style={{ marginTop: 10 }}>
+            Escribe abajo una pregunta sobre {ctx.entityName} para ver la respuesta con cita a la
+            fuente.
+          </p>
         </div>
 
         {msgs.map((m) =>

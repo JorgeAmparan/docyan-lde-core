@@ -6,8 +6,10 @@
    established in the commercial + pwa kits.
 ============================================================ */
 .onb-kit *{box-sizing:border-box;}
-.onb-kit html, .onb-kit body{margin:0;}
-.onb-kit body{font-family:var(--font-sans);background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;}
+/* La base se aplica sobre el propio wrapper `.onb-kit`. Antes estaba en
+   `.onb-kit html`/`.onb-kit body`, selectores muertos (html/body son ANCESTROS del
+   wrapper, no descendientes), así que el fondo/tipografía base nunca se aplicaban. */
+.onb-kit{margin:0;font-family:var(--font-sans);background:var(--bg);color:var(--fg);-webkit-font-smoothing:antialiased;}
 .onb-kit .lic{display:inline-flex;align-items:center;justify-content:center;line-height:0;}
 .onb-kit .lic svg{width:100%;height:100%;}
 .onb-kit button{font-family:inherit;}
@@ -550,3 +552,32 @@
   border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-sm);
 }
 .onb-kit .consult-embed .ctx{border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg);}
+
+/* ── Fila de progreso de ingesta (B13/D6) — estado real del worker ─────────── */
+.onb-kit .ingest-row{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;box-shadow:var(--shadow-xs);}
+.onb-kit .ingest-row.done{border-color:var(--success-600);}
+.onb-kit .ingest-row.err{border-color:var(--danger-600);background:var(--danger-50,var(--surface));}
+.onb-kit .ingest-row .ir-ic{width:40px;height:40px;border-radius:var(--radius-md);background:var(--amate-100);color:var(--fg);display:flex;align-items:center;justify-content:center;flex:none;}
+.onb-kit .ingest-row.done .ir-ic{background:var(--success-50,var(--amate-100));color:var(--success-600);}
+.onb-kit .ingest-row.err .ir-ic{background:var(--danger-50,var(--amate-100));color:var(--danger-600);}
+.onb-kit .ingest-row .ir-main{min-width:0;flex:1;}
+.onb-kit .ingest-row .ir-n{font-size:14px;font-weight:600;}
+.onb-kit .ingest-row .ir-m{font-size:12px;color:var(--fg-muted);margin-top:3px;}
+.onb-kit .ingest-row .ir-pct{font-size:12.5px;color:var(--fg-muted);flex:none;}
+.onb-kit .ingest-row .opbar{height:5px;border-radius:var(--radius-full);background:var(--amate-200);overflow:hidden;}
+.onb-kit .ingest-row .opbar i{display:block;height:100%;background:var(--cinnabar-500);transition:width var(--dur-base) var(--ease-out);}
+
+/* ── Menú de cuenta de la cabecera (B13/D4) ───────────────────────────────── */
+.onb-kit .acct-menu{position:relative;}
+.onb-kit .acct-trigger{border:none;cursor:pointer;padding:0;}
+.onb-kit .acct-pop{position:absolute;top:calc(100% + 8px);right:0;min-width:218px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg,var(--shadow-sm));padding:6px;z-index:300;}
+.onb-kit .acct-head{padding:8px 10px 10px;border-bottom:1px solid var(--border);margin-bottom:6px;}
+.onb-kit .acct-head .acct-n{font-size:13px;font-weight:600;color:var(--fg);}
+.onb-kit .acct-head .acct-e{font-size:11.5px;color:var(--fg-muted);margin-top:2px;word-break:break-all;}
+.onb-kit .acct-item{display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;text-align:left;padding:9px 10px;border-radius:var(--radius-sm);font-size:13px;color:var(--fg);cursor:pointer;}
+.onb-kit .acct-item:hover{background:var(--amate-100);}
+.onb-kit .acct-item svg{color:var(--fg-muted);flex:none;}
+.onb-kit .acct-item.danger{color:var(--danger-600);}
+.onb-kit .acct-item.danger svg{color:var(--danger-600);}
+.onb-kit .acct-item:disabled{opacity:.6;cursor:default;}
+.onb-kit .acct-sep{height:1px;background:var(--border);margin:6px 4px;}
