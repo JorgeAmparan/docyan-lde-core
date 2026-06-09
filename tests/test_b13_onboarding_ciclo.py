@@ -341,6 +341,24 @@ def test_listar_usuarios_aislado_por_org(ctx):
     assert emails == {"a2@iso.com"}  # no ve usuarios de otra org
 
 
+def test_invitacion_sin_proveedor_correo_devuelve_enlace(ctx):
+    # Sin SMTP (email_sender=None): no se "envía", pero la invitación se crea y el
+    # invite_url vuelve en la respuesta para reenvío/prueba manual (no rompe el flujo).
+    from app.onboarding import service
+    org_id = _signup(ctx["client"], "nosmtp@org.com", "Org NS")["org_id"]
+    inv = service.crear_invitacion(
+        ctx["store"], ctx["audit"], None,
+        org_id=org_id, invited_by="nosmtp@org.com", invited_by_role="admin",
+        email="invitado@org.com", role="viewer")
+    assert inv["email_enviado"] is False
+    assert inv["invite_url"] and "token=" in inv["invite_url"]
+    # La invitación quedó persistida y es aceptable con el token del enlace.
+    token = inv["invite_url"].split("token=")[1]
+    acc = ctx["client"].post("/invitations/accept", json={
+        "token": token, "password": "newpass123", "name": "Invitado"})
+    assert acc.status_code == 200, acc.text
+
+
 def test_invitacion_token_invalido(ctx):
     r = ctx["client"].post("/invitations/accept", json={
         "token": "no-existe", "password": "newpass123", "name": "X"})

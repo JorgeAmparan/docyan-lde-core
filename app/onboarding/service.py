@@ -273,23 +273,28 @@ def crear_invitacion(
     })
     invite_url = f"{APP_BASE_URL}/invitacion?token={raw_token}"
 
-    email_enviado = True
-    try:
-        from app.notifications.email import EmailMessage
+    # Sin proveedor de correo (email_sender None: SMTP no configurado) → no se
+    # envía, pero la invitación queda creada y el invite_url vuelve en la respuesta
+    # para reenvío/prueba manual. Con proveedor, se intenta enviar de verdad.
+    email_enviado = False
+    if email_sender is not None:
+        try:
+            from app.notifications.email import EmailMessage
 
-        org = store.get_org(org_id) or {}
-        nombre_org = org.get("nombre") or "tu organización"
-        email_sender.send(EmailMessage(
-            to=email,
-            subject="Te invitaron a DOCYAN LDE™",
-            body_text=(
-                f"Te invitaron a unirte a {nombre_org} en DOCYAN LDE™.\n\n"
-                f"Abre este enlace para establecer tu contraseña y entrar:\n{invite_url}\n\n"
-                f"El enlace vence el {expires_at.date().isoformat()}.\n"
-            ),
-        ))
-    except Exception:  # noqa: BLE001 — el envío no es gate de la creación
-        email_enviado = False
+            org = store.get_org(org_id) or {}
+            nombre_org = org.get("nombre") or "tu organización"
+            email_sender.send(EmailMessage(
+                to=email,
+                subject="Te invitaron a DOCYAN LDE™",
+                body_text=(
+                    f"Te invitaron a unirte a {nombre_org} en DOCYAN LDE™.\n\n"
+                    f"Abre este enlace para establecer tu contraseña y entrar:\n{invite_url}\n\n"
+                    f"El enlace vence el {expires_at.date().isoformat()}.\n"
+                ),
+            ))
+            email_enviado = True
+        except Exception:  # noqa: BLE001 — el envío no es gate de la creación
+            email_enviado = False
 
     audit.record("invitation_created", invited_by, {
         "org_id": org_id, "email": email, "role": role,

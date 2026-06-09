@@ -95,13 +95,16 @@ class SmtpEmailSender:
             ) from exc
 
 
-def get_email_sender() -> EmailSender:
+def get_email_sender() -> EmailSender | None:
     """
-    Factory de producción: SMTP si está configurado, si no Console (degradado).
+    Factory de producción: SMTP si está configurado; si NO, devuelve `None` (sin
+    proveedor de correo).
 
-    Falta de SMTP NO bloquea el flujo de invitación: el correo se loguea y el
-    enlace queda disponible en la respuesta de la API para reenvío manual. Cuando
-    se configure SMTP (Fly secrets), el envío real se activa sin tocar código.
+    Falta de SMTP NO bloquea el flujo de invitación: el llamador (crear_invitacion)
+    trata `None` como "no se envió" (`email_enviado=False`) y devuelve igual el
+    `invite_url` en la respuesta de la API para reenvío/prueba manual. Cuando se
+    configure SMTP (Fly secrets: SMTP_HOST + EMAIL_FROM), el envío real se activa
+    sin tocar código.
     """
     host = os.getenv("SMTP_HOST")
     sender = os.getenv("EMAIL_FROM") or os.getenv("SMTP_USER")
@@ -114,4 +117,4 @@ def get_email_sender() -> EmailSender:
             sender=sender,
             use_tls=os.getenv("SMTP_USE_TLS", "true").lower() != "false",
         )
-    return ConsoleEmailSender()
+    return None
