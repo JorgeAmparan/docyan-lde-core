@@ -6,12 +6,17 @@ Mapeo de visualización: Tipo 6 (eventos operativos) y Tipo 7 (alertas
 administrativas de vencimiento — SOLO administrativas, CLAUDE.md §11.1).
 """
 from app.schemas_documentales.base import DocumentSchema, EntidadSchema, RelacionSchema
+from app.schemas_documentales.catalogo._common import (
+    ESPECIFICACION_CONSULTABLE,
+    SPEC_PROMPT_HINT,
+)
 
 SCHEMA = DocumentSchema(
     tipo_documento="calibracion",
     descripcion=(
         "Certificado de calibración de instrumentos: instrumento, certificado, "
-        "mediciones registradas, fecha de vencimiento y técnico responsable."
+        "mediciones registradas, fecha de vencimiento, técnico responsable y las "
+        "especificaciones consultables del instrumento (rango, clase, incertidumbre)."
     ),
     entidades=[
         EntidadSchema("Instrumento", "Instrumento o equipo calibrado.",
@@ -24,6 +29,8 @@ SCHEMA = DocumentSchema(
                       ["fecha", "periodo"]),
         EntidadSchema("Tecnico", "Técnico o metrólogo responsable.",
                       ["nombre", "acreditacion"]),
+        # T1: rango de medición, clase de precisión, incertidumbre nominal del instrumento.
+        ESPECIFICACION_CONSULTABLE,
     ],
     relaciones=[
         RelacionSchema("CERTIFICA", "CertificadoCalibracion", "Instrumento",
@@ -34,6 +41,8 @@ SCHEMA = DocumentSchema(
                        "Un certificado tiene fecha de vencimiento."),
         RelacionSchema("EMITIDO_POR", "CertificadoCalibracion", "Tecnico",
                        "Un certificado es emitido por un técnico."),
+        RelacionSchema("TIENE_ESPECIFICACION", "Instrumento", "Especificacion",
+                       "Un instrumento tiene rango, clase de precisión e incertidumbre."),
     ],
     prompt_extraccion=(
         "Eres un extractor de conocimiento de certificados de calibración "
@@ -43,9 +52,9 @@ SCHEMA = DocumentSchema(
         "incertidumbre), la fecha de vencimiento de la calibración y el técnico "
         "responsable. Las fechas de vencimiento son administrativas (vigencias), "
         "no decisiones operativas. Responde SIEMPRE en español, conservando "
-        "unidades y nomenclatura metrológica en su forma original."
+        "unidades y nomenclatura metrológica en su forma original." + SPEC_PROMPT_HINT
     ),
-    tipos_intencion_visualizacion=[6, 7],
+    tipos_intencion_visualizacion=[1, 6, 7],
     palabras_clave=[
         "calibración", "calibration", "certificado", "certificate", "metrología",
         "metrology", "incertidumbre", "uncertainty", "trazabilidad", "traceability",

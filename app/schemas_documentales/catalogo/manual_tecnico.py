@@ -5,6 +5,10 @@ Procedimientos paso a paso, advertencias de seguridad, herramientas y EPP.
 Mapeo de visualización: Tipo 2 (procedimientos paso a paso).
 """
 from app.schemas_documentales.base import DocumentSchema, EntidadSchema, RelacionSchema
+from app.schemas_documentales.catalogo._common import (
+    ESPECIFICACION_CONSULTABLE,
+    SPEC_PROMPT_HINT,
+)
 
 SCHEMA = DocumentSchema(
     tipo_documento="manual_tecnico",
@@ -23,6 +27,8 @@ SCHEMA = DocumentSchema(
                       ["nombre", "especificacion"]),
         EntidadSchema("EPP", "Equipo de protección personal requerido.",
                       ["nombre", "norma"]),
+        # T1: ratings/especificaciones del equipo (tensión, corriente, par, etc.).
+        ESPECIFICACION_CONSULTABLE,
     ],
     relaciones=[
         RelacionSchema("CONTIENE_PASO", "Procedimiento", "Paso",
@@ -42,11 +48,11 @@ SCHEMA = DocumentSchema(
         "protección personal (EPP) mencionados. Ignora encabezados, pies de página, "
         "números de página y créditos editoriales. "
         "Responde SIEMPRE en español, conservando los términos técnicos y nombres de "
-        "norma en su forma original."
+        "norma en su forma original." + SPEC_PROMPT_HINT
     ),
-    # T2 (procedimientos paso a paso) + T3 (los manuales traen figuras/diagramas
-    # que se auto-extraen como borrador curable, B9.5 §1.1 T3).
-    tipos_intencion_visualizacion=[2, 3],
+    # T1 (ratings/especificaciones del equipo) + T2 (procedimientos paso a paso) +
+    # T3 (figuras/diagramas auto-extraídos, B9.5 §1.1 T3).
+    tipos_intencion_visualizacion=[1, 2, 3],
     palabras_clave=[
         "manual", "instruction", "installation", "instalación", "instrucciones",
         "procedimiento", "procedure", "paso", "step", "advertencia", "warning",
