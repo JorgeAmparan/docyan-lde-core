@@ -58,6 +58,7 @@ export default function SignupFreemiumPage() {
   };
 
   return (
+    <div className="onb-kit">
     <div className="auth-stage">
       <div className="auth-split">
         <ValueAside
@@ -133,6 +134,7 @@ export default function SignupFreemiumPage() {
           </form>
         </div>
       </div>
+    </div>
     </div>
   );
 }

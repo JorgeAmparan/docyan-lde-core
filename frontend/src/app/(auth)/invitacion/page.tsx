@@ -208,8 +208,10 @@ function GuestFlow() {
 
 export default function GuestPage() {
   return (
-    <Suspense fallback={null}>
-      <GuestFlow />
-    </Suspense>
+    <div className="onb-kit">
+      <Suspense fallback={null}>
+        <GuestFlow />
+      </Suspense>
+    </div>
   );
 }

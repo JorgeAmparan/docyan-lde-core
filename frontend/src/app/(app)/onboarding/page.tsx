@@ -99,6 +99,7 @@ export default function OnboardingFase1Page() {
   };
 
   return (
+    <div className="onb-kit">
     <div className="onb">
       <aside className="onb-rail">
         <BrandRow tone="light" size={26} />
@@ -388,6 +389,7 @@ export default function OnboardingFase1Page() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

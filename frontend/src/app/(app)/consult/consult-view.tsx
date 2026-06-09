@@ -300,15 +300,25 @@ export function ConsultView({
               <div className="meta">{ctx.entityMeta}</div>
             </div>
           </div>
-          <div className="sugs">
-            {SUGGESTIONS.map(([ic, q]) => (
-              <button type="button" className="sug" key={q} onClick={() => askFree(q)} disabled={busy}>
-                <Icon name={ic} size={15} />
-                {q}
-                <span className="ar">→</span>
-              </button>
-            ))}
-          </div>
+          {/* Embebido (onboarding): NO mostramos sugerencias precargadas (son del
+              CoDo de demo, no del documento del usuario). El usuario escribe su
+              propia pregunta sobre lo que acaba de ingerir. */}
+          {!embedded && (
+            <div className="sugs">
+              {SUGGESTIONS.map(([ic, q]) => (
+                <button type="button" className="sug" key={q} onClick={() => askFree(q)} disabled={busy}>
+                  <Icon name={ic} size={15} />
+                  {q}
+                  <span className="ar">→</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {embedded && (
+            <p className="meta" style={{ marginTop: 10 }}>
+              Escribe abajo una pregunta sobre tu documento para ver la respuesta con cita a la fuente.
+            </p>
+          )}
         </div>
 
         {msgs.map((m) =>
