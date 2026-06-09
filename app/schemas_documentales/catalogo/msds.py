@@ -6,12 +6,17 @@ Mapeo de visualización: Tipo 6 (eventos operativos + alertas) y Tipo 7 (alertas
 administrativas — SOLO administrativas, línea ABSOLUTA CLAUDE.md §11.1).
 """
 from app.schemas_documentales.base import DocumentSchema, EntidadSchema, RelacionSchema
+from app.schemas_documentales.catalogo._common import (
+    ESPECIFICACION_CONSULTABLE,
+    SPEC_PROMPT_HINT,
+)
 
 SCHEMA = DocumentSchema(
     tipo_documento="msds",
     descripcion=(
         "Hoja de Datos de Seguridad (MSDS/SDS): sustancias químicas, sus riesgos, "
-        "medidas de protección, equipo de protección y número CAS."
+        "medidas de protección, equipo de protección, número CAS, límites de "
+        "exposición y propiedades físicas consultables."
     ),
     entidades=[
         EntidadSchema("Sustancia", "Una sustancia o mezcla química.",
@@ -24,6 +29,8 @@ SCHEMA = DocumentSchema(
                       ["nombre", "parte_cuerpo"]),
         EntidadSchema("NumeroCAS", "Identificador CAS de una sustancia.",
                       ["valor"]),
+        # T1: límites de exposición (OSHA/ACGIH) + propiedades físicas consultables.
+        ESPECIFICACION_CONSULTABLE,
     ],
     relaciones=[
         RelacionSchema("TIENE_RIESGO", "Sustancia", "Riesgo",
@@ -34,6 +41,8 @@ SCHEMA = DocumentSchema(
                        "Manipular la sustancia exige equipo de protección."),
         RelacionSchema("IDENTIFICADA_POR", "Sustancia", "NumeroCAS",
                        "Una sustancia se identifica por su número CAS."),
+        RelacionSchema("TIENE_ESPECIFICACION", "Sustancia", "Especificacion",
+                       "Una sustancia tiene límites de exposición y propiedades físicas."),
     ],
     prompt_extraccion=(
         "Eres un extractor de conocimiento de Hojas de Datos de Seguridad (MSDS/SDS). "
@@ -43,9 +52,9 @@ SCHEMA = DocumentSchema(
         "NO emitas recomendaciones clínicas ni decisiones operativas: limítate a "
         "extraer la información presente en el documento (línea de seguridad "
         "regulatoria). Responde SIEMPRE en español, conservando nombres químicos y "
-        "números CAS en su forma original."
+        "números CAS en su forma original." + SPEC_PROMPT_HINT
     ),
-    tipos_intencion_visualizacion=[6, 7],
+    tipos_intencion_visualizacion=[1, 6, 7],
     palabras_clave=[
         "msds", "sds", "safety data sheet", "hoja de datos de seguridad",
         "hoja de seguridad", "cas", "ghs", "hazard", "peligro", "first aid",
