@@ -539,3 +539,14 @@ button{font-family:inherit;}
   .usage-bar{flex-wrap:wrap;gap:12px;}
   .usage-bar .ub-track{max-width:100%;width:100%;order:3;}
 }
+
+/* ── Consulta embebida en el wizard de onboarding (B13 · momento "ájá") ──────
+   Monta el ConsultView real (motor /mo/query) DENTRO del paso, sin position:fixed:
+   contenedor acotado en flujo. Reusa .ctx/.convo/.qbar del kit-pwa tal cual. */
+.consult-embed{
+  position:relative; display:flex; flex-direction:column;
+  height:min(560px,68vh); max-width:560px; margin:0 auto; width:100%;
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-sm);
+}
+.consult-embed .ctx{border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg);}

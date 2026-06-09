@@ -137,10 +137,27 @@ function answerTitle(a: Answer): string {
  * real `/mo/query` (8 typed payloads). On backend failure shows an honest error
  * (NO canned data — B9.5 §2.5).
  */
-export function ConsultView({ context }: { context?: ConsultContext }) {
+export function ConsultView({
+  context,
+  embedded = false,
+  onFirstAnswer,
+}: {
+  context?: ConsultContext;
+  /** Embebido (p.ej. en el wizard de onboarding): en flujo, sin ocupar toda la
+   *  pantalla ni navegar fuera. Mismo motor real (/mo/query), inline. */
+  embedded?: boolean;
+  /** Se dispara UNA vez al aparecer la primera respuesta (éxito o error honesto).
+   *  El wizard de onboarding lo usa para confirmar el "ájá" y habilitar Continuar. */
+  onFirstAnswer?: () => void;
+}) {
   const ctx = context ?? CANNED_CTX;
   const router = useRouter();
   const token = useAuth((s) => s.token);
+  const firstAnswerRef = useRef(false);
+  const onFirstAnswerRef = useRef(onFirstAnswer);
+  useEffect(() => {
+    onFirstAnswerRef.current = onFirstAnswer;
+  }, [onFirstAnswer]);
 
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -156,6 +173,10 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
       { id: Date.now() + 1, role: "answer", answer: a },
     ]);
     setText("");
+    if (!firstAnswerRef.current) {
+      firstAnswerRef.current = true;
+      onFirstAnswerRef.current?.();
+    }
   }, []);
 
   const query = useCallback(
@@ -233,15 +254,20 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg)",
-        maxWidth: 560,
-        margin: "0 auto",
-      }}
+      className={embedded ? "consult-embed" : undefined}
+      style={
+        embedded
+          ? undefined
+          : {
+              position: "fixed",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--bg)",
+              maxWidth: 560,
+              margin: "0 auto",
+            }
+      }
     >
       <div className="ctx">
         <DocyanMark size={26} />
@@ -251,14 +277,16 @@ export function ConsultView({ context }: { context?: ConsultContext }) {
             <span className="ctx-codo">{ctx.codo}</span> · {ctx.entityName}
           </div>
         </div>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => router.push("/saved")}
-          aria-label="Mis consultas"
-        >
-          <Icon name="bookmark" size={19} />
-        </button>
+        {!embedded && (
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => router.push("/saved")}
+            aria-label="Mis consultas"
+          >
+            <Icon name="bookmark" size={19} />
+          </button>
+        )}
       </div>
 
       <div className="convo" ref={convoRef}>

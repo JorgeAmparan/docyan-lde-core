@@ -8,6 +8,7 @@ import { BrandRow } from "@/components/brand/brand-row";
 import { api, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import type { FreemiumExcedePayload } from "@/lib/onboarding";
+import { ConsultView, type ConsultContext } from "@/app/(app)/consult/consult-view";
 
 /**
  * Pantalla 4 (B13) — Onboarding Fase 1 (el momento "ájá"): bienvenida → sube tu
@@ -38,6 +39,7 @@ export default function OnboardingFase1Page() {
   const [uploading, setUploading] = useState(false);
   const [convert, setConvert] = useState<FreemiumExcedePayload | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [aha, setAha] = useState(false);
 
   const pct = Math.round(((step + 1) / STEPS.length) * 100);
   const cur = STEPS[step];
@@ -80,7 +82,14 @@ export default function OnboardingFase1Page() {
     }
   };
 
-  const canNext = step === 1 ? !!jobId : true;
+  const canNext = step === 1 ? !!jobId : step === 3 ? aha : true;
+
+  const consultCtx: ConsultContext = {
+    codo: "Tu primer documento",
+    entityName: fileName ?? "tu documento",
+    entityTitle: fileName ?? "Tu primer documento vivo",
+    entityMeta: pages != null ? `${pages} páginas · recién ingerido` : "recién ingerido",
+  };
   const next = () => {
     if (step === STEPS.length - 1) {
       router.push("/documentos");
@@ -260,33 +269,26 @@ export default function OnboardingFase1Page() {
               <h1>Haz tu primera consulta</h1>
               <p className="onb-lead">
                 Este es el momento. Pregunta en tu idioma y recibe la respuesta con una cita
-                cliqueable al span exacto de tu documento.
+                cliqueable al span exacto de tu documento — aquí mismo.
               </p>
               <div className="onb-body">
-                <div className="onb-hl">
-                  <div className="hl" style={{ cursor: "pointer" }} onClick={() => router.push("/consult")}>
-                    <span className="hi">
-                      <Icon name="scan-line" size={18} />
+                {/* Motor real (/mo/query) embebido: la primera consulta ocurre DENTRO
+                    del wizard, sin saltar de pantalla. No se fabrica respuesta. */}
+                <ConsultView embedded context={consultCtx} onFirstAnswer={() => setAha(true)} />
+                {aha && (
+                  <div className="aha" style={{ marginTop: 16 }}>
+                    <span className="aha-ic">
+                      <Icon name="sparkles" size={20} />
                     </span>
                     <div>
-                      <div className="ht">Abrir la consulta</div>
-                      <div className="hm">Pregunta y recibe respuesta con cita a la fuente exacta.</div>
-                    </div>
-                    <Icon name="chevron-right" size={18} style={{ marginLeft: "auto", color: "var(--fg-subtle)" }} />
-                  </div>
-                </div>
-                <div className="aha">
-                  <span className="aha-ic">
-                    <Icon name="sparkles" size={20} />
-                  </span>
-                  <div>
-                    <div className="aha-t">Eso es DOCYAN.</div>
-                    <div className="aha-m">
-                      Tu colaborador obtiene lo mismo escaneando el QR del equipo — sin cuenta, al pie
-                      de la máquina.
+                      <div className="aha-t">Eso es DOCYAN.</div>
+                      <div className="aha-m">
+                        Tu colaborador obtiene lo mismo escaneando el QR del equipo — sin cuenta, al
+                        pie de la máquina.
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </>
           )}
