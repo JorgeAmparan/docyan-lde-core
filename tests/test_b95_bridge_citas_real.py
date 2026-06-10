@@ -55,35 +55,43 @@ def _raw(client, tenant, cypher):
 
 
 def _poblar_como_sdk(client):
-    """Shape EXACTO de graphrag_sdk con el catálogo (sin :DocumentoSource)."""
-    # especificacion.py
+    """
+    Shape REAL de graphrag_sdk 1.1.1 (verificado en el grafo de prod, B13.2): toda
+    entidad colapsada a `{id, name, type, description}` con `[__Entity__, <Tipo>]`, y
+    TODA relación como `:RELATES {rel_type:'<LABEL_SCHEMA>'}` (el label del schema vive
+    en la propiedad, NO como tipo de arista). El bridge normaliza esto al contrato de
+    lectura. (Antes este helper sembraba el shape del CATÁLOGO — labels/props/edges que
+    el SDK nunca emite —: ese era el punto ciego que dejó la costura abierta en silencio.)
+    """
+    # especificacion.py — el valor+unidad vive en `description` (el SDK no separa props).
     _raw(client, TENANT, """
-        CREATE (e:Especificacion {id:'e1', nombre:'Torque del perno B del rotor',
-                                  descripcion:'Par de apriete', categoria:'mecanica'})
-        CREATE (p:ParametroTecnico {id:'p1', nombre:'par de apriete', valor_nominal:'85'})
-        CREATE (u:UnidadMedida {id:'u1', simbolo:'N·m', nombre:'newton metro'})
-        CREATE (e)-[:DEFINE_PARAMETRO]->(p)
-        CREATE (p)-[:EXPRESADO_EN]->(u)
+        CREATE (:`__Entity__`:Especificacion {id:'e1', type:'Especificacion',
+            name:'Torque del perno B del rotor',
+            description:'85 N·m — par de apriete del perno B del rotor.'})
     """)
-    # manual_tecnico.py
+    # manual_tecnico.py — Procedimiento→Paso vía :RELATES{CONTIENE_PASO}; EPP/herr/adv
+    # cuelgan del PASO (como el reader las recorre con `(paso)-->(:EPP)`).
     _raw(client, TENANT, """
-        CREATE (pr:Procedimiento {id:'pr1', nombre:'Cambio del filtro de refrigerante',
-                                  objetivo:'sustituir filtro', ambito:'mantenimiento'})
-        CREATE (s1:Paso {id:'s1', numero:'1', descripcion:'Despresuriza el circuito y espera 2 minutos.'})
-        CREATE (s2:Paso {id:'s2', numero:'2', descripcion:'Sustituye el cartucho por uno nuevo.'})
-        CREATE (epp:EPP {id:'epp1', nombre:'Guantes de nitrilo', norma:'EN 374'})
-        CREATE (h:Herramienta {id:'h1', nombre:'Llave de filtro'})
-        CREATE (adv:Advertencia {id:'adv1', texto:'No abrir con el sistema presurizado.'})
-        CREATE (pr)-[:CONTIENE_PASO]->(s1)
-        CREATE (pr)-[:CONTIENE_PASO]->(s2)
-        CREATE (pr)-[:REQUIERE_EPP]->(epp)
-        CREATE (s1)-[:REQUIERE_HERRAMIENTA]->(h)
-        CREATE (s1)-[:TIENE_ADVERTENCIA]->(adv)
+        CREATE (pr:`__Entity__`:Procedimiento {id:'pr1', type:'Procedimiento',
+            name:'Cambio del filtro de refrigerante'})
+        CREATE (s1:`__Entity__`:Paso {id:'s1', type:'Paso',
+            name:'Despresuriza el circuito y espera 2 minutos.'})
+        CREATE (s2:`__Entity__`:Paso {id:'s2', type:'Paso',
+            name:'Sustituye el cartucho del filtro por uno nuevo.'})
+        CREATE (epp:`__Entity__`:EPP {id:'epp1', type:'EPP', name:'Guantes de nitrilo'})
+        CREATE (h:`__Entity__`:Herramienta {id:'h1', type:'Herramienta', name:'Llave de filtro'})
+        CREATE (adv:`__Entity__`:Advertencia {id:'adv1', type:'Advertencia',
+            name:'No abrir con el sistema presurizado.'})
+        CREATE (pr)-[:RELATES {rel_type:'CONTIENE_PASO'}]->(s1)
+        CREATE (pr)-[:RELATES {rel_type:'CONTIENE_PASO'}]->(s2)
+        CREATE (s1)-[:RELATES {rel_type:'REQUIERE_EPP'}]->(epp)
+        CREATE (s1)-[:RELATES {rel_type:'REQUIERE_HERRAMIENTA'}]->(h)
+        CREATE (s1)-[:RELATES {rel_type:'TIENE_ADVERTENCIA'}]->(adv)
     """)
-    # calibracion.py (para Historial T6: CertificadoCalibracion + vencimiento)
+    # calibracion.py (Historial T6) — CertificadoCalibracion con vencimiento.
     _raw(client, TENANT, """
-        CREATE (c:CertificadoCalibracion {id:'cert1', nombre:'Calibración anual rotor',
-                                          fecha_vencimiento:'2026-12-01'})
+        CREATE (:`__Entity__`:CertificadoCalibracion {id:'cert1', type:'CertificadoCalibracion',
+            name:'Calibración anual rotor', fecha_vencimiento:'2026-12-01'})
     """)
 
 
@@ -124,8 +132,10 @@ def test_bridge_cierra_cita_tipo1(grafo_poblado):
     pay = tipo1_informativa.resolver(ctx, reader).payload
 
     espec = pay.especificaciones[0]
-    assert espec.valor == "85", f"valor denormalizado esperado, got {espec.valor!r}"
-    assert espec.unidad == "N·m", f"unidad denormalizada esperada, got {espec.unidad!r}"
+    assert espec.nombre == "Torque del perno B del rotor"   # name → nombre
+    # El SDK no separa valor/unidad: el dato vive en `description` → `valor`.
+    assert espec.valor and "85" in espec.valor and "N·m" in espec.valor, \
+        f"valor desde description esperado, got {espec.valor!r}"
     assert len(pay.citas) >= 1, "Tipo 1 debe traer al menos una cita tras el bridge"
     cita = pay.citas[0]
     assert cita.documento_id == DOC_ID
@@ -146,10 +156,16 @@ def test_bridge_cierra_pasos_y_cita_tipo2(grafo_poblado):
     pay = tipo2_guia_paso_a_paso.resolver(ctx, reader).payload
 
     assert len(pay.pasos) == 2, f"esperados 2 pasos, got {len(pay.pasos)}"
-    assert pay.pasos[0].orden == 1
-    assert "Guantes de nitrilo" in pay.pasos[0].epp, "EPP debe colgar del paso"
-    assert "Llave de filtro" in pay.pasos[0].herramientas
-    assert any("presurizado" in a for a in pay.pasos[0].advertencias)
+    # Los pasos cuelgan del Procedimiento vía :CONTIENE materializado del :RELATES.
+    descs = " ".join((p.descripcion or "") for p in pay.pasos)
+    assert "circuito" in descs.lower() or "cartucho" in descs.lower()
+    # EPP/herr/adv cuelgan del paso (reader: `(paso)-->(:EPP|:Herramienta|:Advertencia)`).
+    epp = [e for p in pay.pasos for e in (p.epp or [])]
+    herr = [h for p in pay.pasos for h in (p.herramientas or [])]
+    adv = [a for p in pay.pasos for a in (p.advertencias or [])]
+    assert "Guantes de nitrilo" in epp, f"EPP debe colgar del paso, got {epp}"
+    assert "Llave de filtro" in herr
+    assert any("presurizado" in a for a in adv)
     assert len(pay.citas) >= 1, "Tipo 2 debe traer cita tras el bridge"
     assert pay.citas[0].documento_id == DOC_ID
 

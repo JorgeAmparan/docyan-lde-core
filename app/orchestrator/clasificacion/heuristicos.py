@@ -52,8 +52,18 @@ _PATRONES: dict[TipoIntencion, list[tuple[str, float]]] = {
         (r"\bpaso a paso\b", 3.0),
         (r"\bprocedimiento\b", 2.5),
         (r"\binstruccion(es)?\b", 2.0),
-        (r"\bcomo (se )?(hace|realiza|instala|cambia|opera|monta|ejecuta|arma|configura)\b", 2.2),
-        (r"\bcomo (puedo|debo)\b", 1.6),
+        # "cómo + acción": por RAÍZ verbal, cubre 1ª persona ("cambio"), 3ª persona
+        # ("cambia"), infinitivo ("cambiar") y reflexivo ("se cambia"). El operador
+        # en piso pregunta en 1ª persona ("¿cómo cambio el rotor?") — antes el patrón
+        # solo cubría 3ª persona y caía a INFORMATIVA (defecto independiente del grafo).
+        (
+            r"\bcomo (se |lo |la |me )?(hac|hag|realiz|instal|cambi|reemplaz|sustitu|"
+            r"oper|mont|desmont|ejecut|arm|configur|coloc|conect|desconect|ajust|"
+            r"aplic|prepar|carg|limpi|calibr|enciend|apag|inici|arranc|reinici|"
+            r"activ|desactiv|reset)\w*\b",
+            2.2,
+        ),
+        (r"\bcomo (puedo|debo|hacer|lo hago)\b", 1.8),
         (r"\bguia (de|para)\b", 1.8),
         (r"\bque pasos\b", 2.5),
         (r"\bpasos? (para|de|a seguir)\b", 2.3),

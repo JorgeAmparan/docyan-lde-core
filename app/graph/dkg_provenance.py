@@ -130,52 +130,22 @@ def bridge_and_normalize(
         enlazados += int((rows[0].get("c") if rows else 0) or 0)
     counters["contenido_enlazado"] = enlazados
 
-    # ── §1.0.3 — Denormalizar valor/unidad sobre :Especificacion (Tipo 1) ───────
-    # El reader lee `e.valor`/`e.unidad`; el catálogo los pone en
-    # `:ParametroTecnico.valor_nominal` y `:UnidadMedida.simbolo`. Se copian al
-    # `:Especificacion` sin perder el dato original (coalesce: no pisa si ya hay).
-    client.query(
-        tenant_id,
-        """
-        MATCH (e:Especificacion)-[:DEFINE_PARAMETRO]->(p:ParametroTecnico)
-        OPTIONAL MATCH (p)-[:EXPRESADO_EN]->(u:UnidadMedida)
-        SET e.valor = coalesce(e.valor, p.valor_nominal),
-            e.unidad = coalesce(e.unidad, u.simbolo)
-        """,
-        {},
-    )
-
-    # ── §1.0.3 — Tipo 2: alias de arista, orden y EPP por paso ──────────────────
-    # (a) `:CONTIENE_PASO` (Proc→Paso) ⇒ alias `:CONTIENE` (lo que el reader lee).
-    client.query(
-        tenant_id,
-        """
-        MATCH (p:Procedimiento)-[:CONTIENE_PASO]->(s:Paso)
-        MERGE (p)-[:CONTIENE]->(s)
-        """,
-        {},
-    )
-    # (b) `Paso.orden` ⇐ `Paso.numero` cuando falta (el reader ordena por `orden`).
-    client.query(
-        tenant_id,
-        """
-        MATCH (s:Paso)
-        WHERE s.orden IS NULL AND s.numero IS NOT NULL
-        SET s.orden = toInteger(s.numero)
-        """,
-        {},
-    )
-    # (c) EPP del procedimiento colgado también de cada `:Paso` (el reader lee
-    #     `(paso)-->(:EPP)`; el catálogo lo cuelga del Procedimiento vía REQUIERE_EPP).
-    client.query(
-        tenant_id,
-        """
-        MATCH (p:Procedimiento)-[:REQUIERE_EPP]->(epp:EPP)
-        MATCH (p)-[:CONTIENE]->(s:Paso)
-        MERGE (s)-[:CONTIENE]->(epp)
-        """,
-        {},
-    )
+    # ── §1.0.3 — Normalización al shape REAL de GraphRAG-SDK (costura escritura↔lectura)
+    # GraphRAG-SDK 1.1.1 NO escribe los atributos del schema como propiedades del
+    # nodo: colapsa toda entidad a `{id, name, type, description, spans, embedding}`
+    # (labels `[__Entity__, <type>]`), y TODA relación a `:RELATES {rel_type, …}`
+    # (el label original del schema queda en la propiedad `rel_type`, no como tipo de
+    # arista). Los readers B8 leen `e.nombre/e.valor`, `:Procedimiento-[:CONTIENE]->`,
+    # etc. — que el SDK nunca emite. Verificado en el grafo de prod (sprint B13.2).
+    #
+    # Aquí cerramos la costura UNA vez, post-ingesta, de forma ESTRUCTURAL y agnóstica
+    # al tipo documental (mapa por label de ontología, NO por tipo de documento):
+    #   (a) proyectar `name`/`description` del SDK a los campos canónicos que el reader
+    #       lee, por label (coalesce: no pisa si ya hay dato real);
+    #   (b) materializar las aristas `:CONTIENE` que el reader recorre, desde las
+    #       `:RELATES` del SDK, por pares contenedor→hijo de la ontología.
+    counters["props_normalizadas"] = _proyectar_campos_canonicos(client, tenant_id)
+    counters["aristas_lectura"] = _materializar_aristas_lectura(client, tenant_id)
 
     # ── §1.0.2 — Enlazar contenido a la :EntidadOperativa del QR (T6/T8) ─────────
     # Si la ingesta vino atada a una entidad operativa (el equipo del QR), se
@@ -224,6 +194,124 @@ def bridge_and_normalize(
         tenant_id, doc_id[:12], tipo_documento, counters,
     )
     return counters
+
+
+# ── Normalización del shape SDK-nativo → contrato de lectura B8 ────────────────
+#
+# Mapa ONTOLÓGICO (por label de entidad, NO por tipo documental): a qué campo
+# canónico del reader se proyecta el `name` del SDK. Cubre las entidades de los 8
+# tipos; un tipo documental nuevo que reuse estos labels queda cubierto sin tocar
+# código (esa es la regla anti-parche-por-tipo).
+_CAMPO_PRIMARIO_DESDE_NAME: dict[str, str] = {
+    "Especificacion": "nombre",
+    "TerminoTecnico": "termino",
+    "Procedimiento": "nombre",
+    "Paso": "descripcion",
+    "EPP": "nombre",
+    "Herramienta": "nombre",
+    "Advertencia": "texto",
+    "RecursoVisual": "titulo",
+    "Etiqueta": "texto",
+    "LeyendaSimbolica": "simbolo",
+    "RecursoVideo": "titulo",
+    "Capitulo": "titulo",
+    "Subtitulo": "texto",
+    "Transcripcion": "texto",
+    "ArbolDiagnostico": "titulo",
+    "NodoDecision": "pregunta",
+    "CausaProbable": "descripcion",
+    "AccionResolutoria": "descripcion",
+    "EventoOperativo": "descripcion",
+    "Observacion": "texto",
+    "MedicionRegistrada": "descripcion",
+    "CertificadoVigencia": "nombre",
+    "CertificadoCalibracion": "nombre",
+    "Alerta": "descripcion",
+    "Norma": "nombre",
+    "RequisitoNormativo": "descripcion",
+    "Sustancia": "nombre",
+    "Riesgo": "descripcion",
+    "MedidaProteccion": "descripcion",
+    "EquipoProteccion": "nombre",
+    "Producto": "nombre",
+    "Modelo": "nombre",
+    "Fabricante": "nombre",
+    "Instrumento": "nombre",
+    "Tecnico": "nombre",
+}
+
+# Campo secundario proyectado desde `description` del SDK (el detalle/valor textual).
+_CAMPO_SECUNDARIO_DESDE_DESCRIPTION: dict[str, str] = {
+    "Especificacion": "valor",
+    "TerminoTecnico": "definicion",
+    "LeyendaSimbolica": "significado",
+}
+
+# Pares contenedor→hijo que el reader recorre con `:CONTIENE`. El SDK escribe estas
+# relaciones como `:RELATES`; se materializa el `:CONTIENE` que la lectura espera.
+# Es ontológico (pares de labels), no por tipo documental.
+_PARES_CONTIENE: tuple[tuple[str, str], ...] = (
+    ("Procedimiento", "Paso"),
+    ("ArbolDiagnostico", "NodoDecision"),
+    ("NodoDecision", "CausaProbable"),
+    ("NodoDecision", "AccionResolutoria"),
+    ("RecursoVisual", "Etiqueta"),
+    ("RecursoVisual", "LeyendaSimbolica"),
+    ("RecursoVideo", "Capitulo"),
+    ("RecursoVideo", "Subtitulo"),
+    ("RecursoVideo", "Transcripcion"),
+)
+
+
+def _proyectar_campos_canonicos(client: Any, tenant_id: str) -> int:
+    """
+    Proyecta el `name`/`description` genéricos del SDK a los campos canónicos que el
+    reader lee, por label (coalesce: no pisa un dato ya presente). Idempotente.
+    Devuelve cuántos labels se normalizaron (best-effort por label).
+    """
+    n = 0
+    for label, primario in _CAMPO_PRIMARIO_DESDE_NAME.items():
+        sets = [f"x.{primario} = coalesce(x.{primario}, x.name)"]
+        secundario = _CAMPO_SECUNDARIO_DESDE_DESCRIPTION.get(label)
+        if secundario:
+            sets.append(f"x.{secundario} = coalesce(x.{secundario}, x.description, x.name)")
+        try:
+            client.query(
+                tenant_id,
+                f"MATCH (x:{label}) WHERE x.name IS NOT NULL SET {', '.join(sets)}",
+                {},
+            )
+            n += 1
+        except Exception as exc:  # noqa: BLE001 — normalización best-effort, no es gate
+            logger.warning("no se pudo normalizar props de %s: %s", label, type(exc).__name__)
+    return n
+
+
+def _materializar_aristas_lectura(client: Any, tenant_id: str) -> int:
+    """
+    Materializa las aristas `:CONTIENE` que los readers recorren, desde las `:RELATES`
+    del SDK, por pares contenedor→hijo de la ontología. Idempotente (MERGE).
+    Devuelve cuántas aristas `:CONTIENE` se aseguraron.
+    """
+    total = 0
+    for contenedor, hijo in _PARES_CONTIENE:
+        try:
+            rows = client.query(
+                tenant_id,
+                f"""
+                MATCH (a:{contenedor})-[:RELATES]->(b:{hijo})
+                MERGE (a)-[:CONTIENE]->(b)
+                RETURN count(*) AS c
+                """,
+                {},
+            )
+            total += int((rows[0].get("c") if rows else 0) or 0)
+        except Exception as exc:  # noqa: BLE001 — best-effort, no es gate
+            logger.warning(
+                "no se pudo materializar :CONTIENE %s→%s: %s",
+                contenedor, hijo, type(exc).__name__,
+            )
+    return total
 
 
 def _add_mirror_label(
