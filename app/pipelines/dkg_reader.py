@@ -17,7 +17,47 @@ SIEMPRE estructuras planas (dict/list) — nunca nodos crudos de FalkorDB.
 """
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Protocol, runtime_checkable
+
+# Palabras vacías + interrogativas en español: se descartan al tokenizar la pregunta
+# para el retrieval léxico. Sin esto, el `termino` cae a la PREGUNTA COMPLETA y el
+# CONTAINS nunca casa el nombre/valor de un nodo (la frase entera no es substring).
+_STOPWORDS = frozenset(
+    "el la los las un una unos unas de del al a en y o u que cual cuales cuanto cuanta "
+    "cuantos cuantas como cuando donde quien quienes es son esta estan ser para por con "
+    "sin sobre se su sus mi mis lo le les me te nos hay tiene tienen dame muestrame dime "
+    "cuál cuáles qué cómo cuándo dónde quién necesito quiero".split()
+)
+
+
+def _sin_acentos(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
+
+def tokenizar_busqueda(termino: str | None) -> list[str]:
+    """
+    Parte la consulta en tokens de contenido (≥3 chars, sin stopwords/interrogativas).
+    El retrieval casa por CUALQUIER token, de modo que "¿cuál es el límite de exposición
+    OSHA?" recupere la spec cuyo nombre/valor contiene "osha"/"exposición"/"límite".
+
+    Los tokens CONSERVAN sus acentos: el texto extraído por el SDK los lleva, y el
+    `CONTAINS` de FalkorDB es sensible a acentos (no hay `unaccent`). El filtro de
+    stopwords/longitud sí compara sin acentos (para no depender de cómo se acentúe la
+    stopword). Lista vacía ⇒ traer todo.
+    """
+    bajo = (termino or "").lower()
+    # Conserva acentos en la palabra; separa por lo que no sea letra/dígito/(-/).
+    palabras = re.findall(r"[0-9a-záéíóúñü][0-9a-záéíóúñü\-/]+", bajo)
+    vistos: list[str] = []
+    for p in palabras:
+        plano = _sin_acentos(p)
+        if len(plano) >= 3 and plano not in _STOPWORDS and p not in vistos:
+            vistos.append(p)
+    if not vistos and palabras:
+        vistos = [max(palabras, key=len)]
+    return vistos
 
 
 @runtime_checkable
@@ -51,29 +91,33 @@ class DKGReader:
     # ── Tipo 1 — Informativa ──────────────────────────────────────────────────
 
     def informativa(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+        toks = tokenizar_busqueda(termino)
         especs = self.client.query(
             tenant_id,
             """
             MATCH (e:Especificacion)
-            WHERE $t = '' OR toLower(e.nombre) CONTAINS toLower($t)
-               OR toLower(coalesce(e.valor,'')) CONTAINS toLower($t)
+            WHERE size($toks) = 0
+               OR ANY(w IN $toks WHERE toLower(coalesce(e.nombre,'')) CONTAINS w
+                                      OR toLower(coalesce(e.valor,'')) CONTAINS w)
             OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(e)
             RETURN e.id AS id, e.nombre AS nombre, e.valor AS valor,
                    e.unidad AS unidad, e.seccion AS seccion, e.pagina AS pagina,
                    d.id AS documento_id, d.tipo_documento AS documento_nombre
             LIMIT 25
             """,
-            {"t": termino},
+            {"toks": toks},
         )
         termino_def = self.client.query(
             tenant_id,
             """
             MATCH (tt:TerminoTecnico)
-            WHERE $t = '' OR toLower(tt.termino) CONTAINS toLower($t)
+            WHERE size($toks) = 0
+               OR ANY(w IN $toks WHERE toLower(coalesce(tt.termino,'')) CONTAINS w
+                                      OR toLower(coalesce(tt.definicion,'')) CONTAINS w)
             RETURN tt.termino AS termino, tt.definicion AS definicion
             LIMIT 1
             """,
-            {"t": termino},
+            {"toks": toks},
         )
         td = termino_def[0] if termino_def else {}
         return {
@@ -85,11 +129,13 @@ class DKGReader:
     # ── Tipo 2 — Guía paso a paso ─────────────────────────────────────────────
 
     def procedimiento(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+        toks = tokenizar_busqueda(termino)
         rows = self.client.query(
             tenant_id,
             """
             MATCH (p:Procedimiento)
-            WHERE $t = '' OR toLower(p.nombre) CONTAINS toLower($t)
+            WHERE size($toks) = 0
+               OR ANY(w IN $toks WHERE toLower(coalesce(p.nombre,'')) CONTAINS w)
             OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(p)
             OPTIONAL MATCH (p)-[:CONTIENE]->(paso:Paso)
             OPTIONAL MATCH (paso)-->(epp:EPP)
@@ -109,18 +155,20 @@ class DKGReader:
                             postcondiciones: paso.postcondiciones}) AS pasos
             LIMIT 1
             """,
-            {"t": termino},
+            {"toks": toks},
         )
         return rows[0] if rows else {"procedimiento_id": None, "titulo": "", "pasos": []}
 
     # ── Tipo 3 — Gráficos / diagramas ─────────────────────────────────────────
 
     def recurso_visual(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+        toks = tokenizar_busqueda(termino)
         rows = self.client.query(
             tenant_id,
             """
             MATCH (r:RecursoVisual)
-            WHERE $t = '' OR toLower(coalesce(r.titulo, r.nombre, '')) CONTAINS toLower($t)
+            WHERE size($toks) = 0
+               OR ANY(w IN $toks WHERE toLower(coalesce(r.titulo, r.nombre, '')) CONTAINS w)
             OPTIONAL MATCH (r)-[:CONTIENE]->(et:Etiqueta)
             OPTIONAL MATCH (r)-[:CONTIENE]->(ls:LeyendaSimbolica)
             WITH r,
@@ -130,18 +178,20 @@ class DKGReader:
                    r.url AS recurso_url, etiquetas, leyenda
             LIMIT 1
             """,
-            {"t": termino},
+            {"toks": toks},
         )
         return rows[0] if rows else {"recurso_id": None, "titulo": "", "etiquetas": [], "leyenda": []}
 
     # ── Tipo 4 — Video ────────────────────────────────────────────────────────
 
     def video(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+        toks = tokenizar_busqueda(termino)
         rows = self.client.query(
             tenant_id,
             """
             MATCH (v:RecursoVideo)
-            WHERE $t = '' OR toLower(coalesce(v.titulo, v.nombre, '')) CONTAINS toLower($t)
+            WHERE size($toks) = 0
+               OR ANY(w IN $toks WHERE toLower(coalesce(v.titulo, v.nombre, '')) CONTAINS w)
             OPTIONAL MATCH (v)-[:CONTIENE]->(c:Capitulo)
             OPTIONAL MATCH (v)-[:CONTIENE]->(s:Subtitulo)
             OPTIONAL MATCH (v)-[:CONTIENE]->(tr:Transcripcion)
@@ -155,7 +205,7 @@ class DKGReader:
                    capitulos, subtitulos, transcripcion
             LIMIT 1
             """,
-            {"t": termino},
+            {"toks": toks},
         )
         return rows[0] if rows else {"recurso_id": None, "titulo": "", "capitulos": [],
                                      "subtitulos": [], "transcripcion": None}
@@ -185,11 +235,13 @@ class DKGReader:
             )
             arbol = {"arbol_id": None, "titulo": termino}
         else:
+            toks = tokenizar_busqueda(termino)
             rows = self.client.query(
                 tenant_id,
                 """
                 MATCH (t:ArbolDiagnostico)
-                WHERE $t = '' OR toLower(coalesce(t.titulo, t.nombre, '')) CONTAINS toLower($t)
+                WHERE size($toks) = 0
+                   OR ANY(w IN $toks WHERE toLower(coalesce(t.titulo, t.nombre, '')) CONTAINS w)
                 OPTIONAL MATCH (t)-[:CONTIENE]->(n:NodoDecision)
                 WITH t, n ORDER BY coalesce(n.orden, 0) LIMIT 1
                 OPTIONAL MATCH (n)-[rel]->(sig:NodoDecision)
@@ -198,7 +250,7 @@ class DKGReader:
                        n.id AS nodo_actual_id, n.pregunta AS pregunta, opciones
                 LIMIT 1
                 """,
-                {"t": termino},
+                {"toks": toks},
             )
             arbol = {}
         if not rows:
