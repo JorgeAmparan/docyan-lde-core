@@ -638,3 +638,18 @@
 .s2 .legaldoc-body section{margin-bottom:32px;}
 .s2 .legaldoc-body h2{font-size:18px;font-weight:700;margin:0 0 10px;}
 .s2 .legaldoc-body p{color:var(--fg-muted);font-size:14.5px;line-height:1.65;margin:0 0 12px;}
+
+/* F3 N1 — FAQ: encabezado, búsqueda, índice de bloques, bloques, CTA. */
+.s2 .faq-head{margin-bottom:24px;}
+.s2 .faq-head h1{font-size:clamp(28px,4vw,38px);font-weight:700;letter-spacing:-.02em;margin:12px 0 12px;}
+.s2 .faq-search{display:flex;align-items:center;gap:10px;margin-top:18px;padding:0 14px;height:46px;border:1px solid var(--border-strong);border-radius:var(--radius-full);background:var(--surface);max-width:420px;}
+.s2 .faq-search svg{color:var(--fg-subtle);flex:0 0 auto;}
+.s2 .faq-search input{flex:1;border:none;background:none;outline:none;font-size:14.5px;color:var(--fg);font-family:inherit;}
+.s2 .faq-index{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 8px;}
+.s2 .faq-index a{font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--fg-muted);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-full);}
+.s2 .faq-index a:hover{color:var(--accent-fg);border-color:var(--cinnabar-200);background:var(--cinnabar-50);}
+.s2 .faq-block{margin-top:36px;scroll-margin-top:84px;}
+.s2 .faq-block h2{font-size:15px;font-weight:700;font-family:var(--font-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--accent-fg);margin:0 0 14px;}
+.s2 .faq-cta{margin-top:56px;padding:32px;border-radius:var(--radius-xl);background:var(--amate-100);text-align:center;}
+.s2 .faq-cta h2{font-size:clamp(20px,3vw,26px);font-weight:700;letter-spacing:-.01em;margin:0 0 18px;}
+.s2 .faq-cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
