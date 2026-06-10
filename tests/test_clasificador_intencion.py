@@ -23,6 +23,11 @@ EJEMPLOS = {
         "cómo se instala la bomba",
         "procedimiento de montaje",
         "pasos para cambiar el filtro",
+        # Fraseo del operador en piso: 1ª persona e infinitivo (antes caían a
+        # INFORMATIVA por cubrir solo 3ª persona — defecto del clasificador, B13.2).
+        "cómo cambio el rotor de la centrífuga",
+        "cómo reemplazo el filtro de refrigerante",
+        "cómo instalar el equipo nuevo",
     ],
     TipoIntencion.GRAFICOS_DIAGRAMAS: [
         "muéstrame el diagrama eléctrico",
