@@ -341,9 +341,14 @@
 .s2 .umb-item p{font-size:12.5px;color:var(--fg-muted);line-height:1.5;margin:0;}
 
 /* CTA final — dos puertas */
-.s2 .doors{display:grid;grid-template-columns:1fr;gap:16px;margin-top:36px;}
-@media(min-width:880px){.s2 .doors{grid-template-columns:1fr 1fr;gap:20px;}}
-.s2 .door{border-radius:var(--radius-xl);padding:26px;display:flex;flex-direction:column;gap:10px;}
+.s2 .doors{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:36px;}
+/* B2 (causa de fondo): desktop = dos columnas PROPORCIONALES ~60/40 con minmax(0,…)
+   para que el min-content de la puerta principal NO sesgue el reparto. Antes, `1fr`
+   = minmax(auto,1fr): el auto (min-content) de Freemium pineaba la Piloto a su ancho
+   de contenido ("$175/mo" partido). Apilado (<880px) = una columna a 100%. Ninguna
+   tarjeta lleva width/max-width fijo; ambas estiran (justify-self:stretch). */
+@media(min-width:880px){.s2 .doors{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px;}}
+.s2 .door{border-radius:var(--radius-xl);padding:26px;display:flex;flex-direction:column;gap:10px;width:auto;max-width:none;min-width:0;justify-self:stretch;}
 .s2 .door.main{background:var(--surface);border:2px solid var(--cinnabar-400);box-shadow:var(--shadow-md);}
 .s2 .door.side{background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-xs);}
 .s2 .door .d-lab{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-fg);}
