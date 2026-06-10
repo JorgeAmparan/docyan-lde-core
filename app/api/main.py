@@ -11,6 +11,7 @@ from app.api.routers import (
     admin,
     billing,
     chat,
+    demo,
     documents,
     governance,
     ingest_sources,
@@ -74,6 +75,7 @@ app.include_router(recursos.router)
 app.include_router(onboarding.router)
 app.include_router(invitations.router)
 app.include_router(mis_documentos.router)
+app.include_router(demo.router)
 
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

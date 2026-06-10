@@ -62,6 +62,7 @@ def canjear_codigo(
     password: str,
     name: str,
     org_name: str | None,
+    quota: Any = None,
 ) -> dict:
     """
     Valida y canjea un código de acceso: provisiona una org NUEVA con plan piloto,
@@ -112,6 +113,14 @@ def canjear_codigo(
     store.update_access_code(
         code, status="used", org_generada=org_id, redeemed_at=_now().isoformat(),
     )
+    # F3 §C: siembra el cupo de ingestas del plan del piloto (Esencial → 10+3/mes).
+    # Fail-open: un fallo de infraestructura al sembrar el cupo NO debe bloquear el
+    # canje del código (el cupo se puede re-sembrar; el alta de cuenta es lo crítico).
+    if quota is not None:
+        try:
+            quota.ensure_quota(org_id, row["tipo"])
+        except Exception:  # noqa: BLE001 — fail-open
+            pass
     audit.record("access_code_redeemed", email, {
         "code": code, "org_id": org_id, "plan": row["tipo"],
     }, org_id=org_id)
@@ -133,7 +142,7 @@ def canjear_codigo(
 # ════════════════════════════════════════════════════════════════════════════
 
 
-def signup(store: Any, audit: Any, token_issuer: Any, req: Any) -> dict:
+def signup(store: Any, audit: Any, token_issuer: Any, req: Any, quota: Any = None) -> dict:
     """
     Crea la cuenta (Fase 1). Sin `codigo_acceso` → Freemium (admin de org nueva,
     3 docs / 30 días). Con `codigo_acceso` → canje de piloto. En ambos casos el
@@ -142,7 +151,7 @@ def signup(store: Any, audit: Any, token_issuer: Any, req: Any) -> dict:
     if req.codigo_acceso:
         prov = canjear_codigo(
             store, audit, code=req.codigo_acceso, email=str(req.email),
-            password=req.password, name=req.name, org_name=req.org_name,
+            password=req.password, name=req.name, org_name=req.org_name, quota=quota,
         )
         user = prov["user"]
         org = store.get_org(prov["org_id"]) or {}
@@ -201,11 +210,14 @@ def signup(store: Any, audit: Any, token_issuer: Any, req: Any) -> dict:
 # ════════════════════════════════════════════════════════════════════════════
 
 
-def activar_plan(store: Any, audit: Any, *, org_id: str, actor: str, req: Any) -> dict:
+def activar_plan(
+    store: Any, audit: Any, *, org_id: str, actor: str, req: Any, quota: Any = None
+) -> dict:
     """
     Fase 2: el cliente elige/activa plan. Fija plan, criticidad del segmento
     (decisión #15) y, en planes pagados, retira el límite freemium (doc_limit del
-    plan o ilimitado). Marca `fase2_completada=True`.
+    plan o ilimitado). Marca `fase2_completada=True`. F3 §C: siembra el cupo de
+    ingestas del plan (Esencial 10+3/mes · Profesional 30+10/mes · Enterprise config).
     """
     org = store.get_org(org_id)
     if org is None:
@@ -227,6 +239,14 @@ def activar_plan(store: Any, audit: Any, *, org_id: str, actor: str, req: Any) -
 
     org = store.update_org(org_id, **fields)
     store.upsert_org_billing(org_id, plan=req.plan, lifecycle_status="active")
+    # F3 §C: al activar un plan con cupo, siémbralo (idempotente: no reinicia el
+    # cupo ya gastado si la fase 2 se re-ejecuta). Freemium no lleva cupo → no-op.
+    # Fail-open: un fallo al sembrar el cupo no debe bloquear la activación de plan.
+    if quota is not None:
+        try:
+            quota.ensure_quota(org_id, req.plan)
+        except Exception:  # noqa: BLE001 — fail-open
+            pass
     audit.record("onboarding_fase2", actor, {
         "org_id": org_id, "plan": req.plan, "criticidad": req.criticidad_segmento,
     }, org_id=org_id)

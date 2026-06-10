@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { VERTICALS, demoDocHref, type DemoVertical, type DemoQA } from "@/lib/demo-data";
+import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
 
 /* DOCYAN Landing v2 — full consult flow for the public demo-CoDo explorer:
    multi-turn thread, conditional renderers by intent type, in-app source overlay
@@ -171,25 +172,54 @@ function SourceOverlay({ a, onClose }: { a: AnswerMsg; onClose: () => void }) {
 export function DemoConsult({ vkey }: { vkey: string }) {
   const router = useRouter();
   const vert: DemoVertical = VERTICALS.find((v) => v.key === vkey) ?? VERTICALS[0];
-  const [msgs, setMsgs] = useState<({ role: "user"; text: string } | { role: "answer"; a: AnswerMsg })[]>([]);
+  const [msgs, setMsgs] = useState<
+    (
+      | { role: "user"; text: string }
+      | { role: "answer"; a: AnswerMsg }
+      | { role: "note"; text: string }
+    )[]
+  >([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [src, setSrc] = useState<AnswerMsg | null>(null);
   const convoRef = useRef<HTMLDivElement>(null);
 
   const ask = async (question: string) => {
+    // Capa 1 (handoff §8): match exacto de una pregunta preparada → respuesta citada
+    // instantánea. Estas Q&A están ancladas al span real del documento del CoDo demo.
     const hit = vert.qa.find((x) => x.q === question);
     setMsgs((m) => [...m, { role: "user", text: question }]);
     setLoading(true);
-    let a: AnswerMsg;
-    await delay(540);
     if (hit) {
-      a = { ...hit, codo: vert.codo };
-    } else {
-      const b = vert.qa[0];
-      a = { kind: "info", q: question, codo: vert.codo, note: "Respuesta con cita a la fuente exacta del documento de este equipo.", cite: b.cite, doc: b.doc, page: b.page, span: question };
+      await delay(420);
+      setMsgs((m) => [...m, { role: "answer", a: { ...hit, codo: vert.codo } }]);
+      setLoading(false);
+      return;
     }
-    setMsgs((m) => [...m, { role: "answer", a }]);
+    // Capa 3: sin match preparado → consulta REAL contra el tenant demo (D3). Si el
+    // grafo demo no sostiene la pregunta, se muestra el fallback honesto — nunca una
+    // respuesta inventada (coherente con la purga de CANNED_* de B13.1).
+    const res = await demoQuery(question, vert.key);
+    if (res.servido && res.resultado) {
+      const r = res.resultado as Record<string, unknown>;
+      const payload = (r.payload ?? {}) as Record<string, unknown>;
+      const cita = (r.cita ?? {}) as Record<string, unknown>;
+      const a: AnswerMsg = {
+        kind: ((res.kind ?? "info") as DemoQA["kind"]),
+        q: question,
+        codo: vert.codo,
+        value: payload.valor as string | undefined,
+        unit: payload.unidad as string | undefined,
+        note: (payload.texto as string) ?? (r.respuesta as string) ?? "",
+        doc: (cita.doc as string) ?? vert.docs[0],
+        cite: (cita.cite as string) ?? (cita.referencia as string) ?? "",
+        page: (cita.page as number) ?? (cita.pagina as number),
+        span: (cita.span as string) ?? "",
+      };
+      setMsgs((m) => [...m, { role: "answer", a }]);
+    } else {
+      setMsgs((m) => [...m, { role: "note", text: res.fallback ?? DEMO_FALLBACK }]);
+    }
     setLoading(false);
   };
   useEffect(() => {
@@ -207,8 +237,9 @@ export function DemoConsult({ vkey }: { vkey: string }) {
         <Icon name="info" size={15} />
         <span>Estás en un <b>CoDo demo</b> de DOCYAN. Para crear el tuyo, agenda una demo o regístrate.</span>
         <div className="db-ctas">
-          <button className="btn sec" onClick={() => router.push("/signup")}>Agendar demo</button>
-          <button className="btn primary" onClick={() => router.push("/signup")}>Regístrate</button>
+          {/* Embudo F3: "Agendar demo" → /codigo (piloto); CTA primario → /signup. */}
+          <button className="btn sec" onClick={() => router.push("/codigo")}>Agendar demo</button>
+          <button className="btn primary" onClick={() => router.push("/signup")}>Pruébalo gratis</button>
         </div>
       </div>
       <div className="dc-wrap">
@@ -234,6 +265,11 @@ export function DemoConsult({ vkey }: { vkey: string }) {
           {msgs.map((m, i) =>
             m.role === "user" ? (
               <div className="fa-user" key={i}>{m.text}</div>
+            ) : m.role === "note" ? (
+              <div className="fa-card dc-fallback" key={i}>
+                <div className="fa-mode"><Icon name="info" size={14} />Sin respuesta en este documento demo</div>
+                <p className="fa-note">{m.text}</p>
+              </div>
             ) : (
               <DemoAnswer key={i} a={m.a} codo={vert.codo} onCite={setSrc} />
             ),

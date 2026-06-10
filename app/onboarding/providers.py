@@ -36,6 +36,13 @@ def get_token_issuer():
     return ProductionTokenIssuer()
 
 
+def get_quota_manager():
+    """Cupo de ingestas (F3 §C). Reusa el provider de ingesta."""
+    from app.ingesta.providers import get_quota_manager as _factory
+
+    return _factory()
+
+
 class ProductionTokenIssuer:
     """Emite el par access/refresh reusando los helpers de `app/api/auth.py`."""
 

@@ -48,6 +48,7 @@ async def signup(req: SignupRequest) -> SignupResponse:
         out = service.signup(
             providers.get_store(), providers.get_audit(),
             providers.get_token_issuer(), req,
+            quota=providers.get_quota_manager(),
         )
     except OnboardingError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
@@ -70,6 +71,7 @@ async def activar_plan(
         org = service.activar_plan(
             providers.get_store(), providers.get_audit(),
             org_id=ctx["org_id"], actor=actor, req=req,
+            quota=providers.get_quota_manager(),
         )
     except OnboardingError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)

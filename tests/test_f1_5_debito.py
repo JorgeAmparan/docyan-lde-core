@@ -88,9 +88,9 @@ def test_debito_multitenant_aislado():
 # Fórmula de cobro de setup (Modelo Comercial §2.3)
 # ════════════════════════════════════════════════════════════════════════════
 
-def test_formula_documento_chico_gana_piso_25():
-    # costo×25 = 0.04*25 = 1.0 < 25 → gana el piso $25.
-    assert pt.precio_setup(0.04) == 25.0
+def test_formula_documento_chico_gana_piso_15():
+    # costo×25 = 0.04*25 = 1.0 < 15 → gana el piso $15 (v1.1, F3).
+    assert pt.precio_setup(0.04) == 15.0
 
 
 def test_formula_documento_caro_gana_costo_por_25():
@@ -118,7 +118,7 @@ def test_cotizador_expone_precio_setup():
     bm = _bm(100.0)
     cot = Cotizador(budget_manager=bm).cotizar("t", DOC_BYTES.decode())
     d = cot.to_dict()
-    assert d["precio_setup_usd"] >= 25.0  # piso para un doc chico
+    assert d["precio_setup_usd"] >= 15.0  # piso para un doc chico (v1.1, F3)
     assert d["factor_complejidad"] == 1.0
 
 

@@ -25,6 +25,7 @@ from enum import Enum
 
 from app.ingesta import pricing_table as pt
 from app.ingesta.budget_manager import BudgetManager
+from app.ingesta.quota_manager import QuotaManager
 
 # Encoding de tiktoken para medir. o200k_base es el de gpt-4o/gpt-4o-mini; se usa
 # como referencia única para todo el documento (aproximación documentada para la
@@ -76,6 +77,11 @@ class Cotizacion:
     pricing_as_of: str = pt.PRICING_AS_OF
     # Detalle de tokens facturables estimados por fase (transparencia para el PM).
     detalle_tokens: dict = field(default_factory=dict)
+    # Cupo de ingestas (F3 §C). `dentro_de_cupo`=True → esta ingesta va incluida en el
+    # plan y `precio_setup_usd`=0. `cupo_restante`=None → el plan no lleva cupo
+    # (freemium / org sin cupo) y rige la fórmula de setup como siempre.
+    dentro_de_cupo: bool = False
+    cupo_restante: int | None = None
 
     @property
     def aprobado(self) -> bool:
@@ -143,8 +149,15 @@ def estimar_tiempo_seg(tokens_documento: int) -> float:
 class Cotizador:
     """Cotizador pre-ingesta. Punto único de decisión de gasto de ingesta."""
 
-    def __init__(self, budget_manager: BudgetManager | None = None):
+    def __init__(
+        self,
+        budget_manager: BudgetManager | None = None,
+        quota_manager: QuotaManager | None = None,
+    ):
         self.budget = budget_manager or BudgetManager()
+        # Cupo de ingestas (F3 §C). Opcional: si no se inyecta, NO se aplica cupo y
+        # el setup se cobra con la fórmula como antes (comportamiento previo intacto).
+        self.quota = quota_manager
 
     def cotizar(
         self,
@@ -165,8 +178,21 @@ class Cotizador:
         desglose, detalle = estimar_costo(tokens)
         costo = desglose.total_usd
         tiempo = estimar_tiempo_seg(tokens)
-        # Precio de setup comercial (Modelo Comercial §2.3): MAX($25, costo×25)×factor.
+        # Precio de setup comercial (Modelo Comercial §2.3 v1.1): MAX($15, costo×25)×factor.
         precio_setup = pt.precio_setup(costo)
+
+        # Cupo de ingestas (F3 §C). Si la org tiene cupo disponible, esta ingesta va
+        # INCLUIDA: setup $0 ("incluido en tu plan"). Agotado el cupo, rige la fórmula.
+        # Sin cupo (freemium / org sin fila): None → comportamiento previo (fórmula).
+        dentro_de_cupo = False
+        cupo_restante: int | None = None
+        if self.quota is not None:
+            estado = self.quota.estado(tenant_id)
+            if estado.aplica:
+                cupo_restante = estado.cupo_restante
+                if estado.dentro_de_cupo:
+                    dentro_de_cupo = True
+                    precio_setup = 0.0
 
         verdict = self.budget.verificar(
             tenant_id, costo, costo_sesion_acumulado_usd
@@ -174,11 +200,18 @@ class Cotizador:
 
         if verdict.aprobado:
             decision = DecisionCotizacion.aprobado_requiere_confirmacion
-            motivo = (
-                f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s); "
-                f"setup ${precio_setup:.2f} USD. "
-                "Presupuesto suficiente. Requiere confirmación explícita para ingerir."
-            )
+            if dentro_de_cupo:
+                motivo = (
+                    f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s). "
+                    f"Setup incluido en tu plan ({cupo_restante} ingesta(s) restantes). "
+                    "Requiere confirmación explícita para ingerir."
+                )
+            else:
+                motivo = (
+                    f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s); "
+                    f"setup ${precio_setup:.2f} USD. "
+                    "Presupuesto suficiente. Requiere confirmación explícita para ingerir."
+                )
         elif "hard cap" in verdict.motivo.lower():
             decision = DecisionCotizacion.rechazado_hard_cap
             motivo = verdict.motivo
@@ -200,4 +233,6 @@ class Cotizador:
             precio_setup_usd=precio_setup,
             factor_complejidad=pt.FACTOR_COMPLEJIDAD,
             detalle_tokens=detalle,
+            dentro_de_cupo=dentro_de_cupo,
+            cupo_restante=cupo_restante,
         )
