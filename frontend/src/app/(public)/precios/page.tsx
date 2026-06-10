@@ -1,240 +1,157 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
-import {
-  REGIONS,
-  REGION_KEYS,
-  PLAN_NAMES,
-  PLAN_BLURB,
-  PLAN_FEAT,
-  COMPARISON,
-  PLAN_SLUGS,
-  priceFor,
-  fmtMoney,
-  type PlanIndex,
-} from "@/lib/pricing";
-import { useRegion } from "@/lib/region-store";
+import { BANDS, fmtUSD } from "@/lib/bands";
+import { useBand, useT } from "@/lib/site-i18n";
+import { Doors, GeoCtl } from "@/components/commercial/site-chrome";
 
-/* DOCYAN commercial pricing — recreated 1:1 from the design bundle `pricing.jsx`,
-   wired to the shared region store + Sprint B9 pricing source of truth. The region
-   bar and billing toggle live-swap every figure/currency with no page reload. */
+/* DOCYAN sitio público v2 — PRECIOS v2.1 (fuente ÚNICA de precios del sitio, §A).
+   3 tiers por documentos vivos × 3 bandas con selector en vivo + ingestas incluidas
+   + dos puertas. Sin "pares lingüísticos" (restricción #1). Port fiel de precios.jsx. */
 
-const PLAN_INDICES: PlanIndex[] = [0, 1, 2];
-
-const FAQ: [string, string][] = [
-  [
-    "¿Qué pasa cuando alcanzo el límite de mi plan?",
-    "El gate es estricto, sin bypass. En Esencial y Profesional, al tocar el límite de documentos vivos o pares lingüísticos te invitamos a subir de plan para seguir ingiriendo. En Enterprise el límite es flexible y se ajusta a tu volumen contratado.",
-  ],
-  [
-    "¿Cómo cambio de plan?",
-    "Subes o bajas de plan cuando quieras. El cobro se prorratea automáticamente vía Stripe: pagas solo la diferencia por los días restantes del ciclo, sin penalizaciones.",
-  ],
-  [
-    "¿Qué incluye el setup inicial?",
-    "Configuración de tu organización, alta de tu primer CoDo, calibración de Playbooks A·B·C y carga guiada de tu documentación base. En Enterprise el setup es a medida (onboarding in-situ y capacitación).",
-  ],
-  [
-    "¿Cómo funciona la ingesta continua?",
-    "Cada documento se cotiza antes de ingerir: tiktoken mide el documento, verificamos tu saldo y confirmas. El costo es el del stack de procesamiento más una tarifa fija de $0.02 USD por documento. Sin saldo o confirmación no hay ingesta.",
-  ],
-  [
-    "Mi mercado no aparece en la lista, ¿qué hago?",
-    "Contáctanos. Habilitamos precios y moneda para mercados no listados caso por caso; escríbenos a ventas y te cotizamos en tu jurisdicción.",
-  ],
-];
+interface Bi { es: string; en: string }
+interface Tier {
+  key: string; name: string; docs: Bi; price: number; from: boolean;
+  ing: Bi; feats: Bi[]; cta: Bi; rec: boolean;
+}
 
 export default function PreciosPage() {
-  const region = useRegion((s) => s.region);
-  const setRegion = useRegion((s) => s.setRegion);
-  const [annual, setAnnual] = useState(true);
-  const r = REGIONS[region];
+  const t = useT();
+  const { band } = useBand();
+  const b = BANDS[band];
+
+  const TIERS: Tier[] = [
+    {
+      key: "esencial", name: "Esencial", docs: { es: "hasta 50 documentos vivos", en: "up to 50 live documents" },
+      price: b.tiers.esencial, from: false,
+      ing: { es: "Incluye 10 documentos de arranque + 3 al mes", en: "Includes 10 starter documents + 3 per month" },
+      feats: [
+        { es: "Todas las capacidades del producto", en: "Every product capability" },
+        { es: "Usuarios ilimitados", en: "Unlimited users" },
+        { es: "Consulta multilingüe con cita al original", en: "Multilingual consultation, cited to the original" },
+      ],
+      cta: { es: "Empezar con Esencial", en: "Start with Esencial" }, rec: false,
+    },
+    {
+      key: "profesional", name: "Profesional", docs: { es: "hasta 300 documentos vivos", en: "up to 300 live documents" },
+      price: b.tiers.profesional, from: false,
+      ing: { es: "Incluye 30 documentos de arranque + 10 al mes", en: "Includes 30 starter documents + 10 per month" },
+      feats: [
+        { es: "Todo lo de Esencial", en: "Everything in Esencial" },
+        { es: "Inteligencia organizacional (frecuencia y cobertura)", en: "Organizational intelligence (frequency & coverage)" },
+        { es: "Soporte prioritario", en: "Priority support" },
+      ],
+      cta: { es: "Empezar con Profesional", en: "Start with Profesional" }, rec: true,
+    },
+    {
+      key: "enterprise", name: "Enterprise", docs: { es: "300+ · a la medida", en: "300+ · tailored" },
+      price: b.tiers.enterprise, from: true,
+      ing: { es: "Documentos de arranque y cupo mensual negociados", en: "Starter documents and monthly quota negotiated" },
+      feats: [
+        { es: "Todo lo de Profesional", en: "Everything in Profesional" },
+        { es: "On-premise / jurisdicción dedicada", en: "On-premise / dedicated jurisdiction" },
+        { es: "Acompañamiento de implementación", en: "Implementation support" },
+      ],
+      cta: { es: "Hablar con nosotros", en: "Talk to us" }, rec: false,
+    },
+  ];
 
   return (
-    <div>
-      <div className="pricing-head">
+    <div data-screen-label="Precios">
+      <header className="pr-head">
         <div className="wrap">
-          <span className="eyebrow">Precios</span>
-          <h1>Planes claros. Cifras públicas.</h1>
-          <div className="region-bar">
-            {REGION_KEYS.map((k) => (
-              <button
-                key={k}
-                className={"rb" + (k === region ? " on" : "")}
-                onClick={() => setRegion(k)}
-              >
-                {k}
-              </button>
+          <span className="eyebrow">{t({ es: "Precios", en: "Pricing" })}</span>
+          <h1>{t({ es: "Dos decisiones simples. Nada más.", en: "Two simple decisions. Nothing else." })}</h1>
+          <p className="sec-lead">{t({
+            es: "Qué producto y de qué tamaño. Por documentos vivos, no por usuarios — todas las capacidades en todos los planes, sin add-ons.",
+            en: "Which product, and what size. Priced by live documents, not by users — every capability in every plan, no add-ons.",
+          })}</p>
+        </div>
+      </header>
+
+      <section className="band" style={{ paddingTop: 12 }}>
+        <div className="wrap">
+          <div className="prodline">
+            <div className="pl-card on">
+              <h3>DOCYAN <span className="now-tag">{t({ es: "Disponible hoy", en: "Available today" })}</span></h3>
+              <p>{t({ es: "El entorno de documentos analizados en vivo. Lo que estás viendo en este sitio.", en: "The live document environment. What this site shows." })}</p>
+            </div>
+            <div className="pl-card soon">
+              <h3>DOCYAN Data <span className="soon-tag">{t({ es: "Próximamente", en: "Coming soon" })}</span></h3>
+              <p>{t({ es: "Inteligencia organizacional ampliada sobre tu corpus.", en: "Expanded organizational intelligence over your corpus." })}</p>
+            </div>
+            <div className="pl-card soon">
+              <h3>DOCYAN Field <span className="soon-tag">{t({ es: "Próximamente", en: "Coming soon" })}</span></h3>
+              <p>{t({ es: "Operación de campo con conectividad intermitente como caso primario.", en: "Field operation with intermittent connectivity as the primary case." })}</p>
+            </div>
+          </div>
+
+          <div className="band-bar">
+            <GeoCtl showLang={false} />
+            <span className="band-note">{t({ es: "Precios en USD por organización, al mes. Banda según tu región — ajústala si hace falta.", en: "USD pricing per organization, monthly. Band set by your region — adjust if needed." })}</span>
+          </div>
+
+          <div className="tiers">
+            {TIERS.map((tier) => (
+              <div className={"tier" + (tier.rec ? " rec" : "")} key={tier.key}>
+                {tier.rec && <span className="rec-tag">{t({ es: "Más elegido", en: "Most chosen" })}</span>}
+                <span className="tn">{tier.name}</span>
+                <span className="tdocs">{t(tier.docs)}</span>
+                <div className="tp">
+                  {tier.from && <span className="per">{t({ es: "desde", en: "from" })}</span>}
+                  <span className="amt">{fmtUSD(tier.price)}</span>
+                  <span className="per">USD / {t({ es: "mes", en: "mo" })}</span>
+                </div>
+                <span className="tband">{t({ es: "Banda", en: "Band" })} {b.key} · {t(b.regions)}</span>
+                <ul className="tfeat">
+                  <li className="ing"><Icon name="file-plus-2" size={16} />{t(tier.ing)}</li>
+                  {tier.feats.map((f, i) => <li key={i}><Icon name="check" size={16} />{t(f)}</li>)}
+                </ul>
+                <Link className={"btn lg " + (tier.rec ? "primary" : "sec")} href={tier.key === "enterprise" ? "/codigo" : "/signup"}>{t(tier.cta)}</Link>
+              </div>
             ))}
           </div>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <div className="billing-toggle">
-              <span style={{ color: annual ? "var(--fg-subtle)" : "var(--fg)" }}>Mensual</span>
-              <div
-                className={"sw" + (annual ? "" : " month")}
-                onClick={() => setAnnual(!annual)}
-              >
-                <i />
-              </div>
-              <span style={{ color: annual ? "var(--fg)" : "var(--fg-subtle)" }}>Anual</span>
-              <span className="save-pill">−15%</span>
+          <p className="all-feats">{t({
+            es: "Los tres planes consultan igual de bien. La diferencia es cuántos documentos viven en tu entorno.",
+            en: "All three plans consult equally well. The difference is how many documents live in your environment.",
+          })}</p>
+
+          <div className="ingest">
+            <span className="eyebrow">{t({ es: "Ingestas incluidas", en: "Included ingestions" })}</span>
+            <h2>{t({ es: "Cada plan incluye documentos listos para consultar", en: "Every plan includes documents ready to consult" })}</h2>
+            <p>{t({
+              es: "Subir un documento a DOCYAN no es «subir un archivo»: es analizarlo en vivo hasta dejarlo consultable con cita. Cada plan incluye un arranque generoso y un cupo mensual para crecer a tu ritmo.",
+              en: "Adding a document to DOCYAN isn't “uploading a file”: it's analyzing it live until it's consultable with citations. Every plan includes a generous start and a monthly quota to grow at your pace.",
+            })}</p>
+            <div className="ingest-rows">
+              <div className="ingest-row"><span className="ir-t">Esencial</span><span className="ir-v">{t({ es: "10 iniciales + 3/mes", en: "10 starters + 3/mo" })}</span></div>
+              <div className="ingest-row"><span className="ir-t">Profesional</span><span className="ir-v">{t({ es: "30 iniciales + 10/mes", en: "30 starters + 10/mo" })}</span></div>
+              <div className="ingest-row"><span className="ir-t">Enterprise</span><span className="ir-v">{t({ es: "Negociado a tu corpus", en: "Negotiated to your corpus" })}</span></div>
+            </div>
+            <div className="ingest-note">
+              <Icon name="badge-check" size={15} />
+              <span>{t({
+                es: "¿Necesitas más? Documentos adicionales desde $15 USD, cotizados de forma transparente antes de confirmar. Tú decides el ritmo.",
+                en: "Need more? Additional documents from $15 USD, quoted transparently before you confirm. You set the pace.",
+              })}</span>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="wrap">
-        <div className="plans">
-          {PLAN_NAMES.map((name, i) => (
-            <div className={"plan" + (i === 1 ? " rec" : "")} key={name}>
-              {i === 1 && <span className="rec-tag">Recomendado</span>}
-              <div className="pn">{name}</div>
-              <div className="pp">
-                <span className="amt">{fmtMoney(priceFor(region, i as PlanIndex, annual), region)}</span>
-                <span className="per">/mes</span>
-              </div>
-              <div className="setup">Setup inicial: {r.setup[i]}</div>
-              <p style={{ fontSize: 13.5, color: "var(--fg-muted)", margin: "12px 0 0" }}>
-                {PLAN_BLURB[i]}
-              </p>
-              <ul className="pfeat">
-                {PLAN_FEAT[i].map((f) => (
-                  <li key={f}>
-                    <Icon name="check" size={16} />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              {i === 2 ? (
-                <Link
-                  className="btn sec"
-                  style={{ width: "100%", justifyContent: "center" }}
-                  href="/soporte"
-                >
-                  Hablar con ventas
-                </Link>
-              ) : (
-                <Link
-                  className={"btn " + (i === 1 ? "primary" : "sec")}
-                  style={{ width: "100%", justifyContent: "center" }}
-                  href={`/signup?plan=${PLAN_SLUGS[i]}`}
-                >
-                  Empezar
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: 16,
-            margin: "8px 0 40px",
-            fontSize: 13,
-            color: "var(--fg-muted)",
-          }}
-        >
-          <span>
-            <Icon name="shield-check" size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-            30 días de garantía
-          </span>
-          <span>
-            <Icon name="calendar" size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-            Demo en vivo (sin trial gratuito)
-          </span>
-          <span>
-            <Icon name="receipt" size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-            Impuestos según jurisdicción
-          </span>
-        </div>
-
-        <h2 style={{ fontSize: 22, fontWeight: 600, marginBottom: 4 }}>Comparativa</h2>
-        <table className="cmp">
-          <thead>
-            <tr>
-              <th></th>
-              <th className="c">Esencial</th>
-              <th className="c">Profesional</th>
-              <th className="c">Enterprise</th>
-            </tr>
-          </thead>
-          <tbody>
-            {COMPARISON.map((row) => (
-              <tr key={row[0]}>
-                <td>{row[0]}</td>
-                {PLAN_INDICES.map((c) => {
-                  const val = row[c + 1];
-                  return (
-                    <td className={"c" + (c === 1 ? " reccol" : "")} key={c}>
-                      {val === true ? (
-                        <Icon name="check" size={16} style={{ color: "var(--success-600)" }} />
-                      ) : val === false ? (
-                        <Icon name="minus" size={16} style={{ color: "var(--stone-400)" }} />
-                      ) : (
-                        val
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div style={{ height: 56 }} />
-      </div>
-
-      <div className="band paper">
+      <section className="band paper">
         <div className="wrap">
-          <span className="eyebrow">Add-ons</span>
-          <h2 className="sec-title">Crece sin cambiar de plan.</h2>
-          <ul className="pfeat" style={{ maxWidth: 720 }}>
-            <li>
-              <Icon name="check" size={16} />
-              Ingesta continua — cotizada por documento (costo del stack + $0.02 USD fijo por documento).
-            </li>
-            <li>
-              <Icon name="check" size={16} />
-              Documentos vivos extra sobre el cupo de tu plan.
-            </li>
-            <li>
-              <Icon name="check" size={16} />
-              Pares lingüísticos extra sobre los incluidos.
-            </li>
-            <li>
-              <Icon name="check" size={16} />
-              Saldo prepagado desde $50 USD (equivalente regional), sin auto-recarga.
-            </li>
-          </ul>
+          <div className="cta-band">
+            <span className="eyebrow">{t({ es: "¿No estás listo para elegir?", en: "Not ready to choose?" })}</span>
+            <h2 className="sec-title">{t({ es: "No elijas todavía. Vive el producto.", en: "Don't choose yet. Live the product." })}</h2>
+          </div>
+          <Doors />
+          <div style={{ marginTop: 26, textAlign: "center" }}>
+            <Link className="vlink" href="/seguridad"><Icon name="shield" size={14} />{t({ es: "¿Compras necesita el detalle de seguridad?", en: "Does procurement need the security detail?" })}</Link>
+          </div>
         </div>
-      </div>
-
-      <div className="band">
-        <div className="wrap">
-          <span className="eyebrow">Preguntas frecuentes</span>
-          <h2 className="sec-title">Lo que necesitas saber antes de empezar.</h2>
-          <dl style={{ maxWidth: 760 }}>
-            {FAQ.map(([q, a]) => (
-              <div key={q} style={{ marginBottom: 24 }}>
-                <dt style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>{q}</dt>
-                <dd
-                  style={{
-                    margin: 0,
-                    fontSize: 14.5,
-                    color: "var(--fg-muted)",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {a}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </div>
+      </section>
     </div>
   );
 }
