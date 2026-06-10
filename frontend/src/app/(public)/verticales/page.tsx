@@ -49,7 +49,7 @@ function Umbrella() {
       p: { es: "Manuales, normas, métodos: el documento manda.", en: "Manuals, standards, methods: the document rules." },
     },
     {
-      ic: "alert-triangle",
+      ic: "triangle-alert",
       h: { es: "El error cuesta", en: "Errors cost" },
       p: {
         es: "Paro de línea, hallazgo, incidente. Equivocarse no es gratis.",

@@ -607,3 +607,29 @@
 .s2 .cb-item svg{color:var(--cinnabar-300);flex:none;}
 .s2 .cb-item .cb-entity{margin-left:auto;font-family:var(--font-mono);font-size:10.5px;font-weight:400;color:var(--amate-300);text-align:right;line-height:1.3;}
 @media(max-width:560px){.s2 .cb-item .cb-entity{display:none;}}
+
+/* F3 fix B2 — la tarjeta Piloto (.door.side) desbordaba: su botón con
+   white-space:nowrap forzaba un ancho mayor al de la tarjeta. Los botones de las
+   puertas ocupan el ancho completo y su texto envuelve (web y móvil). */
+.s2 .door .btn{width:100%;white-space:normal;height:auto;min-height:48px;padding-top:10px;padding-bottom:10px;line-height:1.25;text-align:center;}
+.s2 .door{min-width:0;}
+.s2 .door .btn svg{flex:0 0 auto;}
+
+/* F3 N1/N2 — FAQ + documentos legales con índice lateral. */
+.s2 .faq-list{display:flex;flex-direction:column;gap:10px;margin-top:8px;}
+.s2 .faq-item{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);overflow:hidden;}
+.s2 .faq-item.open{border-color:var(--border-strong);}
+.s2 .faq-q{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;background:none;border:none;cursor:pointer;font-size:15px;font-weight:600;color:var(--fg);text-align:left;}
+.s2 .faq-a{padding:0 18px 18px;color:var(--fg-muted);font-size:14.5px;line-height:1.6;}
+.s2 .legaldoc-head{margin-bottom:28px;}
+.s2 .legaldoc-head h1{font-size:clamp(28px,4vw,38px);font-weight:700;letter-spacing:-.02em;margin:14px 0 0;}
+.s2 .legaldoc-upd{font-size:12px;color:var(--fg-subtle);margin-top:8px;}
+.s2 .legaldoc-grid{display:grid;grid-template-columns:1fr;gap:32px;}
+@media(min-width:880px){.s2 .legaldoc-grid{grid-template-columns:220px 1fr;gap:48px;align-items:start;}}
+.s2 .legaldoc-index{position:sticky;top:84px;}
+.s2 .legaldoc-index ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;counter-reset:li;}
+.s2 .legaldoc-index a{font-size:13px;color:var(--fg-muted);text-decoration:none;}
+.s2 .legaldoc-index a:hover{color:var(--accent-fg);}
+.s2 .legaldoc-body section{margin-bottom:32px;}
+.s2 .legaldoc-body h2{font-size:18px;font-weight:700;margin:0 0 10px;}
+.s2 .legaldoc-body p{color:var(--fg-muted);font-size:14.5px;line-height:1.65;margin:0 0 12px;}

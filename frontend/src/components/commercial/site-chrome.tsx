@@ -17,7 +17,10 @@ import { useSite, useT } from "@/lib/site-i18n";
 const NAV_LINKS: [string, string, { es: string; en: string }][] = [
   ["producto", "/producto", { es: "Producto", en: "Product" }],
   ["como", "/como-funciona", { es: "Cómo funciona", en: "How it works" }],
-  ["verticales", "/verticales", { es: "Verticales", en: "Industries" }],
+  // C1: "Verticales" → "Sectores" en toda la superficie pública (slug /verticales se
+  // conserva; /sectores redirige). C3: "Demo" entra a la nav entre Sectores y Precios.
+  ["verticales", "/verticales", { es: "Sectores", en: "Industries" }],
+  ["demo", "/demo", { es: "Demo", en: "Demo" }],
   ["seguridad", "/seguridad", { es: "Seguridad", en: "Security" }],
   ["precios", "/precios", { es: "Precios", en: "Pricing" }],
 ];
@@ -185,7 +188,12 @@ export function SiteFooter2() {
             <Link href="/demo">{t({ es: "Demos sin registro", en: "No-signup demos" })}</Link>
             <Link href="/codigo">{t({ es: "Canjear código piloto", en: "Redeem pilot code" })}</Link>
             <Link href="/login">{t({ es: "Entrar", en: "Sign in" })}</Link>
-            <Link href="/legal">{t({ es: "Privacidad y términos", en: "Privacy & terms" })}</Link>
+          </div>
+          <div>
+            <h4>{t({ es: "Recursos", en: "Resources" })}</h4>
+            <Link href="/faq">{t({ es: "Preguntas frecuentes", en: "FAQ" })}</Link>
+            <Link href="/privacidad">{t({ es: "Aviso de privacidad", en: "Privacy notice" })}</Link>
+            <Link href="/terminos">{t({ es: "Términos del servicio", en: "Terms of service" })}</Link>
           </div>
         </div>
         <div className="fbottom">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
+import { useT } from "@/lib/site-i18n";
 import { VERTICALS, demoDocHref, type DemoVertical, type DemoQA } from "@/lib/demo-data";
 import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
 
@@ -19,14 +20,15 @@ function openDoc(a: AnswerMsg) {
 }
 
 function FaCite({ a, codo, onCite }: { a: AnswerMsg; codo: string; onCite: (a: AnswerMsg) => void }) {
+  const t = useT();
   return (
     <div className="da-cite-row">
-      <span className="tipwrap" data-tip={`Ver fuente · pág. ${a.page ?? "—"}  ↗`}>
+      <span className="tipwrap" data-tip={`${t({ es: "Ver fuente · pág.", en: "View source · p." })} ${a.page ?? "—"}  ↗`}>
         <button className="cite chip-fn" onClick={() => onCite({ ...a, codo })}>
           <span className="brk" />{a.cite} <span className="ext">↗</span>
         </button>
       </span>
-      <button className="openpdf" onClick={() => openDoc(a)}><Icon name="external-link" size={13} />Abrir PDF</button>
+      <button className="openpdf" onClick={() => openDoc(a)}><Icon name="external-link" size={13} />{t({ es: "Abrir PDF", en: "Open PDF" })}</button>
     </div>
   );
 }
@@ -50,14 +52,15 @@ function FaSteps({ a }: { a: DemoQA }) {
   );
 }
 function FaDiagram({ a }: { a: DemoQA }) {
+  const t = useT();
   const [act, setAct] = useState<number | null>(null);
   return (
     <>
       <div className="fa-q">{a.title}</div>
       <div className="fa-diag">
-        <span className="ph-tag">DIAGRAMA · DROP IMAGE</span>
+        <span className="ph-tag">{t({ es: "DIAGRAMA · DROP IMAGE", en: "DIAGRAM · DROP IMAGE" })}</span>
         {a.pins?.map(([n, x, y]) => (
-          <button key={n} className={"fa-pin" + (act === n ? " on" : "")} style={{ left: x + "%", top: y + "%" }} onClick={() => setAct(act === n ? null : n)} aria-label={`Pin ${n}`}>{n}</button>
+          <button key={n} className={"fa-pin" + (act === n ? " on" : "")} style={{ left: x + "%", top: y + "%" }} onClick={() => setAct(act === n ? null : n)} aria-label={`${t({ es: "Marca", en: "Pin" })} ${n}`}>{n}</button>
         ))}
       </div>
       <ol className="fa-legend">
@@ -69,15 +72,17 @@ function FaDiagram({ a }: { a: DemoQA }) {
   );
 }
 function FaVideo({ a }: { a: DemoQA }) {
+  const t = useT();
   return (
     <>
       <div className="fa-q">{a.title}</div>
-      <div className="fa-vid"><span className="ph-tag">VIDEO · {a.dur} · DROP CLIP</span><button className="fa-play" aria-label="Reproducir"><Icon name="play" size={18} /></button></div>
+      <div className="fa-vid"><span className="ph-tag">VIDEO · {a.dur} · DROP CLIP</span><button className="fa-play" aria-label={t({ es: "Reproducir", en: "Play" })}><Icon name="play" size={18} /></button></div>
       <ul className="fa-chapters">{a.chapters?.map(([t, l], i) => <li key={i}><span className="fa-tc">{t}</span>{l}</li>)}</ul>
     </>
   );
 }
 function FaTrouble({ a }: { a: DemoQA }) {
+  const t = useT();
   const [node, setNode] = useState(-1);
   return (
     <>
@@ -89,8 +94,8 @@ function FaTrouble({ a }: { a: DemoQA }) {
         </>
       ) : (
         <>
-          <p className="fa-outcome"><strong>Diagnóstico:</strong> {a.options?.[node][1]}</p>
-          <button className="fa-retry" onClick={() => setNode(-1)}><Icon name="rotate-ccw" size={13} />Otra rama</button>
+          <p className="fa-outcome"><strong>{t({ es: "Diagnóstico:", en: "Diagnosis:" })}</strong> {a.options?.[node][1]}</p>
+          <button className="fa-retry" onClick={() => setNode(-1)}><Icon name="rotate-ccw" size={13} />{t({ es: "Otra rama", en: "Another branch" })}</button>
         </>
       )}
     </>
@@ -106,10 +111,11 @@ function FaHistory({ a }: { a: DemoQA }) {
   );
 }
 function FaAlerts({ a }: { a: DemoQA }) {
+  const t = useT();
   return (
     <>
       <div className="fa-q">{a.title}</div>
-      <div className="fa-admin"><Icon name="info" size={14} />Recordatorio administrativo — no es una instrucción operativa.</div>
+      <div className="fa-admin"><Icon name="info" size={14} />{t({ es: "Recordatorio administrativo — no es una instrucción operativa.", en: "Administrative reminder — not an operational instruction." })}</div>
       {a.items?.map(([sev, t, m], i) => (
         <div className={"fa-alert s-" + sev} key={i}><div><span className="fa-at">{t}</span><span className="fa-am">{m}</span></div></div>
       ))}
@@ -117,12 +123,13 @@ function FaAlerts({ a }: { a: DemoQA }) {
   );
 }
 function FaCompare({ a }: { a: DemoQA }) {
+  const t = useT();
   return (
     <>
       <div className="fa-q">{a.title}</div>
       <div className="fa-vers"><span className="fa-ver old">{a.from}</span><Icon name="arrow-right" size={14} /><span className="fa-ver new">{a.to}</span></div>
-      <ul className="fa-diff">{a.diff?.map(([k, t], i) => <li className={"d-" + k} key={i}><span className="dm">{k === "add" ? "+" : k === "del" ? "−" : "~"}</span>{t}</li>)}</ul>
-      <div className="fa-sum"><span className="fa-sl">Resumen</span>{a.summary}</div>
+      <ul className="fa-diff">{a.diff?.map(([k, label], i) => <li className={"d-" + k} key={i}><span className="dm">{k === "add" ? "+" : k === "del" ? "−" : "~"}</span>{label}</li>)}</ul>
+      <div className="fa-sum"><span className="fa-sl">{t({ es: "Resumen", en: "Summary" })}</span>{a.summary}</div>
     </>
   );
 }
@@ -133,10 +140,11 @@ const FA: Record<string, (props: { a: DemoQA }) => React.JSX.Element> = {
 };
 
 function DemoAnswer({ a, codo, onCite }: { a: AnswerMsg; codo: string; onCite: (a: AnswerMsg) => void }) {
+  const t = useT();
   const R = FA[a.kind] ?? FaInfo;
   return (
     <div className="fa-card">
-      <div className="fa-mode"><span className="fa-pulse" />Respuesta con cita · tipo: {a.kind}</div>
+      <div className="fa-mode"><span className="fa-pulse" />{t({ es: "Respuesta con cita · tipo:", en: "Cited answer · type:" })} {a.kind}</div>
       <R a={a} />
       <FaCite a={a} codo={codo} onCite={onCite} />
     </div>
@@ -144,15 +152,16 @@ function DemoAnswer({ a, codo, onCite }: { a: AnswerMsg; codo: string; onCite: (
 }
 
 function SourceOverlay({ a, onClose }: { a: AnswerMsg; onClose: () => void }) {
+  const t = useT();
   return (
     <div className="src-overlay" onClick={onClose}>
       <div className="src-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="src-head">
           <div style={{ minWidth: 0 }}>
-            <div className="src-doc-t">{a.doc || "Documento fuente"}</div>
+            <div className="src-doc-t">{a.doc || t({ es: "Documento fuente", en: "Source document" })}</div>
             <div className="src-cite">{a.cite}</div>
           </div>
-          <button className="src-x" onClick={onClose} aria-label="Cerrar"><Icon name="x" size={18} /></button>
+          <button className="src-x" onClick={onClose} aria-label={t({ es: "Cerrar", en: "Close" })}><Icon name="x" size={18} /></button>
         </div>
         <div className="src-body">
           <p>Antes de aplicar cualquier valor, verifica que las superficies de contacto estén limpias y que el equipo se encuentre en estado seguro. Confirma la vigencia de los registros asociados del CoDo.</p>
@@ -161,8 +170,8 @@ function SourceOverlay({ a, onClose }: { a: AnswerMsg; onClose: () => void }) {
         </div>
         <div className="src-foot">
           <Icon name="shield-check" size={14} />
-          <span>Pedigree a span exacto · cadena SHA-256</span>
-          <a onClick={() => openDoc(a)}>Abrir PDF ↗</a>
+          <span>{t({ es: "Pedigree al fragmento exacto · cadena SHA-256", en: "Exact-passage pedigree · SHA-256 chain" })}</span>
+          <a onClick={() => openDoc(a)}>{t({ es: "Abrir PDF ↗", en: "Open PDF ↗" })}</a>
         </div>
       </div>
     </div>
@@ -171,6 +180,7 @@ function SourceOverlay({ a, onClose }: { a: AnswerMsg; onClose: () => void }) {
 
 export function DemoConsult({ vkey }: { vkey: string }) {
   const router = useRouter();
+  const t = useT();
   const vert: DemoVertical = VERTICALS.find((v) => v.key === vkey) ?? VERTICALS[0];
   const [msgs, setMsgs] = useState<
     (
@@ -230,35 +240,52 @@ export function DemoConsult({ vkey }: { vkey: string }) {
     e.preventDefault();
     if (text.trim()) { ask(text.trim()); setText(""); }
   };
+  // B7: "Volver" regresa al hub /demo (o a la página de origen si se llegó desde
+  // /verticales o /demo del mismo origen). Nunca al index salvo fallback robusto.
+  const goBack = () => {
+    if (typeof document !== "undefined" && document.referrer) {
+      try {
+        const ref = new URL(document.referrer);
+        if (ref.origin === window.location.origin &&
+            (ref.pathname.startsWith("/verticales") || ref.pathname.startsWith("/demo"))) {
+          router.back();
+          return;
+        }
+      } catch {
+        /* referrer no parseable: cae al fallback */
+      }
+    }
+    router.push("/demo");
+  };
 
   return (
     <div className="demo-page">
       <div className="demo-banner">
         <Icon name="info" size={15} />
-        <span>Estás en un <b>CoDo demo</b> de DOCYAN. Para crear el tuyo, agenda una demo o regístrate.</span>
+        <span>{t({ es: "Estás en un ", en: "You're in a " })}<b>{t({ es: "CoDo demo", en: "demo CoDo" })}</b>{t({ es: " de DOCYAN. Para crear el tuyo, agenda una demo o regístrate.", en: " by DOCYAN. To create your own, schedule a demo or sign up." })}</span>
         <div className="db-ctas">
           {/* Embudo F3: "Agendar demo" → /codigo (piloto); CTA primario → /signup. */}
-          <button className="btn sec" onClick={() => router.push("/codigo")}>Agendar demo</button>
-          <button className="btn primary" onClick={() => router.push("/signup")}>Pruébalo gratis</button>
+          <button className="btn sec" onClick={() => router.push("/codigo")}>{t({ es: "Agendar demo", en: "Schedule demo" })}</button>
+          <button className="btn primary" onClick={() => router.push("/signup")}>{t({ es: "Pruébalo gratis", en: "Try it free" })}</button>
         </div>
       </div>
       <div className="dc-wrap">
         <div className="dc-head">
-          <button className="dc-back" onClick={() => router.push("/")}><Icon name="arrow-left" size={16} />Volver</button>
+          <button className="dc-back" onClick={goBack}><Icon name="arrow-left" size={16} />{t({ es: "Volver", en: "Back" })}</button>
           <div className="dc-ctx">
             <span className="dc-ic"><Icon name={vert.icon} size={18} /></span>
             <div>
-              <div className="ml">Estás consultando</div>
+              <div className="ml">{t({ es: "Estás consultando", en: "You're consulting" })}</div>
               <div className="mn">{vert.codo} · {vert.entity}</div>
             </div>
           </div>
-          <span className="dc-tag">{vert.docs.length} documentos vivos</span>
+          <span className="dc-tag">{vert.docs.length} {t({ es: "documentos vivos", en: "live documents" })}</span>
         </div>
 
         <div className="dc-body" ref={convoRef}>
           {msgs.length === 0 && (
             <div className="dc-intro">
-              <p>Pregúntale a este CoDo demo. Cada respuesta se renderiza según su tipo — valor, procedimiento, diagrama, diagnóstico… — y llega con su cita. Tócala para ver el span en la fuente.</p>
+              <p>{t({ es: "Pregúntale a este CoDo demo. Cada respuesta se renderiza según su tipo — valor, procedimiento, diagrama, diagnóstico… — y llega con su cita. Tócala para ver el fragmento en la fuente.", en: "Ask this demo CoDo. Each answer renders by its type — value, procedure, diagram, diagnosis… — and arrives with its citation. Tap it to see the passage in the source." })}</p>
               <div className="dc-docs">{vert.docs.map((d) => <span className="dc-doc" key={d}><Icon name="file-text" size={13} />{d}</span>)}</div>
             </div>
           )}
@@ -267,21 +294,21 @@ export function DemoConsult({ vkey }: { vkey: string }) {
               <div className="fa-user" key={i}>{m.text}</div>
             ) : m.role === "note" ? (
               <div className="fa-card dc-fallback" key={i}>
-                <div className="fa-mode"><Icon name="info" size={14} />Sin respuesta en este documento demo</div>
+                <div className="fa-mode"><Icon name="info" size={14} />{t({ es: "Sin respuesta en este documento demo", en: "No answer in this demo document" })}</div>
                 <p className="fa-note">{m.text}</p>
               </div>
             ) : (
               <DemoAnswer key={i} a={m.a} codo={vert.codo} onCite={setSrc} />
             ),
           )}
-          {loading && <div className="demo-shimmer dc-load"><span className="sh-dot" />DOCYAN está buscando en el documento…</div>}
+          {loading && <div className="demo-shimmer dc-load"><span className="sh-dot" />{t({ es: "DOCYAN está buscando en el documento…", en: "DOCYAN is searching the document…" })}</div>}
         </div>
 
         <div className="dc-foot">
           <div className="dc-sugs">{vert.qa.map((x) => <button key={x.q} className="demo-sug" onClick={() => ask(x.q)} disabled={loading}>{x.q}</button>)}</div>
           <form className="demo-box dc-box" onSubmit={submit}>
-            <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Pregunta sobre ${vert.entity}…`} aria-label="Pregunta" />
-            <button type="submit" className="db-send" aria-label="Preguntar" disabled={loading}><Icon name="arrow-up" size={17} /></button>
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`${t({ es: "Pregunta sobre", en: "Ask about" })} ${vert.entity}…`} aria-label={t({ es: "Pregunta", en: "Question" })} />
+            <button type="submit" className="db-send" aria-label={t({ es: "Preguntar", en: "Ask" })} disabled={loading}><Icon name="arrow-up" size={17} /></button>
           </form>
         </div>
       </div>

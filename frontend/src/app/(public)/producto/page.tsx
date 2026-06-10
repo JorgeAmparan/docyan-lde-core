@@ -28,7 +28,7 @@ const GARANTIA: { ic: string; h: Bi; p: Bi }[] = [
     ic: "shield-check",
     h: { es: "Freno de alucinación", en: "Hallucination brake" },
     p: {
-      es: "Pedigree a span y umbrales por criticidad. Si la confianza no alcanza el umbral del dato, DOCYAN no responde con humo: te dice qué encontró y dónde seguir.",
+      es: "Pedigree al fragmento exacto y umbrales por criticidad. Si la confianza no alcanza el umbral del dato, DOCYAN no responde con humo: te dice qué encontró y dónde seguir.",
       en: "Span-level pedigree and criticality thresholds. If confidence doesn't clear the data's threshold, DOCYAN doesn't answer with smoke: it tells you what it found and where to keep looking.",
     },
   },
@@ -36,7 +36,7 @@ const GARANTIA: { ic: string; h: Bi; p: Bi }[] = [
     ic: "quote",
     h: { es: "La cita es el producto", en: "The citation is the product" },
     p: {
-      es: "Cada respuesta lleva su marca de cita al span exacto del original. No es una nota al pie decorativa: es el contrato de confianza de cada interacción.",
+      es: "Cada respuesta lleva su marca de cita al fragmento exacto del original. No es una nota al pie decorativa: es el contrato de confianza de cada interacción.",
       en: "Every answer carries its citation mark to the exact span of the original. Not a decorative footnote: the trust contract of every interaction.",
     },
   },
@@ -148,7 +148,7 @@ export default function ProductoPage() {
             ))}
           </div>
           <div className="unsafe">
-            <Icon name="alert-triangle" size={20} />
+            <Icon name="triangle-alert" size={20} />
             <div>
               <h3>{t({ es: "El acto inseguro que esto reemplaza", en: "The unsafe act this replaces" })}</h3>
               <p>{t({

@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import { DemoConsult } from "@/components/commercial/demo-consult";
+import { SiteLangProvider } from "@/lib/site-i18n";
 
 /**
  * Public demo-CoDo explorer (route `demo:<vertical>` in the bundle). Full-screen,
@@ -10,5 +11,9 @@ import { DemoConsult } from "@/components/commercial/demo-consult";
  */
 export default function DemoVerticalPage({ params }: { params: Promise<{ vertical: string }> }) {
   const { vertical } = use(params);
-  return <DemoConsult vkey={vertical} />;
+  return (
+    <SiteLangProvider>
+      <DemoConsult vkey={vertical} />
+    </SiteLangProvider>
+  );
 }

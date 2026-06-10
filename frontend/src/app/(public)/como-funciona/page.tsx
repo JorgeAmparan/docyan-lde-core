@@ -34,7 +34,7 @@ export default function ComoPage() {
               { ic: "file-up", h: { es: "Ingesta", en: "Ingestion" }, p: { es: "El documento entra y se registra con hash SHA-256 — su identidad criptográfica desde el minuto cero.", en: "The document enters and is registered with a SHA-256 hash — its cryptographic identity from minute zero." } },
               { ic: "scan-text", h: { es: "Análisis vivo", en: "Live analysis" }, p: { es: "Estructura, tablas, unidades y relaciones se vuelven un grafo del documento, no una bolsa de fragmentos.", en: "Structure, tables, units and relationships become a graph of the document, not a bag of fragments." } },
               { ic: "git-branch", h: { es: "Clasificación de intención", en: "Intent classification" }, p: { es: "Cada pregunta se clasifica: dato puntual, procedimiento, comparación. La ruta de respuesta depende de la intención.", en: "Each question is classified: point fact, procedure, comparison. The answer path depends on the intent." } },
-              { ic: "quote", h: { es: "Respuesta con pedigree", en: "Answer with pedigree" }, p: { es: "La respuesta se compone desde el grafo, con cita a span y umbral de confianza según la criticidad del dato.", en: "The answer is composed from the graph, with a span citation and a confidence threshold set by the data's criticality." } },
+              { ic: "quote", h: { es: "Respuesta con pedigree", en: "Answer with pedigree" }, p: { es: "La respuesta se compone desde el grafo, con cita al fragmento exacto y umbral de confianza según la criticidad del dato.", en: "The answer is composed from the graph, with a span citation and a confidence threshold set by the data's criticality." } },
             ].map((n, i, arr) => (
               <Fragment key={i}>
                 <div className="anode">
@@ -62,9 +62,9 @@ export default function ComoPage() {
             </div>
             {[
               { d: { es: "Unidad de análisis", en: "Unit of analysis" }, r: { es: "Fragmentos sueltos por similitud", en: "Loose chunks by similarity" }, doc: { es: "El documento completo como grafo: estructura, tablas, unidades", en: "The whole document as a graph: structure, tables, units" } },
-              { d: { es: "Trazabilidad", en: "Traceability" }, r: { es: "«Fuentes» aproximadas, a veces inventadas", en: "Approximate “sources,” sometimes invented" }, doc: { es: "Pedigree a span: cada dato apunta al fragmento exacto", en: "Span pedigree: every datum points to the exact fragment" } },
+              { d: { es: "Trazabilidad", en: "Traceability" }, r: { es: "«Fuentes» aproximadas, a veces inventadas", en: "Approximate “sources,” sometimes invented" }, doc: { es: "Pedigree al fragmento exacto: cada dato apunta al fragmento exacto", en: "Span pedigree: every datum points to the exact fragment" } },
               { d: { es: "Cuando no sabe", en: "When it doesn't know" }, r: { es: "Responde igual, con seguridad fingida", en: "Answers anyway, with feigned confidence" }, doc: { es: "Umbral por criticidad: por debajo, lo dice y orienta dónde buscar", en: "Criticality threshold: below it, it says so and points where to look" } },
-              { d: { es: "Idioma", en: "Language" }, r: { es: "Mezcla idiomas o pierde el original", en: "Mixes languages or loses the original" }, doc: { es: "Respuesta en el idioma del usuario; el span original, intacto, a un toque", en: "Answer in the user's language; the original span, intact, one tap away" } },
+              { d: { es: "Idioma", en: "Language" }, r: { es: "Mezcla idiomas o pierde el original", en: "Mixes languages or loses the original" }, doc: { es: "Respuesta en el idioma del usuario; el fragmento original, intacto, a un toque", en: "Answer in the user's language; the original span, intact, one tap away" } },
               { d: { es: "Integridad", en: "Integrity" }, r: { es: "Sin cadena verificable", en: "No verifiable chain" }, doc: { es: "SHA-256 de documento a respuesta, auditable", en: "SHA-256 from document to answer, auditable" } },
             ].map((r, i) => (
               <div className="vs-row" key={i}>
@@ -83,14 +83,14 @@ export default function ComoPage() {
           <span className="eyebrow">{t({ es: "La línea multilingüe", en: "The multilingual line" })}</span>
           <h2 className="sec-title">{t({ es: "La pregunta viaja; el original no se mueve", en: "The question travels; the original never moves" })}</h2>
           <p className="sec-lead">{t({
-            es: "El documento se analiza en su idioma original y así se queda. Cuando alguien pregunta en otro idioma, DOCYAN responde en el idioma de la pregunta — y la cita lleva siempre al span original, intacto. La fuente nunca se reescribe.",
+            es: "El documento se analiza en su idioma original y así se queda. Cuando alguien pregunta en otro idioma, DOCYAN responde en el idioma de la pregunta — y la cita lleva siempre al fragmento original, intacto. La fuente nunca se reescribe.",
             en: "The document is analyzed in its original language and stays that way. When someone asks in another language, DOCYAN answers in the language of the question — and the citation always leads to the original span, intact. The source is never rewritten.",
           })}</p>
           <div className="steps3">
             {[
               { n: "·", ic: "file-text", h: { es: "El original es sagrado", en: "The original is sacred" }, p: { es: "El MSDS que vino en inglés vive en inglés. Su hash lo fija; nadie consulta una copia reescrita.", en: "The MSDS that came in English lives in English. Its hash pins it; nobody consults a rewritten copy." } },
               { n: "·", ic: "message-circle", h: { es: "La consulta, en tu idioma", en: "The consultation, in your language" }, p: { es: "El operador pregunta en español y lee la respuesta en español, de un vistazo, sin fricción.", en: "The operator asks in Spanish and reads the answer in Spanish, at a glance, without friction." } },
-              { n: "·", ic: "quote", h: { es: "El span original, a un toque", en: "The original span, one tap away" }, p: { es: "La cita abre el fragmento exacto tal como vino. Verificable por cualquiera, en cualquier auditoría.", en: "The citation opens the exact fragment as it came. Verifiable by anyone, in any audit." } },
+              { n: "·", ic: "quote", h: { es: "El fragmento original, a un toque", en: "The original span, one tap away" }, p: { es: "La cita abre el fragmento exacto tal como vino. Verificable por cualquiera, en cualquier auditoría.", en: "The citation opens the exact fragment as it came. Verifiable by anyone, in any audit." } },
             ].map((s, i) => (
               <div className="step3" key={i}>
                 <span className="si"><Icon name={s.ic} size={22} /></span>

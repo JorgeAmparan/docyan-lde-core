@@ -160,7 +160,7 @@ export const VDETAIL: Record<string, VertDetail> = {
         ic: "quote",
         h: { es: "El auditor pregunta; tú citas", en: "The auditor asks; you cite" },
         p: {
-          es: "«¿Con qué método se corrió esta muestra?» — respuesta con cita al span del método vigente, en segundos.",
+          es: "«¿Con qué método se corrió esta muestra?» — respuesta con cita al fragmento del método vigente, en segundos.",
           en: "“Which method ran this sample?” — answer with a citation to the current method's span, in seconds.",
         },
       },

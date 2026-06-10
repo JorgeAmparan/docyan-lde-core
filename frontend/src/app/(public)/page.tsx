@@ -332,7 +332,7 @@ function LiveDemo() {
                     <span className="s-orig"><Icon name="globe" size={11} />{t({ es: "Documento original en " + (a.spanLang === "EN" ? "inglés" : "español") + " · tú preguntaste en español", en: "Original document in " + (a.spanLang === "EN" ? "English" : "Spanish") + " · you asked in English" })}</span>
                   )}
                   <div className="s-actions">
-                    <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Pedigree a span · SHA-256", en: "Span pedigree · SHA-256" })}</span>
+                    <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Pedigree al fragmento exacto · SHA-256", en: "Span pedigree · SHA-256" })}</span>
                   </div>
                 </div>
               </div>
@@ -513,7 +513,7 @@ function StepsSection() {
   const steps: { n: string; ic: string; h: Bilingual; p: Bilingual }[] = [
     { n: "01", ic: "upload", h: { es: "Sube tus documentos", en: "Upload your documents" }, p: { es: "Manuales, fichas, MSDS, procedimientos. DOCYAN los analiza y los vuelve documentos vivos.", en: "Manuals, datasheets, MSDS, procedures. DOCYAN analyzes them and makes them live documents." } },
     { n: "02", ic: "message-circle-question", h: { es: "Tu gente pregunta", en: "Your people ask" }, p: { es: "En su idioma, desde el punto de uso. La respuesta llega renderizada para leerse de un vistazo.", en: "In their language, at the point of use. The answer arrives rendered to be read at a glance." } },
-    { n: "03", ic: "quote", h: { es: "Cada respuesta trae su fuente", en: "Every answer carries its source" }, p: { es: "Cita clickeable al span exacto del documento original. Si DOCYAN no lo sabe, lo dice.", en: "A clickable citation to the exact span of the original document. If DOCYAN doesn't know, it says so." } },
+    { n: "03", ic: "quote", h: { es: "Cada respuesta trae su fuente", en: "Every answer carries its source" }, p: { es: "Cita clickeable al fragmento exacto del documento original. Si DOCYAN no lo sabe, lo dice.", en: "A clickable citation to the exact span of the original document. If DOCYAN doesn't know, it says so." } },
   ];
   return (
     <section className="band" data-screen-label="Home — Cómo funciona (resumen)">
@@ -562,7 +562,7 @@ function TrustSection() {
               <span className="ti"><Icon name="shield-check" size={19} /></span>
               <div>
                 <h3>{t({ es: "Freno de alucinación", en: "Hallucination brake" })}</h3>
-                <p>{t({ es: "Pedigree a span y umbrales por criticidad: si la confianza no alcanza, DOCYAN no inventa — te muestra dónde buscar.", en: "Span-level pedigree and criticality thresholds: if confidence falls short, DOCYAN doesn't invent — it shows you where to look." })}</p>
+                <p>{t({ es: "Pedigree al fragmento exacto y umbrales por criticidad: si la confianza no alcanza, DOCYAN no inventa — te muestra dónde buscar.", en: "Span-level pedigree and criticality thresholds: if confidence falls short, DOCYAN doesn't invent — it shows you where to look." })}</p>
               </div>
             </div>
             <div className="trust-pt">
@@ -574,7 +574,7 @@ function TrustSection() {
             </div>
           </div>
           <div className="unsafe" style={{ marginTop: 0 }}>
-            <Icon name="alert-triangle" size={20} />
+            <Icon name="triangle-alert" size={20} />
             <div>
               <h3>{t({ es: "Tu gente ya le pregunta a una IA. Sin fuente.", en: "Your people already ask an AI. Without a source." })}</h3>
               <p>{t({
