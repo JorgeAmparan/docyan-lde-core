@@ -642,9 +642,12 @@
 /* F3 N1 — FAQ: encabezado, búsqueda, índice de bloques, bloques, CTA. */
 .s2 .faq-head{margin-bottom:24px;}
 .s2 .faq-head h1{font-size:clamp(28px,4vw,38px);font-weight:700;letter-spacing:-.02em;margin:12px 0 12px;}
-.s2 .faq-search{display:flex;align-items:center;gap:10px;margin-top:18px;padding:0 14px;height:46px;border:1px solid var(--border-strong);border-radius:var(--radius-full);background:var(--surface);max-width:420px;}
+/* Fluye con el contenedor (mismo principio que B2): sin ancho fijo; el <input>
+   lleva min-width:0 para encoger en flex (sin él, su ancho intrínseco por `size`
+   impide que el campo participe del layout en pantallas angostas). */
+.s2 .faq-search{display:flex;align-items:center;gap:10px;margin-top:18px;padding:0 14px;height:46px;border:1px solid var(--border-strong);border-radius:var(--radius-full);background:var(--surface);width:100%;}
 .s2 .faq-search svg{color:var(--fg-subtle);flex:0 0 auto;}
-.s2 .faq-search input{flex:1;border:none;background:none;outline:none;font-size:14.5px;color:var(--fg);font-family:inherit;}
+.s2 .faq-search input{flex:1 1 auto;min-width:0;border:none;background:none;outline:none;font-size:14.5px;color:var(--fg);font-family:inherit;}
 .s2 .faq-index{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 8px;}
 .s2 .faq-index a{font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--fg-muted);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius-full);}
 .s2 .faq-index a:hover{color:var(--accent-fg);border-color:var(--cinnabar-200);background:var(--cinnabar-50);}
