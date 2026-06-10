@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import requiere_rol, verificar_credenciales
 from app.onboarding import providers, service
+from app.onboarding.limites import estado_cupo
 from app.onboarding.models import (
     ActivarPlanRequest,
     CuentaResumen,
@@ -19,7 +20,6 @@ from app.onboarding.models import (
     UsuarioOut,
     UsuariosList,
 )
-from app.onboarding.limites import estado_cupo
 from app.onboarding.service import OnboardingError
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
