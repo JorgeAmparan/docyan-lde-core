@@ -22,7 +22,7 @@ import { Icon } from "@/components/icon";
 import { Doors } from "@/components/commercial/site-chrome";
 import { useT, type Bilingual } from "@/lib/site-i18n";
 import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
-import { DemoAnswerCard, type DemoCardData } from "@/components/commercial/demo-answer-card";
+import { DemoAnswerCard } from "@/components/commercial/demo-answer-card";
 
 /* ============================================================ */
 /* Demo vivo del hero (port de demo.jsx, backend real codo="hero") */
