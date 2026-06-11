@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { useT, type Bilingual } from "@/lib/site-i18n";
 import { VERTICALS, DOC_TIPO_LABEL, type DemoVertical } from "@/lib/demo-data";
-import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
+import { demoQuery } from "@/lib/demo-query";
+import { DemoAnswerCard, type DemoCardData } from "@/components/commercial/demo-answer-card";
+
+type T = (o: Bilingual) => string;
 
 /* DOCYAN sitio público v2 — explorador de CoDo demo (F3, reconciliado). TODA consulta
    (sugerida o libre) va al backend real (POST /demo/query) y se renderiza con cita al
@@ -44,103 +47,43 @@ interface Answer {
   fallback: string | null;
 }
 
-function CitedCard({ a, onOpen }: { a: Answer; onOpen: (e: Espec) => void }) {
-  const t = useT();
+/* Normaliza la respuesta del CoDo al contrato de la tarjeta UNIFICADA
+   (`DemoAnswerCard`, el mismo render del hero). InfoCard: primera spec prominente
+   + extras; ProcedureCard: pasos numerados; vacío: fallback honesto que invita a
+   las sugeridas. */
+function toCardData(a: Answer, t: T): DemoCardData {
   const esProc = a.kind === "procedure_card";
   const sinRespuesta = !a.servido || (esProc ? a.pasos.length === 0 : a.especificaciones.length === 0);
   if (sinRespuesta) {
-    return (
-      <div className="fa-card dc-fallback">
-        <div className="fa-mode"><Icon name="info" size={14} />{t({ es: "Sin respuesta en este documento demo", en: "No answer in this demo document" })}</div>
-        <p className="fa-note">{a.fallback || DEMO_FALLBACK}</p>
-      </div>
-    );
+    return {
+      kind: "empty",
+      fallback: a.fallback
+        ? `${a.fallback} ${t({ es: "Prueba una de las preguntas sugeridas abajo.", en: "Try one of the suggested questions below." })}`
+        : t({ es: "Esa pregunta no está en este documento demo — prueba una de las preguntas sugeridas abajo.", en: "That question isn't in this demo document — try one of the suggested questions below." }),
+    };
   }
-  // Procedimiento del manual técnico: pasos numerados (texto real del documento).
   if (esProc) {
-    return (
-      <div className="fa-card">
-        <div className="fa-mode"><span className="fa-pulse" />{t({ es: "Procedimiento citado al manual", en: "Procedure cited to the manual" })}</div>
-        {a.titulo && <div className="fa-proc-t">{a.titulo}</div>}
-        <ol className="fa-pasos">
-          {a.pasos.slice(0, 8).map((p, i) => (
-            <li key={i}>
-              <span className="fa-paso-d">{p.descripcion}</span>
-              {(p.herramientas?.length || p.epp?.length) ? (
-                <span className="fa-paso-meta">
-                  {(p.herramientas ?? []).concat(p.epp ?? []).join(" · ")}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-        <div className="da-cite-row">
-          <span className="cite2 cite2-static"><span className="brk" />{a.doc} · {a.docNombre || "manual_tecnico"}</span>
-        </div>
-      </div>
-    );
+    return {
+      kind: "procedure",
+      titulo: a.titulo,
+      pasos: a.pasos.slice(0, 8).map((p) => ({
+        descripcion: p.descripcion,
+        meta: (p.herramientas ?? []).concat(p.epp ?? []).join(" · ") || undefined,
+      })),
+      citeLabel: `${a.doc} · ${a.docNombre || "manual_tecnico"}`,
+      verbatim: null, // los procedimientos muestran los pasos reales; sin span por paso
+    };
   }
-  // Una respuesta puede sostenerse en varias especificaciones del documento real.
-  const specs = a.especificaciones.slice(0, 4);
-  return (
-    <div className="fa-card">
-      <div className="fa-mode"><span className="fa-pulse" />{t({ es: "Respuesta con cita al documento", en: "Answer cited to the document" })}</div>
-      <div className="fa-specs">
-        {specs.map((e, i) => (
-          <div className="fa-spec" key={i}>
-            <div className="fa-spec-v">{e.nombre}</div>
-            {e.valor && <p className="fa-note">{e.valor}</p>}
-            <div className="da-cite-row">
-              <button className="cite2" onClick={() => onOpen(e)}>
-                <span className="brk" />{a.doc} · {e.cita?.documento_nombre || "msds"} <span className="ext">↗</span>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SourceOverlay({ e, doc, onClose }: { e: Espec; doc: string; onClose: () => void }) {
-  const t = useT();
-  // INTEGRIDAD DE CITA (regla absoluta): el overlay solo muestra el VERBATIM del
-  // documento (cita.fragmento = chunk[start:end]). Si no hay span, se declara
-  // honesto "fragmento no disponible" — jamás el nombre/valor generado por el LLM.
-  const verbatim = e.cita?.fragmento?.trim() || null;
-  return (
-    <div className="src-overlay" onClick={onClose}>
-      <div className="src-sheet" onClick={(ev) => ev.stopPropagation()}>
-        <div className="src-head">
-          <div style={{ minWidth: 0 }}>
-            <div className="src-doc-t">{doc}</div>
-            <div className="src-cite">{e.cita?.documento_nombre || "msds"}</div>
-          </div>
-          <button className="src-x" onClick={onClose} aria-label={t({ es: "Cerrar", en: "Close" })}><Icon name="x" size={18} /></button>
-        </div>
-        <div className="src-body">
-          {verbatim ? (
-            <>
-              <p>{t({ es: "Fragmento del documento original que sostiene la respuesta:", en: "Fragment of the original document that supports the answer:" })}</p>
-              <p><mark>{verbatim}</mark></p>
-              <p>{t({ es: "El documento se consulta en su idioma original; la respuesta llega en el idioma del sitio.", en: "The document is consulted in its original language; the answer arrives in the site's language." })}</p>
-            </>
-          ) : (
-            <>
-              <p className="src-unavailable">{t({ es: "Fragmento no disponible", en: "Fragment not available" })}</p>
-              <p>{t({ es: "Esta respuesta aún no tiene el span de caracteres del documento. Se muestra la ubicación de la fuente, no el texto generado.", en: "This answer doesn't yet have the document's character span. The source location is shown, not generated text." })}</p>
-            </>
-          )}
-        </div>
-        <div className="src-foot">
-          <Icon name="shield-check" size={14} />
-          <span>{verbatim
-            ? t({ es: "Pedigree al fragmento exacto · cadena SHA-256", en: "Exact-passage pedigree · SHA-256 chain" })
-            : t({ es: "Procedencia al documento · sin span exacto", en: "Document provenance · no exact span" })}</span>
-        </div>
-      </div>
-    </div>
-  );
+  const primary = a.especificaciones[0];
+  return {
+    kind: "info",
+    value: primary?.nombre,
+    unit: primary?.unidad,
+    note: primary?.valor,
+    extras: a.especificaciones.slice(1, 4).map((e) => ({ nombre: e.nombre, valor: e.valor })),
+    citeLabel: `${a.doc} · ${primary?.cita?.documento_nombre || "msds"}`,
+    verbatim: primary?.cita?.fragmento?.trim() || null,
+  };
 }
 
 export function DemoConsult({ vkey }: { vkey: string }) {
@@ -150,7 +93,6 @@ export function DemoConsult({ vkey }: { vkey: string }) {
   const [msgs, setMsgs] = useState<({ role: "user"; text: string } | { role: "answer"; a: Answer })[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [src, setSrc] = useState<Espec | null>(null);
   const [docsOpen, setDocsOpen] = useState(false);
   const convoRef = useRef<HTMLDivElement>(null);
 
@@ -263,7 +205,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
             m.role === "user" ? (
               <div className="fa-user" key={i}>{m.text}</div>
             ) : (
-              <CitedCard key={i} a={m.a} onOpen={setSrc} />
+              <DemoAnswerCard key={i} data={toCardData(m.a, t)} />
             ),
           )}
           {loading && <div className="demo-shimmer dc-load"><span className="sh-dot" />{t({ es: "DOCYAN está buscando en el documento…", en: "DOCYAN is searching the document…" })}</div>}
@@ -277,7 +219,6 @@ export function DemoConsult({ vkey }: { vkey: string }) {
           </form>
         </div>
       </div>
-      {src && <SourceOverlay e={src} doc={vert.docs[0]?.name || ""} onClose={() => setSrc(null)} />}
     </div>
   );
 }

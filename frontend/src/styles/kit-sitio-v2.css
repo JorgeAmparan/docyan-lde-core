@@ -169,6 +169,12 @@
 .s2 .dc2-a .big{font-weight:700;font-size:30px;letter-spacing:-.02em;line-height:1.08;}
 .s2 .dc2-a .big .u{font-size:15px;font-weight:500;color:var(--fg-muted);}
 .s2 .dc2-a .note{font-size:13.5px;line-height:1.5;color:var(--fg-muted);margin:6px 0 0;}
+/* Specs secundarias en la tarjeta unificada (CoDo con varias especificaciones). */
+.s2 .dc2-a .dc2-extras{list-style:none;margin:10px 0 0;padding:10px 0 0;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:7px;}
+.s2 .dc2-a .dc2-extras li{display:flex;flex-direction:column;gap:1px;}
+.s2 .dc2-a .dc2-extras .dc2-extra-n{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--fg);}
+.s2 .dc2-a .dc2-extras .dc2-extra-v{font-size:12.5px;color:var(--fg-muted);line-height:1.45;}
+.s2 .dc2-a .dc-fallback-mode{color:var(--fg-muted);}
 .s2 .cite2{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);padding:5px 10px 5px 8px;border-radius:var(--radius-sm);cursor:pointer;transition:all var(--dur-fast) var(--ease-out);white-space:nowrap;max-width:100%;}
 .s2 .cite2:hover{background:var(--cinnabar-100);box-shadow:var(--shadow-cinnabar);}
 .s2 .cite2 .brk{position:relative;width:12px;height:12px;flex:none;}

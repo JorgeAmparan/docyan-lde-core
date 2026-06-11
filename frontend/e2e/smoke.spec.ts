@@ -54,21 +54,22 @@ test("demo-CoDo: consulta sugerida → respuesta citada", async ({ page, context
   await page.goto("/demo/lab");
   await expect(page.getByText(/CODO-LAB-04/).first()).toBeVisible();
   await page.locator(".demo-sug").first().click();
-  await expect(page.locator(".fa-card .cite2").first()).toBeVisible({ timeout: 5000 });
+  // Render UNIFICADO: el CoDo usa la misma tarjeta del hero (.dc2-a + .cite2).
+  await expect(page.locator(".dc2-a .cite2").first()).toBeVisible({ timeout: 5000 });
 });
 
-test("integridad de cita: el overlay muestra el VERBATIM del documento, no el texto generado", async ({ page, context }) => {
+test("integridad de cita: el fragmento inline muestra el VERBATIM del documento, no el texto generado", async ({ page, context }) => {
   await context.addCookies([SITE_COOKIE]);
   await mockDemo(page);
   await page.goto("/demo/lab");
   await page.locator(".demo-sug").first().click();
-  await page.locator(".fa-card .cite2").first().click();
-  // El fragmento bajo el sello es el verbatim del documento (chunk[start:end])…
-  const mark = page.locator(".src-body mark").first();
+  await page.locator(".dc2-a .cite2").first().click();
+  // El fragmento inline (.dc2-src) bajo el sello es el verbatim del documento…
+  const mark = page.locator(".dc2-src mark").first();
   await expect(mark).toBeVisible({ timeout: 5000 });
   await expect(mark).toHaveText(VERBATIM);
   // …y NUNCA el texto sintetizado por el LLM (regla de integridad de cita).
-  await expect(page.locator(".src-body")).not.toContainText(GENERADO);
+  await expect(page.locator(".dc2-src")).not.toContainText(GENERADO);
 });
 
 test("precios conmuta la banda en vivo (3 bandas v2.1)", async ({ page, context }) => {

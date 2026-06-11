@@ -20,8 +20,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { Doors } from "@/components/commercial/site-chrome";
-import { useT, useSite, type Bilingual } from "@/lib/site-i18n";
+import { useT, type Bilingual } from "@/lib/site-i18n";
 import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
+import { DemoAnswerCard, type DemoCardData } from "@/components/commercial/demo-answer-card";
 
 /* ============================================================ */
 /* Demo vivo del hero (port de demo.jsx, backend real codo="hero") */
@@ -86,12 +87,10 @@ type Phase = "idle" | "typing" | "loading" | "answered";
 
 function LiveDemo() {
   const t = useT();
-  const { lang } = useSite();
   const [docKey, setDocKey] = useState("msds");
   const [phase, setPhase] = useState<Phase>("idle");
   const [q, setQ] = useState("");
   const [a, setA] = useState<AnswerState | null>(null);
-  const [showSrc, setShowSrc] = useState(false);
   const [text, setText] = useState("");
   const typingRef = useRef(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -112,7 +111,6 @@ function LiveDemo() {
     setQ(question);
     setPhase("loading");
     setA(null);
-    setShowSrc(false);
     // SIEMPRE backend real (codo="hero"): la respuesta se compone de las
     // especificaciones del grafo real con su cita. Cero enlatado (D3). Fallback
     // honesto si el documento no la sostiene — nunca se fabrica.
@@ -146,7 +144,6 @@ function LiveDemo() {
     }
     setA(res);
     setPhase("answered");
-    setTimeout(() => setShowSrc(true), 480);
   };
 
   const ask = async (qa: DemoQA) => {
@@ -155,7 +152,6 @@ function LiveDemo() {
     const question = t(qa.q);
     setPhase("typing");
     setA(null);
-    setShowSrc(false);
     setText("");
     for (let i = 1; i <= question.length; i++) {
       setText(question.slice(0, i));
@@ -182,7 +178,6 @@ function LiveDemo() {
     setPhase("idle");
     setA(null);
     setQ("");
-    setShowSrc(false);
     setText("");
   };
 
@@ -219,65 +214,22 @@ function LiveDemo() {
           <div className="dc2-shimmer"><span className="dot" />{t({ es: "DOCYAN está leyendo el documento…", en: "DOCYAN is reading the document…" })}</div>
         )}
         {phase === "answered" && a && (
-          <div className="dc2-a">
-            {a.value ? (
-              <>
-                <div className="big">{a.value} <span className="u">{a.unit}</span></div>
-                <p className="note">{a.note ? t(a.note) : null}</p>
-              </>
-            ) : (
-              <p className="note" style={{ fontSize: 14.5, color: "var(--fg)" }}>{a.text ? t(a.text) : null}</p>
-            )}
-            {a.cite && (
-              <div className="dc2-citerow">
-                <button className="cite2" onClick={() => setShowSrc(!showSrc)}>
-                  <span className="brk" /><span className="ctxt">{a.cite} · {t({ es: "pág.", en: "p." })} {a.page}</span> ↗
-                </button>
-              </div>
-            )}
-            {showSrc && a.cite && (
-              <div className="dc2-src">
-                <span className="thread" />
-                <div className="src2">
-                  {/* INTEGRIDAD DE CITA: solo el verbatim del documento (a.span =
-                      cita.fragmento). Sin span → "fragmento no disponible" honesto. */}
-                  {a.span ? (
-                    <>
-                      <div className="s-head">
-                        <Icon name="file-text" size={12} />
-                        <span>{t({ es: "Fragmento original", en: "Original fragment" })}</span>
-                        <span className="pg">{t({ es: "pág.", en: "p." })} {a.page}</span>
-                      </div>
-                      <div className="s-span">
-                        {a.mark && a.span.includes(a.mark) ? (
-                          <>
-                            {a.span.split(a.mark)[0]}<mark>{a.mark}</mark>{a.span.split(a.mark)[1]}
-                          </>
-                        ) : a.span}
-                      </div>
-                      {a.spanLang && a.spanLang !== lang.toUpperCase() && (
-                        <span className="s-orig"><Icon name="globe" size={11} />{t({ es: "Documento original en " + (a.spanLang === "EN" ? "inglés" : "español") + " · tú preguntaste en español", en: "Original document in " + (a.spanLang === "EN" ? "English" : "Spanish") + " · you asked in English" })}</span>
-                      )}
-                      <div className="s-actions">
-                        <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Pedigree al fragmento exacto · SHA-256", en: "Span pedigree · SHA-256" })}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="s-head">
-                        <Icon name="file-text" size={12} />
-                        <span>{t({ es: "Fragmento no disponible", en: "Fragment not available" })}</span>
-                      </div>
-                      <div className="s-span s-span-na">{t({ es: "Esta respuesta aún no tiene el span de caracteres del documento. Se muestra la procedencia, no texto generado.", en: "This answer doesn't yet have the document's character span. Provenance is shown, not generated text." })}</div>
-                      <div className="s-actions">
-                        <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Procedencia al documento · sin span exacto", en: "Document provenance · no exact span" })}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <DemoAnswerCard
+            key={q}
+            autoOpen
+            data={a.value
+              ? {
+                  kind: "info",
+                  value: a.value,
+                  unit: a.unit,
+                  note: a.note ? t(a.note) : undefined,
+                  citeLabel: a.cite ?? undefined,
+                  page: a.page,
+                  verbatim: a.span,
+                  verbatimLang: a.spanLang,
+                }
+              : { kind: "empty", fallback: a.text ? t(a.text) : DEMO_FALLBACK }}
+          />
         )}
       </div>
 
