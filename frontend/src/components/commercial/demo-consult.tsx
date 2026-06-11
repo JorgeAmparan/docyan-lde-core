@@ -215,7 +215,11 @@ export function DemoConsult({ vkey }: { vkey: string }) {
         </div>
 
         <div className="dc-foot">
-          <div className="dc-sugs">{vert.questions.map((q, i) => <button key={i} className="demo-sug" onClick={() => ask(t(q))} disabled={loading}>{t(q)}</button>)}</div>
+          {vert.questions.length > 0 ? (
+            <div className="dc-sugs">{vert.questions.map((q, i) => <button key={i} className="demo-sug" onClick={() => ask(t(q))} disabled={loading}>{t(q)}</button>)}</div>
+          ) : (
+            <div className="dc-sugs dc-sugs-empty">{t({ es: "Escribe tu pregunta sobre este instrumento y su calibración.", en: "Type your question about this instrument and its calibration." })}</div>
+          )}
           <form className="demo-box dc-box" onSubmit={submit}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`${t({ es: "Pregunta sobre", en: "Ask about" })} ${t(vert.entity)}…`} aria-label={t({ es: "Pregunta", en: "Question" })} />
             <button type="submit" className="db-send" aria-label={t({ es: "Preguntar", en: "Ask" })} disabled={loading}><Icon name="arrow-up" size={17} /></button>

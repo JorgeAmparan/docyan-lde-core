@@ -50,11 +50,12 @@ export const VERTICALS: DemoVertical[] = [
       { name: "Mitutoyo Caliper 500 — Operating Manual", tipo: "manual_tecnico" },
       { name: "Mitutoyo Caliper 500 — Calibration Certificate", tipo: "calibracion" },
     ],
-    questions: [
-      { es: "¿Cuál es el rango de medición?", en: "What is the measuring range?" },
-      { es: "¿Cuál es la incertidumbre de medición?", en: "What is the measurement uncertainty?" },
-      { es: "¿A qué patrón es trazable?", en: "What is it traceable to?" },
-    ],
+    // Sin sugeridas HOY: con tipos reales + retrieval léxico (DEF-2), ninguna pregunta
+    // del manual/cert cita verbatim LIMPIO de forma confiable (el manual pollutea el
+    // match). El CoDo lab muestra su estructura (chip de documentos + tipos reales) y
+    // el input invita a preguntar. Es el CASO DE ACEPTACIÓN #1 de B13.3: sus tres
+    // preguntas naturales (rango, vence, trazable) citando limpio = criterio de cierre.
+    questions: [],
   },
   {
     key: "maq",

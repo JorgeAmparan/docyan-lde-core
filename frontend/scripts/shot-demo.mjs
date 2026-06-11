@@ -28,17 +28,27 @@ async function shot(page, url, sugSel, cardSel, file) {
   console.log("shot:", file);
 }
 
+// Bypass de Protection Protection de Vercel (secret SOLO por env, nunca en repo).
+const BYPASS = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || "";
+const extraHeaders = BYPASS ? { "x-vercel-protection-bypass": BYPASS, "x-vercel-set-bypass-cookie": "true" } : {};
+
+async function shotStructure(page, url, file) {
+  await page.goto(url, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: path.join(OUT, file), fullPage: false });
+  console.log("shot:", file);
+}
+
 const browser = await chromium.launch();
 for (const vp of VIEWPORTS) {
-  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height } });
+  const ctx = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, extraHTTPHeaders: extraHeaders });
   await ctx.addCookies([{ name: "docyan_site", value: "es.A", url: origin }]);
   const page = await ctx.newPage();
-  try {
-    await shot(page, `${PREVIEW}/`, ".dc2-sug", ".dc2-a .cite2", `hero_${vp.tag}.png`);
-  } catch (e) { console.error("hero", vp.tag, e.message); }
-  try {
-    await shot(page, `${PREVIEW}/demo/lab`, ".demo-sug", ".dc2-a", `codo_${vp.tag}.png`);
-  } catch (e) { console.error("codo", vp.tag, e.message); }
+  // Hero (estándar) y un CoDo que cita (maq): criterio binario = tarjeta gemela.
+  try { await shot(page, `${PREVIEW}/`, ".dc2-sug", ".dc2-a .cite2", `hero_${vp.tag}.png`); } catch (e) { console.error("hero", vp.tag, e.message); }
+  try { await shot(page, `${PREVIEW}/demo/maq`, ".demo-sug", ".dc2-a .cite2", `codo_${vp.tag}.png`); } catch (e) { console.error("codo", vp.tag, e.message); }
+  // CoDo lab re-modelado (estructura: chip de documentos, sin sugeridas — B13.3).
+  try { await shotStructure(page, `${PREVIEW}/demo/lab`, `lab_${vp.tag}.png`); } catch (e) { console.error("lab", vp.tag, e.message); }
   await ctx.close();
 }
 await browser.close();
