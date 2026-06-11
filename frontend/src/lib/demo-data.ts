@@ -9,6 +9,14 @@
  */
 import type { Bilingual } from "@/lib/site-i18n";
 
+/** Tipo documental de un doc del CoDo (para el badge del chip expandible). */
+export type DocTipo = "msds" | "manual_tecnico" | "calibracion";
+
+export interface DemoDoc {
+  name: string;   // nombre del documento (idioma original)
+  tipo: DocTipo;  // tipo documental (define schema de extracción + badge)
+}
+
 export interface DemoVertical {
   key: string;            // clave del CoDo y del tenant demo (/demo/query codo=...)
   label: Bilingual;       // sector
@@ -16,26 +24,38 @@ export interface DemoVertical {
   codo: string;           // id del CoDo (display)
   entity: Bilingual;      // de qué trata el CoDo (su documento real)
   blurb: Bilingual;
-  docs: string[];         // documentos del CoDo (nombre en su idioma original)
+  docs: DemoDoc[];        // documentos del CoDo (nombre + tipo); el chip los lista
   questions: Bilingual[]; // preguntas sugeridas — verificadas: cada una cita real
 }
+
+/** Etiqueta bilingüe del tipo documental para el badge del chip. */
+export const DOC_TIPO_LABEL: Record<DocTipo, Bilingual> = {
+  msds: { es: "Hoja de seguridad", en: "Safety data sheet" },
+  manual_tecnico: { es: "Manual técnico", en: "Technical manual" },
+  calibracion: { es: "Certificado de calibración", en: "Calibration certificate" },
+};
 
 export const VERTICALS: DemoVertical[] = [
   {
     key: "lab",
-    label: { es: "Laboratorios", en: "Laboratories" },
-    icon: "flask-conical",
+    label: { es: "Metrología", en: "Metrology" },
+    icon: "ruler",
     codo: "CODO-LAB-04",
-    entity: { es: "Reactivos de laboratorio (etanol, metanol)", en: "Lab reagents (ethanol, methanol)" },
+    entity: { es: "Laboratorio de metrología (calibración de instrumentos)", en: "Metrology lab (instrument calibration)" },
     blurb: {
-      es: "Hojas de seguridad (SDS) de reactivos: límites de exposición, inflamabilidad y manejo seguro.",
-      en: "Reagent safety data sheets (SDS): exposure limits, flammability and safe handling.",
+      es: "Manuales de instrumentos (calibrador, multímetro, balanza) + certificado de calibración ISO 17025: procedimientos, exactitud/resolución y trazabilidad.",
+      en: "Instrument manuals (caliper, multimeter, balance) + ISO 17025 calibration certificate: procedures, accuracy/resolution and traceability.",
     },
-    docs: ["Ethanol — Safety Data Sheet", "Methanol — Safety Data Sheet"],
+    docs: [
+      { name: "Mitutoyo Caliper 500 — Operating Manual", tipo: "manual_tecnico" },
+      { name: "Fluke 87/89 Multimeter — Users Manual", tipo: "manual_tecnico" },
+      { name: "Ohaus Pioneer PX Balance — Instruction Manual", tipo: "manual_tecnico" },
+      { name: "ISO 17025 Calibration Certificate", tipo: "calibracion" },
+    ],
     questions: [
-      { es: "¿Cuál es el límite de exposición?", en: "What is the exposure limit?" },
-      { es: "¿Cuál es el punto de inflamación?", en: "What is the flash point?" },
-      { es: "¿Cuál es la presión de vapor?", en: "What is the vapor pressure?" },
+      { es: "¿Cuál es el rango de medición del calibrador Mitutoyo?", en: "What is the measuring range of the Mitutoyo caliper?" },
+      { es: "¿Cuál es la legibilidad de la balanza Ohaus?", en: "What is the readability of the Ohaus balance?" },
+      { es: "¿A qué patrón nacional es trazable el certificado de calibración?", en: "To which national standard is the calibration certificate traceable?" },
     ],
   },
   {
@@ -48,11 +68,11 @@ export const VERTICALS: DemoVertical[] = [
       es: "SDS del fluido de limpieza de línea: exposición ocupacional, inflamabilidad y EPP.",
       en: "Line-cleaning fluid SDS: occupational exposure, flammability and PPE.",
     },
-    docs: ["Isopropyl Alcohol — Safety Data Sheet"],
+    docs: [{ name: "Isopropyl Alcohol — Safety Data Sheet", tipo: "msds" }],
     questions: [
-      { es: "¿Cuál es el límite de exposición?", en: "What is the exposure limit?" },
-      { es: "¿Cuál es la presión de vapor?", en: "What is the vapor pressure?" },
-      { es: "¿Cuál es el punto de inflamación?", en: "What is the flash point?" },
+      { es: "En la línea, ¿cuál es el límite de exposición ocupacional del solvente?", en: "On the line, what is the solvent's occupational exposure limit?" },
+      { es: "¿Cuál es la presión de vapor del isopropanol?", en: "What is the vapor pressure of isopropanol?" },
+      { es: "¿Cuál es el punto de inflamación del solvente?", en: "What is the solvent's flash point?" },
     ],
   },
   {
@@ -65,11 +85,10 @@ export const VERTICALS: DemoVertical[] = [
       es: "SDS del cáustico de limpieza CIP: concentraciones peligrosas y controles.",
       en: "CIP caustic cleaner SDS: hazardous concentrations and controls.",
     },
-    docs: ["Sodium Hydroxide — Safety Data Sheet"],
+    docs: [{ name: "Sodium Hydroxide — Safety Data Sheet", tipo: "msds" }],
     questions: [
-      { es: "¿Cuál es la concentración IDLH?", en: "What is the IDLH concentration?" },
-      { es: "¿Cuál es la concentración inmediatamente peligrosa para la salud?", en: "What concentration is immediately dangerous to health?" },
-      { es: "¿Cuál es la concentración máxima?", en: "What is the maximum concentration?" },
+      { es: "¿Cuál es la concentración IDLH del cáustico?", en: "What is the IDLH concentration of sodium hydroxide?" },
+      { es: "¿Cuál es el límite OSHA del hidróxido de sodio?", en: "What is the OSHA PEL for sodium hydroxide?" },
     ],
   },
   {
@@ -82,11 +101,11 @@ export const VERTICALS: DemoVertical[] = [
       es: "SDS del ácido de proceso: límites de exposición, EPP requerido y presión de vapor.",
       en: "Process-acid SDS: exposure limits, required PPE and vapor pressure.",
     },
-    docs: ["Hydrochloric Acid — Safety Data Sheet"],
+    docs: [{ name: "Hydrochloric Acid — Safety Data Sheet", tipo: "msds" }],
     questions: [
-      { es: "¿Cuál es el límite de exposición?", en: "What is the exposure limit?" },
-      { es: "¿Qué protección personal se requiere?", en: "What personal protection is required?" },
-      { es: "¿Cuál es la presión de vapor?", en: "What is the vapor pressure?" },
+      { es: "En el proceso, ¿cuál es el límite de exposición por inhalación del ácido?", en: "In the process, what is the acid's inhalation exposure limit?" },
+      { es: "¿Cuál es la presión de vapor del ácido?", en: "What is the vapor pressure of the acid?" },
+      { es: "¿Qué protección personal requiere con el ácido?", en: "What personal protection is required with the acid?" },
     ],
   },
   {
@@ -99,11 +118,11 @@ export const VERTICALS: DemoVertical[] = [
       es: "SDS del sanitizante de equipo: límites de exposición y umbrales de protección respiratoria.",
       en: "Equipment-sanitizer SDS: exposure limits and respiratory-protection thresholds.",
     },
-    docs: ["Sodium Hypochlorite — Safety Data Sheet"],
+    docs: [{ name: "Sodium Hypochlorite — Safety Data Sheet", tipo: "msds" }],
     questions: [
-      { es: "¿Cuál es el límite de exposición?", en: "What is the exposure limit?" },
-      { es: "¿A qué concentración se requiere respirador?", en: "At what concentration is a respirator required?" },
-      { es: "¿Cuál es la concentración para aire suministrado?", en: "What concentration requires supplied air?" },
+      { es: "Al sanitizar el equipo, ¿cuál es el límite de exposición del operador?", en: "When sanitizing equipment, what is the operator's exposure limit?" },
+      { es: "¿A qué nivel se requiere aire suministrado al sanitizar?", en: "At what level is supplied air required when sanitizing?" },
+      { es: "¿Cuál es el techo NIOSH del sanitizante?", en: "What is the NIOSH ceiling for the sanitizer?" },
     ],
   },
 ];

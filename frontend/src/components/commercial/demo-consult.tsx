@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { useT, type Bilingual } from "@/lib/site-i18n";
-import { VERTICALS, type DemoVertical } from "@/lib/demo-data";
+import { VERTICALS, DOC_TIPO_LABEL, type DemoVertical } from "@/lib/demo-data";
 import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
 
 /* DOCYAN sitio público v2 — explorador de CoDo demo (F3, reconciliado). TODA consulta
@@ -25,21 +25,58 @@ interface Espec {
     span_fin?: number | null;
   };
 }
+interface Paso {
+  orden?: number;
+  descripcion?: string;
+  epp?: string[];
+  herramientas?: string[];
+  advertencias?: string[];
+}
 interface Answer {
   q: string;
   servido: boolean;
+  kind: string;                 // "info_card" | "procedure_card" | …
   especificaciones: Espec[];
+  pasos: Paso[];                // procedimiento del manual (manual_tecnico)
+  titulo: string;
+  docNombre: string;            // tipo/nombre del documento de la cita (p.ej. manual_tecnico)
   doc: string;
   fallback: string | null;
 }
 
 function CitedCard({ a, onOpen }: { a: Answer; onOpen: (e: Espec) => void }) {
   const t = useT();
-  if (!a.servido || a.especificaciones.length === 0) {
+  const esProc = a.kind === "procedure_card";
+  const sinRespuesta = !a.servido || (esProc ? a.pasos.length === 0 : a.especificaciones.length === 0);
+  if (sinRespuesta) {
     return (
       <div className="fa-card dc-fallback">
         <div className="fa-mode"><Icon name="info" size={14} />{t({ es: "Sin respuesta en este documento demo", en: "No answer in this demo document" })}</div>
         <p className="fa-note">{a.fallback || DEMO_FALLBACK}</p>
+      </div>
+    );
+  }
+  // Procedimiento del manual técnico: pasos numerados (texto real del documento).
+  if (esProc) {
+    return (
+      <div className="fa-card">
+        <div className="fa-mode"><span className="fa-pulse" />{t({ es: "Procedimiento citado al manual", en: "Procedure cited to the manual" })}</div>
+        {a.titulo && <div className="fa-proc-t">{a.titulo}</div>}
+        <ol className="fa-pasos">
+          {a.pasos.slice(0, 8).map((p, i) => (
+            <li key={i}>
+              <span className="fa-paso-d">{p.descripcion}</span>
+              {(p.herramientas?.length || p.epp?.length) ? (
+                <span className="fa-paso-meta">
+                  {(p.herramientas ?? []).concat(p.epp ?? []).join(" · ")}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+        <div className="da-cite-row">
+          <span className="cite2 cite2-static"><span className="brk" />{a.doc} · {a.docNombre || "manual_tecnico"}</span>
+        </div>
       </div>
     );
   }
@@ -114,6 +151,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [src, setSrc] = useState<Espec | null>(null);
+  const [docsOpen, setDocsOpen] = useState(false);
   const convoRef = useRef<HTMLDivElement>(null);
 
   const ask = async (question: string) => {
@@ -122,12 +160,20 @@ export function DemoConsult({ vkey }: { vkey: string }) {
     // Capa 3 única (D3): toda consulta —sugerida o libre— al backend real.
     const res = await demoQuery(question, vert.key);
     const payload = ((res.resultado || {}) as Record<string, unknown>).payload as Record<string, unknown> | undefined;
+    const kind = (payload?.kind as string) || "info_card";
     const especificaciones = (payload?.especificaciones as Espec[]) || [];
+    const pasos = (payload?.pasos as Paso[]) || [];
+    const citas = (payload?.citas as Array<{ documento_nombre?: string }>) || [];
+    const tieneContenido = kind === "procedure_card" ? pasos.length > 0 : especificaciones.length > 0;
     const a: Answer = {
       q: question,
-      servido: !!res.servido && especificaciones.length > 0,
+      servido: !!res.servido && tieneContenido,
+      kind,
       especificaciones,
-      doc: vert.docs[0] || (t(vert.entity) as string),
+      pasos,
+      titulo: (payload?.titulo as string) || "",
+      docNombre: citas[0]?.documento_nombre || "",
+      doc: vert.docs[0]?.name || (t(vert.entity) as string),
       fallback: res.fallback,
     };
     setMsgs((m) => [...m, { role: "answer", a }]);
@@ -178,7 +224,31 @@ export function DemoConsult({ vkey }: { vkey: string }) {
               <div className="mn">{vert.codo} · {t(vert.entity)}</div>
             </div>
           </div>
-          <span className="dc-tag">{vert.docs.length} {t({ es: "documentos vivos", en: "live documents" })}</span>
+          {/* Chip expandible: lista los documentos del CoDo (nombre + tipo). Sin
+              selector por documento — la unidad consultable es el CoDo; la cita
+              ya atribuye de qué documento viene cada dato. */}
+          <div className="dc-docchip">
+            <button
+              type="button"
+              className="dc-tag dc-tag-btn"
+              aria-expanded={docsOpen}
+              onClick={() => setDocsOpen((o) => !o)}
+            >
+              {vert.docs.length} {t({ es: "documentos vivos", en: "live documents" })}
+              <Icon name={docsOpen ? "chevron-up" : "chevron-down"} size={14} />
+            </button>
+            {docsOpen && (
+              <ul className="dc-doclist" role="list">
+                {vert.docs.map((d) => (
+                  <li key={d.name}>
+                    <Icon name="file-text" size={13} />
+                    <span className="dc-doclist-n">{d.name}</span>
+                    <span className="dc-doclist-t">{t(DOC_TIPO_LABEL[d.tipo])}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <div className="dc-body" ref={convoRef}>
@@ -186,7 +256,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
             <div className="dc-intro">
               <p>{t(vert.blurb)}</p>
               <p>{t({ es: "Pregúntale a este CoDo demo: cada respuesta se compone del documento real y llega con su cita. Tócala para ver el fragmento original.", en: "Ask this demo CoDo: every answer is composed from the real document and comes with its citation. Tap it to see the original fragment." })}</p>
-              <div className="dc-docs">{vert.docs.map((d) => <span className="dc-doc" key={d}><Icon name="file-text" size={13} />{d}</span>)}</div>
+              <div className="dc-docs">{vert.docs.map((d) => <span className="dc-doc" key={d.name}><Icon name="file-text" size={13} />{d.name}</span>)}</div>
             </div>
           )}
           {msgs.map((m, i) =>
@@ -207,7 +277,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
           </form>
         </div>
       </div>
-      {src && <SourceOverlay e={src} doc={vert.docs[0] || ""} onClose={() => setSrc(null)} />}
+      {src && <SourceOverlay e={src} doc={vert.docs[0]?.name || ""} onClose={() => setSrc(null)} />}
     </div>
   );
 }

@@ -47,8 +47,13 @@ from pathlib import Path
 DEMO_SALDO_USD = 50.0
 
 
-def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool) -> dict:
-    """Cotiza y (si no es dry-run) confirma+encola la ingesta de un documento."""
+def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool, tipo_override: str | None = None) -> dict:
+    """Cotiza y (si no es dry-run) confirma+encola la ingesta de un documento.
+
+    `tipo_override` fuerza el `tipo_documento` (schema de extracción) en vez del
+    heurístico — p. ej. un manual de operación que el heurístico clasifica como
+    `especificacion` pero debe ir como `manual_tecnico` para extraer `:Procedimiento`.
+    """
     import hashlib
     import uuid
 
@@ -69,26 +74,27 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool) -> dict:
     tipo_heuristico, _conf = _prov.get_selector().clasificar_heuristica(
         texto[:8000], path.name
     )
+    tipo_documento = tipo_override or tipo_heuristico
 
     # Asegura saldo de cómputo del tenant demo (sin auto-recharge en prod; aquí lo
     # provisionamos explícitamente para la siembra).
     BudgetManager().ensure_budget(tenant_id, saldo_inicial_usd=DEMO_SALDO_USD)
 
     cot = get_cotizador().cotizar(
-        tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_heuristico
+        tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_documento
     )
     if not cot.aprobado:
         return {"doc": path.name, "ok": False, "motivo": cot.motivo}
     if dry_run:
         return {"doc": path.name, "ok": True, "dry_run": True,
-                "tipo": tipo_heuristico, "costo_usd": cot.costo_estimado_usd}
+                "tipo": tipo_documento, "costo_usd": cot.costo_estimado_usd}
 
     store = get_document_store()
     ref = store.put(tenant_id, path.name, data)
     job = IngestJob(
         job_id=uuid.uuid4().hex, tenant_id=tenant_id, documento_ref=ref,
         nombre_archivo=path.name, content_sha256=hashlib.sha256(data).hexdigest(),
-        tipo_documento=tipo_heuristico,  # ← el worker lo usa para elegir el schema
+        tipo_documento=tipo_documento,  # ← el worker lo usa para elegir el schema
         bytes_originales=len(data),
         cotizacion=CotizacionSnapshot(
             costo_estimado_usd=cot.costo_estimado_usd,
@@ -101,13 +107,14 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool) -> dict:
     disp.crear_job(job)
     disp.confirmar(job.job_id)  # reserva saldo + encola hacia el worker
     return {"doc": path.name, "ok": True, "job_id": job.job_id,
-            "tipo": tipo_heuristico, "costo_usd": cot.costo_estimado_usd}
+            "tipo": tipo_documento, "costo_usd": cot.costo_estimado_usd}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Siembra de tenants demo (F3 §E).")
     ap.add_argument("--manifest", required=True, help="JSON {tenant_id: [paths]}")
     ap.add_argument("--dry-run", action="store_true", help="Solo cotiza, no encola.")
+    ap.add_argument("--tipo", default=None, help="Forzar tipo_documento (schema), p. ej. manual_tecnico.")
     args = ap.parse_args()
 
     manifest = json.loads(Path(args.manifest).read_text())
@@ -121,7 +128,7 @@ def main() -> int:
                 total_fail += 1
                 continue
             try:
-                res = _ingest_one(tenant_id, p, dry_run=args.dry_run)
+                res = _ingest_one(tenant_id, p, dry_run=args.dry_run, tipo_override=args.tipo)
             except Exception as exc:  # noqa: BLE001 — un doc no debe tumbar la siembra.
                 print(f"  ✗ {p.name}: error {type(exc).__name__}: {exc}")
                 total_fail += 1

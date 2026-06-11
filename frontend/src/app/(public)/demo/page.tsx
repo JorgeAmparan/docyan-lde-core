@@ -44,7 +44,7 @@ export default function DemosPage() {
                   <p>{t(c.blurb)}</p>
                   <div className="dc2-docs" style={{ marginTop: 10 }}>
                     {c.docs.map((d, i) => (
-                      <span key={i} className="dc2-doc on" style={{ cursor: "default" }}><Icon name="file-text" size={13} />{d}</span>
+                      <span key={i} className="dc2-doc on" style={{ cursor: "default" }}><Icon name="file-text" size={13} />{d.name}</span>
                     ))}
                   </div>
                   <span className="codo-cta" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12, fontWeight: 600 }}>

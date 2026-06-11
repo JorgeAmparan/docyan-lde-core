@@ -666,3 +666,11 @@
 .s2 .fa-spec-v{font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--fg);letter-spacing:-.01em;}
 .s2 .fa-spec .fa-note{margin:4px 0 8px;}
 .s2 .dc-fallback .fa-mode{color:var(--fg-muted);}
+/* Render de procedimiento (procedure_card del manual técnico): pasos numerados. */
+.s2 .fa-proc-t{font-family:var(--font-serif);font-size:16px;font-weight:600;color:var(--fg);margin:2px 0 8px;}
+.s2 .fa-pasos{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:9px;}
+.s2 .fa-pasos li{font-size:14px;line-height:1.5;color:var(--ink-800,var(--fg));}
+.s2 .fa-paso-d{display:block;}
+.s2 .fa-paso-meta{display:block;margin-top:3px;font-family:var(--font-mono);font-size:11px;color:var(--fg-subtle);}
+.s2 .cite2-static{cursor:default;}
+.s2 .cite2-static:hover{background:var(--cinnabar-50);box-shadow:none;}
