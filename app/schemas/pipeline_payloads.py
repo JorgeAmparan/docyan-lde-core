@@ -26,7 +26,13 @@ class _Base(BaseModel):
 
 
 class Cita(_Base):
-    """Cita de procedencia: documento + sección + página (+ span de caracteres)."""
+    """Cita de procedencia: documento + sección + página (+ span de caracteres).
+
+    `fragmento` es el texto VERBATIM del documento (recortado del chunk de origen por
+    `span_inicio:span_fin`), no texto sintetizado. Integridad de cita (regla absoluta):
+    una cita "exacta" SOLO puede mostrarse si `fragmento` viene del documento real; si
+    `fragmento` es None, la UI dice "fragmento no disponible" en vez de inventar.
+    """
 
     documento_id: str | None = None
     documento_nombre: str | None = None
@@ -34,6 +40,7 @@ class Cita(_Base):
     pagina: int | None = None
     span_inicio: int | None = None
     span_fin: int | None = None
+    fragmento: str | None = None
 
 
 class CruceSugerido(_Base):

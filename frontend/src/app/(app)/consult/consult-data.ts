@@ -86,22 +86,28 @@ export function citaLabel(c?: Cita | null): string | null {
   return c.seccion || null;
 }
 
-/** Build the source overlay from a backend `Cita`. Span text only when the
- *  ingest provides character offsets; otherwise the location is shown honestly. */
+/** Build the source overlay from a backend `Cita`. INTEGRIDAD DE CITA (regla
+ *  absoluta): el fragmento resaltado es SOLO el verbatim del documento
+ *  (`cita.fragmento` = chunk[start:end]). Si no hay span, NO se resalta nada y se
+ *  declara honesto "fragmento no disponible" — jamás se muestra texto generado
+ *  como si fuera la fuente. */
 export function citaToSource(c?: Cita | null): SourceSpan | null {
   if (!c) return null;
   const ref =
     [c.seccion, c.pagina != null ? `p.${c.pagina}` : null].filter(Boolean).join(" · ") || "—";
+  const verbatim = c.fragmento?.trim();
   return {
     title: c.documento_nombre || c.documento_id || "Documento fuente",
     ref,
-    paragraphs: [
-      {
-        text:
-          "Fragmento citado de la fuente. El resaltado al span exacto se habilita cuando la ingesta aporta offsets de carácter.",
-        highlight: true,
-      },
-    ],
+    paragraphs: verbatim
+      ? [{ text: verbatim, highlight: true }]
+      : [
+          {
+            text:
+              "Fragmento no disponible: esta cita aún no tiene el span de caracteres del documento. Se muestra la ubicación (documento · sección), no el texto generado.",
+            highlight: false,
+          },
+        ],
     footnote: c.documento_id ? `Documento ${c.documento_id.slice(0, 12)}` : undefined,
   };
 }

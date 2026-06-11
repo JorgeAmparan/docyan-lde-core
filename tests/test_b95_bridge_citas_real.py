@@ -140,6 +140,12 @@ def test_bridge_cierra_cita_tipo1(grafo_poblado):
     cita = pay.citas[0]
     assert cita.documento_id == DOC_ID
     assert cita.documento_nombre == "Manual Rotina 380"
+    # Regla de integridad de cita (paquete F3): la PRESENCIA de documento_nombre NO
+    # es verificación de cita — "citado" = verbatim del documento. Estos specs
+    # sintéticos no llevan `spans`, así que NO debe fabricarse un fragmento: el
+    # verbatim es None y la UI mostrará "fragmento no disponible". El verbatim real
+    # (chunk[start:end]) se asegura en tests/test_cita_integridad.py.
+    assert cita.fragmento is None, "sin span, la cita no debe fabricar fragmento"
 
 
 def test_bridge_cierra_pasos_y_cita_tipo2(grafo_poblado):

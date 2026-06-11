@@ -9,6 +9,10 @@ import { test, expect, type Page } from "@playwright/test";
 
 const SITE_COOKIE = { name: "docyan_site", value: "es.A", url: "http://localhost:3000" };
 
+// Verbatim del documento (lo que la UI DEBE mostrar como fragmento) vs el texto
+// sintetizado por el LLM (`valor`, que NUNCA debe mostrarse como fuente).
+const VERBATIM = "Flash Point: 113 o F (45 o C)";
+const GENERADO = "Límite de exposición ACGIH TLV.";
 const CITED = {
   servido: true,
   kind: "consulta",
@@ -16,7 +20,12 @@ const CITED = {
     payload: {
       kind: "info_card",
       especificaciones: [
-        { nombre: "500 ppm, 8-hr TWA", valor: "Límite de exposición ACGIH TLV.", unidad: null, cita: { documento_nombre: "msds" } },
+        {
+          nombre: "500 ppm, 8-hr TWA",
+          valor: GENERADO,
+          unidad: null,
+          cita: { documento_nombre: "msds", fragmento: VERBATIM, span_inicio: 0, span_fin: VERBATIM.length },
+        },
       ],
     },
   },
@@ -46,6 +55,20 @@ test("demo-CoDo: consulta sugerida → respuesta citada", async ({ page, context
   await expect(page.getByText(/CODO-LAB-04/).first()).toBeVisible();
   await page.locator(".demo-sug").first().click();
   await expect(page.locator(".fa-card .cite2").first()).toBeVisible({ timeout: 5000 });
+});
+
+test("integridad de cita: el overlay muestra el VERBATIM del documento, no el texto generado", async ({ page, context }) => {
+  await context.addCookies([SITE_COOKIE]);
+  await mockDemo(page);
+  await page.goto("/demo/lab");
+  await page.locator(".demo-sug").first().click();
+  await page.locator(".fa-card .cite2").first().click();
+  // El fragmento bajo el sello es el verbatim del documento (chunk[start:end])…
+  const mark = page.locator(".src-body mark").first();
+  await expect(mark).toBeVisible({ timeout: 5000 });
+  await expect(mark).toHaveText(VERBATIM);
+  // …y NUNCA el texto sintetizado por el LLM (regla de integridad de cita).
+  await expect(page.locator(".src-body")).not.toContainText(GENERADO);
 });
 
 test("precios conmuta la banda en vivo (3 bandas v2.1)", async ({ page, context }) => {

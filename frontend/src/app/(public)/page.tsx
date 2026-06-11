@@ -120,17 +120,21 @@ function LiveDemo() {
     try {
       const o = await demoQuery(question, "hero");
       const payload = ((o.resultado || {}) as Record<string, unknown>).payload as Record<string, unknown> | undefined;
-      const especs = (payload?.especificaciones as Array<{ nombre?: string; valor?: string; cita?: { documento_nombre?: string } }>) || [];
+      const especs = (payload?.especificaciones as Array<{ nombre?: string; valor?: string; cita?: { documento_nombre?: string; fragmento?: string | null } }>) || [];
       if (o.servido && especs.length > 0) {
         const e = especs[0];
+        // INTEGRIDAD DE CITA: el "Fragmento original" es SOLO el verbatim del
+        // documento (cita.fragmento = chunk[start:end]); sin span → null y la
+        // fuente se muestra honesta ("fragmento no disponible"). Nunca nombre/valor.
+        const verbatim = e.cita?.fragmento?.trim() || null;
         res = {
           q: { es: question, en: question },
           value: e.nombre || "",
           note: e.valor ? { es: e.valor, en: e.valor } : undefined,
           cite: `${t(doc.name)} · ${e.cita?.documento_nombre || "msds"}`,
           page: "—",
-          span: `${e.nombre || ""}${e.valor ? " — " + e.valor : ""}`,
-          mark: e.nombre || null,
+          span: verbatim,
+          mark: verbatim,
           spanLang: "EN",
         };
       } else {
@@ -231,28 +235,45 @@ function LiveDemo() {
                 </button>
               </div>
             )}
-            {showSrc && a.span && (
+            {showSrc && a.cite && (
               <div className="dc2-src">
                 <span className="thread" />
                 <div className="src2">
-                  <div className="s-head">
-                    <Icon name="file-text" size={12} />
-                    <span>{t({ es: "Fragmento original", en: "Original fragment" })}</span>
-                    <span className="pg">{t({ es: "pág.", en: "p." })} {a.page}</span>
-                  </div>
-                  <div className="s-span">
-                    {a.mark && a.span.includes(a.mark) ? (
-                      <>
-                        {a.span.split(a.mark)[0]}<mark>{a.mark}</mark>{a.span.split(a.mark)[1]}
-                      </>
-                    ) : a.span}
-                  </div>
-                  {a.spanLang && a.spanLang !== lang.toUpperCase() && (
-                    <span className="s-orig"><Icon name="globe" size={11} />{t({ es: "Documento original en " + (a.spanLang === "EN" ? "inglés" : "español") + " · tú preguntaste en español", en: "Original document in " + (a.spanLang === "EN" ? "English" : "Spanish") + " · you asked in English" })}</span>
+                  {/* INTEGRIDAD DE CITA: solo el verbatim del documento (a.span =
+                      cita.fragmento). Sin span → "fragmento no disponible" honesto. */}
+                  {a.span ? (
+                    <>
+                      <div className="s-head">
+                        <Icon name="file-text" size={12} />
+                        <span>{t({ es: "Fragmento original", en: "Original fragment" })}</span>
+                        <span className="pg">{t({ es: "pág.", en: "p." })} {a.page}</span>
+                      </div>
+                      <div className="s-span">
+                        {a.mark && a.span.includes(a.mark) ? (
+                          <>
+                            {a.span.split(a.mark)[0]}<mark>{a.mark}</mark>{a.span.split(a.mark)[1]}
+                          </>
+                        ) : a.span}
+                      </div>
+                      {a.spanLang && a.spanLang !== lang.toUpperCase() && (
+                        <span className="s-orig"><Icon name="globe" size={11} />{t({ es: "Documento original en " + (a.spanLang === "EN" ? "inglés" : "español") + " · tú preguntaste en español", en: "Original document in " + (a.spanLang === "EN" ? "English" : "Spanish") + " · you asked in English" })}</span>
+                      )}
+                      <div className="s-actions">
+                        <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Pedigree al fragmento exacto · SHA-256", en: "Span pedigree · SHA-256" })}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="s-head">
+                        <Icon name="file-text" size={12} />
+                        <span>{t({ es: "Fragmento no disponible", en: "Fragment not available" })}</span>
+                      </div>
+                      <div className="s-span s-span-na">{t({ es: "Esta respuesta aún no tiene el span de caracteres del documento. Se muestra la procedencia, no texto generado.", en: "This answer doesn't yet have the document's character span. Provenance is shown, not generated text." })}</div>
+                      <div className="s-actions">
+                        <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Procedencia al documento · sin span exacto", en: "Document provenance · no exact span" })}</span>
+                      </div>
+                    </>
                   )}
-                  <div className="s-actions">
-                    <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Pedigree al fragmento exacto · SHA-256", en: "Span pedigree · SHA-256" })}</span>
-                  </div>
                 </div>
               </div>
             )}

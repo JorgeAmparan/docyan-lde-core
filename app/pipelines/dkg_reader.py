@@ -17,6 +17,7 @@ SIEMPRE estructuras planas (dict/list) — nunca nodos crudos de FalkorDB.
 """
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from typing import Protocol, runtime_checkable
@@ -58,6 +59,41 @@ def tokenizar_busqueda(termino: str | None) -> list[str]:
     if not vistos and palabras:
         vistos = [max(palabras, key=len)]
     return vistos
+
+
+def _primer_span(spans: object) -> tuple[str, int, int] | None:
+    """
+    Extrae el primer span de caracteres de la propiedad `spans` de un nodo del SDK.
+
+    Formato del SDK (procedencia GraphRAG-SDK): JSON `{"<chunk_id>": [{"start": N,
+    "end": M}, ...], ...}`. Los offsets son RELATIVOS al texto del chunk de origen
+    (no al documento completo). Devuelve `(chunk_id, start, end)` del primer span
+    válido, o None si no hay span aprovechable. Sin span ⇒ no hay verbatim → la UI
+    cae al fallback honesto (integridad de cita).
+    """
+    if not spans:
+        return None
+    data = spans
+    if isinstance(spans, str):
+        s = spans.strip()
+        if not s or s == "[]" or s == "{}":
+            return None
+        try:
+            data = json.loads(s)
+        except (ValueError, TypeError):
+            return None
+    if not isinstance(data, dict):
+        return None
+    for chunk_id, lst in data.items():
+        if not chunk_id or not isinstance(lst, list) or not lst:
+            continue
+        primero = lst[0]
+        if not isinstance(primero, dict):
+            continue
+        ini, fin = primero.get("start"), primero.get("end")
+        if isinstance(ini, int) and isinstance(fin, int) and 0 <= ini < fin:
+            return str(chunk_id), ini, fin
+    return None
 
 
 @runtime_checkable
@@ -102,11 +138,16 @@ class DKGReader:
             OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(e)
             RETURN e.id AS id, e.nombre AS nombre, e.valor AS valor,
                    e.unidad AS unidad, e.seccion AS seccion, e.pagina AS pagina,
+                   e.spans AS spans,
                    d.id AS documento_id, d.tipo_documento AS documento_nombre
             LIMIT 25
             """,
             {"toks": toks},
         )
+        # Integridad de cita: recupera el VERBATIM del documento (chunk[start:end])
+        # para cada spec que tenga span. El que no, queda con fragmento=None → la UI
+        # muestra "fragmento no disponible" en vez de pasar texto generado como fuente.
+        self._hidratar_fragmentos(tenant_id, especs)
         termino_def = self.client.query(
             tenant_id,
             """
@@ -125,6 +166,37 @@ class DKGReader:
             "termino": td.get("termino"),
             "definicion": td.get("definicion"),
         }
+
+    def _hidratar_fragmentos(self, tenant_id: str, especs: list[dict]) -> None:
+        """
+        Recorta el texto VERBATIM del documento para cada spec con span y lo anexa
+        in-place como `fragmento` (+ `span_inicio`/`span_fin`). Una sola query extra:
+        junta los chunks de origen y corta `texto[start:end]`. Spec sin span válido o
+        cuyo offset no casa el chunk ⇒ `fragmento=None` (fallback honesto en la UI).
+        """
+        if not especs:
+            return
+        pendientes: list[tuple[dict, str, int, int]] = []
+        for e in especs:
+            loc = _primer_span(e.get("spans"))
+            if loc is None:
+                continue
+            chunk_id, ini, fin = loc
+            e["span_inicio"], e["span_fin"] = ini, fin
+            pendientes.append((e, chunk_id, ini, fin))
+        if not pendientes:
+            return
+        ids = sorted({cid for _, cid, _, _ in pendientes})
+        chunks = self.client.query(
+            tenant_id,
+            "MATCH (c:Chunk) WHERE c.id IN $ids RETURN c.id AS id, c.text AS text",
+            {"ids": ids},
+        )
+        textos = {c.get("id"): c.get("text") for c in chunks}
+        for e, chunk_id, ini, fin in pendientes:
+            texto = textos.get(chunk_id)
+            if isinstance(texto, str) and 0 <= ini < fin <= len(texto):
+                e["fragmento"] = texto[ini:fin]
 
     # ── Tipo 2 — Guía paso a paso ─────────────────────────────────────────────
 

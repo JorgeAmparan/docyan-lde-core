@@ -16,7 +16,14 @@ interface Espec {
   nombre?: string;
   valor?: string;
   unidad?: string;
-  cita?: { documento_id?: string; documento_nombre?: string };
+  // `fragmento` = verbatim del documento (chunk[start:end]); null ⇒ sin span.
+  cita?: {
+    documento_id?: string;
+    documento_nombre?: string;
+    fragmento?: string | null;
+    span_inicio?: number | null;
+    span_fin?: number | null;
+  };
 }
 interface Answer {
   q: string;
@@ -60,6 +67,10 @@ function CitedCard({ a, onOpen }: { a: Answer; onOpen: (e: Espec) => void }) {
 
 function SourceOverlay({ e, doc, onClose }: { e: Espec; doc: string; onClose: () => void }) {
   const t = useT();
+  // INTEGRIDAD DE CITA (regla absoluta): el overlay solo muestra el VERBATIM del
+  // documento (cita.fragmento = chunk[start:end]). Si no hay span, se declara
+  // honesto "fragmento no disponible" — jamás el nombre/valor generado por el LLM.
+  const verbatim = e.cita?.fragmento?.trim() || null;
   return (
     <div className="src-overlay" onClick={onClose}>
       <div className="src-sheet" onClick={(ev) => ev.stopPropagation()}>
@@ -71,13 +82,24 @@ function SourceOverlay({ e, doc, onClose }: { e: Espec; doc: string; onClose: ()
           <button className="src-x" onClick={onClose} aria-label={t({ es: "Cerrar", en: "Close" })}><Icon name="x" size={18} /></button>
         </div>
         <div className="src-body">
-          <p>{t({ es: "Fragmento del documento original que sostiene la respuesta:", en: "Fragment of the original document that supports the answer:" })}</p>
-          <p><mark>{e.nombre}{e.valor ? ` — ${e.valor}` : ""}</mark></p>
-          <p>{t({ es: "El documento se consulta en su idioma original; la respuesta llega en el idioma del sitio.", en: "The document is consulted in its original language; the answer arrives in the site's language." })}</p>
+          {verbatim ? (
+            <>
+              <p>{t({ es: "Fragmento del documento original que sostiene la respuesta:", en: "Fragment of the original document that supports the answer:" })}</p>
+              <p><mark>{verbatim}</mark></p>
+              <p>{t({ es: "El documento se consulta en su idioma original; la respuesta llega en el idioma del sitio.", en: "The document is consulted in its original language; the answer arrives in the site's language." })}</p>
+            </>
+          ) : (
+            <>
+              <p className="src-unavailable">{t({ es: "Fragmento no disponible", en: "Fragment not available" })}</p>
+              <p>{t({ es: "Esta respuesta aún no tiene el span de caracteres del documento. Se muestra la ubicación de la fuente, no el texto generado.", en: "This answer doesn't yet have the document's character span. The source location is shown, not generated text." })}</p>
+            </>
+          )}
         </div>
         <div className="src-foot">
           <Icon name="shield-check" size={14} />
-          <span>{t({ es: "Pedigree al fragmento exacto · cadena SHA-256", en: "Exact-passage pedigree · SHA-256 chain" })}</span>
+          <span>{verbatim
+            ? t({ es: "Pedigree al fragmento exacto · cadena SHA-256", en: "Exact-passage pedigree · SHA-256 chain" })
+            : t({ es: "Procedencia al documento · sin span exacto", en: "Document provenance · no exact span" })}</span>
         </div>
       </div>
     </div>

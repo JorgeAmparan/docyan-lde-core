@@ -219,6 +219,9 @@
 .s2 .src2 .s-head .pg{margin-left:auto;}
 .s2 .src2 .s-span{font-family:var(--font-serif);font-size:13px;line-height:1.55;color:var(--ink-800);}
 .s2 .src2 .s-span mark{background:var(--cinnabar-100);color:var(--ink-900);padding:1px 3px;border-radius:3px;}
+/* Integridad de cita: estado honesto "fragmento no disponible" — NO resaltado. */
+.s2 .src2 .s-span-na{font-style:italic;color:var(--fg-subtle);}
+.src-overlay .src-body .src-unavailable{font-weight:600;color:var(--fg-subtle);}
 .s2 .src2 .s-orig{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);margin-top:8px;}
 /* suggestions + input */
 .s2 .dc2-sugs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;}
