@@ -147,7 +147,10 @@ export function DemoConsult({ vkey }: { vkey: string }) {
   };
 
   return (
-    <div className="demo-page">
+    // `.s2` escopa el kit-sitio-v2 (mismas clases que el hero del index). El CoDo
+    // vive FUERA del grupo (public)/SiteShell, así que debe declarar `.s2` aquí o
+    // las tarjetas (.dc2-a, .cite2, …) no reciben estilo y caen a texto plano.
+    <div className="demo-page s2">
       <div className="demo-banner">
         <Icon name="info" size={15} />
         <span>{t({ es: "Estás en un CoDo demo de DOCYAN. Para crear el tuyo, agenda una demo o regístrate.", en: "You're in a DOCYAN demo CoDo. To create your own, book a demo or sign up." })}</span>

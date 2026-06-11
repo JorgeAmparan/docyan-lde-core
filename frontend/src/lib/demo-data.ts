@@ -41,21 +41,19 @@ export const VERTICALS: DemoVertical[] = [
     label: { es: "Metrología", en: "Metrology" },
     icon: "ruler",
     codo: "CODO-LAB-04",
-    entity: { es: "Laboratorio de metrología (calibración de instrumentos)", en: "Metrology lab (instrument calibration)" },
+    entity: { es: "Calibrador Mitutoyo 500 — banco dimensional", en: "Mitutoyo 500 caliper — dimensional bench" },
     blurb: {
-      es: "Manuales de instrumentos (calibrador, multímetro, balanza) + certificado de calibración ISO 17025: procedimientos, exactitud/resolución y trazabilidad.",
-      en: "Instrument manuals (caliper, multimeter, balance) + ISO 17025 calibration certificate: procedures, accuracy/resolution and traceability.",
+      es: "El expediente vivo de UN instrumento: manual de operación + su certificado de calibración. Lo que el laboratorio entrega a su cliente maquilador.",
+      en: "The living file of ONE instrument: operating manual + its calibration certificate. What the lab hands its maquila client.",
     },
     docs: [
       { name: "Mitutoyo Caliper 500 — Operating Manual", tipo: "manual_tecnico" },
-      { name: "Fluke 87/89 Multimeter — Users Manual", tipo: "manual_tecnico" },
-      { name: "Ohaus Pioneer PX Balance — Instruction Manual", tipo: "manual_tecnico" },
-      { name: "ISO 17025 Calibration Certificate", tipo: "calibracion" },
+      { name: "Mitutoyo Caliper 500 — Calibration Certificate", tipo: "calibracion" },
     ],
     questions: [
-      { es: "¿Cuál es el rango de medición del calibrador Mitutoyo?", en: "What is the measuring range of the Mitutoyo caliper?" },
-      { es: "¿Cuál es la legibilidad de la balanza Ohaus?", en: "What is the readability of the Ohaus balance?" },
-      { es: "¿A qué patrón nacional es trazable el certificado de calibración?", en: "To which national standard is the calibration certificate traceable?" },
+      { es: "¿Cuál es el rango de medición?", en: "What is the measuring range?" },
+      { es: "¿Cuál es la incertidumbre de medición?", en: "What is the measurement uncertainty?" },
+      { es: "¿A qué patrón es trazable?", en: "What is it traceable to?" },
     ],
   },
   {
