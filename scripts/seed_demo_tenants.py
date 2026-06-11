@@ -60,22 +60,35 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool) -> dict:
     data = path.read_bytes()
     texto, _confiable = extraer_texto(data, path.name)
 
+    # CLASIFICACIÓN DEL TIPO DOCUMENTAL — paridad con la ruta API (POST /ingesta/
+    # documents). SIN esto el worker no recibe tipo y cae a extracción genérica
+    # (__Entity__), saltándose el schema por tipo que produce la ontología DOCYAN
+    # (:Especificacion/:TerminoTecnico…) que el retrieval cita. Es la divergencia
+    # diagnosticada: la costura de consulta citada (B13.2) exige el schema por tipo.
+    from app.ingesta import providers as _prov
+    tipo_heuristico, _conf = _prov.get_selector().clasificar_heuristica(
+        texto[:8000], path.name
+    )
+
     # Asegura saldo de cómputo del tenant demo (sin auto-recharge en prod; aquí lo
     # provisionamos explícitamente para la siembra).
     BudgetManager().ensure_budget(tenant_id, saldo_inicial_usd=DEMO_SALDO_USD)
 
-    cot = get_cotizador().cotizar(tenant_id=tenant_id, texto_documento=texto)
+    cot = get_cotizador().cotizar(
+        tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_heuristico
+    )
     if not cot.aprobado:
         return {"doc": path.name, "ok": False, "motivo": cot.motivo}
     if dry_run:
         return {"doc": path.name, "ok": True, "dry_run": True,
-                "costo_usd": cot.costo_estimado_usd}
+                "tipo": tipo_heuristico, "costo_usd": cot.costo_estimado_usd}
 
     store = get_document_store()
     ref = store.put(tenant_id, path.name, data)
     job = IngestJob(
         job_id=uuid.uuid4().hex, tenant_id=tenant_id, documento_ref=ref,
         nombre_archivo=path.name, content_sha256=hashlib.sha256(data).hexdigest(),
+        tipo_documento=tipo_heuristico,  # ← el worker lo usa para elegir el schema
         bytes_originales=len(data),
         cotizacion=CotizacionSnapshot(
             costo_estimado_usd=cot.costo_estimado_usd,
@@ -88,7 +101,7 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool) -> dict:
     disp.crear_job(job)
     disp.confirmar(job.job_id)  # reserva saldo + encola hacia el worker
     return {"doc": path.name, "ok": True, "job_id": job.job_id,
-            "costo_usd": cot.costo_estimado_usd}
+            "tipo": tipo_heuristico, "costo_usd": cot.costo_estimado_usd}
 
 
 def main() -> int:
@@ -115,7 +128,8 @@ def main() -> int:
                 continue
             if res["ok"]:
                 total_ok += 1
-                print(f"  ✓ {res['doc']} {'(dry-run)' if res.get('dry_run') else res.get('job_id','')}"
+                print(f"  ✓ {res['doc']} [tipo={res.get('tipo')}] "
+                      f"{'(dry-run)' if res.get('dry_run') else res.get('job_id','')}"
                       f" ~${res.get('costo_usd', 0):.4f}")
             else:
                 total_fail += 1
