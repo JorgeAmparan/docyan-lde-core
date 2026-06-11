@@ -66,10 +66,12 @@ def _primer_span(spans: object) -> tuple[str, int, int] | None:
     Extrae el primer span de caracteres de la propiedad `spans` de un nodo del SDK.
 
     Formato del SDK (procedencia GraphRAG-SDK): JSON `{"<chunk_id>": [{"start": N,
-    "end": M}, ...], ...}`. Los offsets son RELATIVOS al texto del chunk de origen
-    (no al documento completo). Devuelve `(chunk_id, start, end)` del primer span
-    válido, o None si no hay span aprovechable. Sin span ⇒ no hay verbatim → la UI
-    cae al fallback honesto (integridad de cita).
+    "end": M}, ...], ...}`. Devuelve `(chunk_id, start, end)` del primer span válido,
+    o None si no hay. Importante: los offsets NO casan 1:1 el texto almacenado del
+    chunk (Docling normaliza newlines/whitespace distinto al indexar, y la deriva
+    crece por campo) → recortar `chunk[start:end]` produce texto desalineado. Por eso
+    el `start` se usa SOLO como PISTA de posición; el verbatim se ancla por término
+    (`_fragmento_anclado`), no por offset crudo. El `chunk_id` sí es fiable.
     """
     if not spans:
         return None
@@ -94,6 +96,53 @@ def _primer_span(spans: object) -> tuple[str, int, int] | None:
         if isinstance(ini, int) and isinstance(fin, int) and 0 <= ini < fin:
             return str(chunk_id), ini, fin
     return None
+
+
+_WS = re.compile(r"\s+")
+_VENTANA = 52  # caracteres de contexto a cada lado del término anclado
+
+
+def _fragmento_anclado(texto: str, nombre: str | None, pista: int) -> dict | None:
+    """
+    Reconstruye el VERBATIM del documento anclando en el TÉRMINO real de la spec, no
+    en el offset crudo del SDK (que está desalineado con el texto almacenado).
+
+    Busca `nombre` literal dentro del texto del chunk (la ocurrencia más cercana a la
+    `pista` del span) y devuelve una ventana de contexto a su alrededor, colapsando
+    espacios para legibilidad. Garantía de integridad: el resultado SIEMPRE es texto
+    real del documento que CONTIENE el término — nunca texto generado, nunca un recorte
+    desalineado. Si el `nombre` no aparece literal en el chunk (p. ej. fue traducido o
+    sintetizado), devuelve None → la UI muestra "fragmento no disponible".
+    """
+    if not texto or not nombre:
+        return None
+    aguja = nombre.strip()
+    if len(aguja) < 2:
+        return None
+    # Todas las ocurrencias literales del término en el chunk.
+    posiciones: list[int] = []
+    i = texto.find(aguja)
+    while i != -1:
+        posiciones.append(i)
+        i = texto.find(aguja, i + 1)
+    if not posiciones:
+        return None
+    # La más cercana a la pista del span (desambigua términos repetidos).
+    pos = min(posiciones, key=lambda s: abs(s - pista))
+    fin = pos + len(aguja)
+    # Ventana de contexto, recortada a límites de palabra (lo ≤ pos, hi ≥ fin: el
+    # término SIEMPRE queda dentro).
+    lo = max(0, pos - _VENTANA)
+    while lo > 0 and not texto[lo - 1].isspace():
+        lo -= 1
+    hi = min(len(texto), fin + _VENTANA)
+    while hi < len(texto) and not texto[hi].isspace():
+        hi += 1
+    frag = _WS.sub(" ", texto[lo:hi]).strip()
+    aguja_norm = _WS.sub(" ", aguja)
+    if aguja_norm not in frag:  # salvaguarda tras colapsar espacios
+        return None
+    return {"texto": frag, "inicio": lo, "fin": hi}
 
 
 @runtime_checkable
@@ -169,34 +218,39 @@ class DKGReader:
 
     def _hidratar_fragmentos(self, tenant_id: str, especs: list[dict]) -> None:
         """
-        Recorta el texto VERBATIM del documento para cada spec con span y lo anexa
-        in-place como `fragmento` (+ `span_inicio`/`span_fin`). Una sola query extra:
-        junta los chunks de origen y corta `texto[start:end]`. Spec sin span válido o
-        cuyo offset no casa el chunk ⇒ `fragmento=None` (fallback honesto en la UI).
+        Anexa in-place el VERBATIM del documento a cada spec con chunk de origen, como
+        `fragmento` (+ `span_inicio`/`span_fin` = posición REAL en el texto almacenado).
+        Una sola query extra: junta los chunks de origen y ancla por término
+        (`_fragmento_anclado`). Spec sin chunk, o cuyo término no aparece literal en él,
+        queda con `fragmento=None` ⇒ la UI muestra "fragmento no disponible". Nunca se
+        fabrica texto: el fragmento es siempre real y contiene el término.
         """
         if not especs:
             return
-        pendientes: list[tuple[dict, str, int, int]] = []
+        pendientes: list[tuple[dict, str, int]] = []
         for e in especs:
             loc = _primer_span(e.get("spans"))
             if loc is None:
                 continue
-            chunk_id, ini, fin = loc
-            e["span_inicio"], e["span_fin"] = ini, fin
-            pendientes.append((e, chunk_id, ini, fin))
+            chunk_id, ini, _fin = loc
+            pendientes.append((e, chunk_id, ini))
         if not pendientes:
             return
-        ids = sorted({cid for _, cid, _, _ in pendientes})
+        ids = sorted({cid for _, cid, _ in pendientes})
         chunks = self.client.query(
             tenant_id,
             "MATCH (c:Chunk) WHERE c.id IN $ids RETURN c.id AS id, c.text AS text",
             {"ids": ids},
         )
         textos = {c.get("id"): c.get("text") for c in chunks}
-        for e, chunk_id, ini, fin in pendientes:
+        for e, chunk_id, pista in pendientes:
             texto = textos.get(chunk_id)
-            if isinstance(texto, str) and 0 <= ini < fin <= len(texto):
-                e["fragmento"] = texto[ini:fin]
+            if not isinstance(texto, str):
+                continue
+            frag = _fragmento_anclado(texto, e.get("nombre"), pista)
+            if frag is not None:
+                e["fragmento"] = frag["texto"]
+                e["span_inicio"], e["span_fin"] = frag["inicio"], frag["fin"]
 
     # ── Tipo 2 — Guía paso a paso ─────────────────────────────────────────────
 
