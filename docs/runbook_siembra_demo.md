@@ -102,3 +102,29 @@ del cliente (donde la consulta citada es el producto). Concretamente:
 
 No lo implemento sin tu go: toca el worker (se despliega aparte) y la semántica de
 estados de job. Si lo apruebas, va como sprint corto propio.
+
+---
+
+## 4. Correspondencia químico-archivo — auditar por CONTENIDO, no por nombre de archivo (F3, jun 2026)
+
+**Incidente:** la siembra inicial usó fact sheets de NJ DOH descargados con el
+número equivocado. Los archivos quedaron **mal etiquetados**: `methanol_sds_en.pdf`
+contenía *Methyl Amyl Acetate*, `min_hcl_sds.pdf` *Hexafluoroacetone*,
+`agri_hipoclorito_sds.pdf` *Stoddard Solvent*. El nombre de archivo decía una cosa;
+el contenido, otra. El overlay mostró un compuesto que NO era el del CoDo.
+
+**Regla:** la correspondencia "químico declarado en la UI == químico del archivo"
+se verifica contra el **texto crudo del chunk** (`Common Name:` del Fact Sheet), NO
+contra `nombre_archivo`. El nombre de archivo no es evidencia.
+
+**Fact sheets correctos (NJ DOH RTK):** acetona=0006-equiv, isopropanol=1010x,
+NaOH, **metanol=1222 (METHYL ALCOHOL)**, **HCl=1012 (HYDROGEN CHLORIDE/Muriatic)**,
+**hipoclorito=1707 (SODIUM HYPOCHLORITE)**. Verificar SIEMPRE con
+`pdfminer … | grep 'Common Name'` antes de sembrar.
+
+**Variabilidad de extracción (DEF-3):** el MISMO archivo metanol rindió 11
+`:Especificacion` en demo-hero y 0 en demo-lab (extracción no determinista). Un
+grafo con `:Especificacion=0` extrae ontología (`:Sustancia`/`:Riesgo`) pero el
+pipeline `informativa` (solo lee `:Especificacion`) no la cita → fallback honesto.
+Cierre real depende del retrieval ampliado (DEF-1) + retry de extracción
+(fail-fast worker) — ver [[post-f3-sprint-plan]] / B13.3.
