@@ -9,81 +9,13 @@
 
 import Link from "next/link";
 import { Icon } from "@/components/icon";
-import { useT, type Bilingual } from "@/lib/site-i18n";
+import { useT } from "@/lib/site-i18n";
 import { Doors } from "@/components/commercial/site-chrome";
+import { VERTICALS } from "@/lib/demo-data";
 
-interface CodoCard {
-  key: string;
-  label: Bilingual;
-  icon: string;
-  codo: string;
-  entity: string;
-  blurb: Bilingual;
-  docs: string[];
-}
-
-const CODOS: CodoCard[] = [
-  {
-    key: "lab",
-    label: { es: "Laboratorios", en: "Laboratories" },
-    icon: "flask-conical",
-    codo: "CODO-LAB-04",
-    entity: "Centrífuga Hettich Rotina 380",
-    blurb: {
-      es: "Centrífugas, balanzas, calibraciones vigentes y MSDS de reactivos.",
-      en: "Centrifuges, balances, current calibrations and reagent MSDS.",
-    },
-    docs: ["Manual de calibración de centrífuga", "MSDS de reactivo común", "Certificado de trazabilidad de patrón"],
-  },
-  {
-    key: "maq",
-    label: { es: "Maquiladoras", en: "Maquiladoras" },
-    icon: "factory",
-    codo: "CODO-MAQ-12",
-    entity: "Línea CNC Haas VF-4",
-    blurb: {
-      es: "Manuales por línea, cambios de herramienta y MSDS de fluidos de corte.",
-      en: "Per-line manuals, tool changes and cutting-fluid MSDS.",
-    },
-    docs: ["Manual operativo de CNC", "Procedimiento de cambio de herramienta", "Hoja MSDS de fluido de corte"],
-  },
-  {
-    key: "pharma",
-    label: { es: "Farma", en: "Pharma" },
-    icon: "pill",
-    codo: "CODO-PHARMA-03",
-    entity: "Bioreactor B-3",
-    blurb: {
-      es: "SOPs, Batch Records y validaciones de limpieza bajo GMP.",
-      en: "SOPs, Batch Records and cleaning validations under GMP.",
-    },
-    docs: ["SOP de operación de bioreactor", "Plantilla Batch Manufacturing Record", "Validación de limpieza CIP"],
-  },
-  {
-    key: "min",
-    label: { es: "Minería", en: "Mining" },
-    icon: "mountain",
-    codo: "CODO-MIN-08",
-    entity: "Excavadora Komatsu PC-2000",
-    blurb: {
-      es: "Operación segura, inspección pre-uso y MSDS de combustibles.",
-      en: "Safe operation, pre-use inspection and fuel MSDS.",
-    },
-    docs: ["Procedimiento de operación segura de excavadora", "MSDS de combustible diésel", "Reporte de inspección pre-uso"],
-  },
-  {
-    key: "agri",
-    label: { es: "Agroindustria", en: "Agribusiness" },
-    icon: "sprout",
-    codo: "CODO-AGRI-02",
-    entity: "Tanque enfriamiento leche T-7",
-    blurb: {
-      es: "Especificaciones de producto, muestreo y certificados por mercado.",
-      en: "Product specs, sampling and per-market certificates.",
-    },
-    docs: ["Especificación de producto leche cruda", "Protocolo de muestreo", "Certificado de calidad para mercado destino"],
-  },
-];
+/* Fuente única de los CoDos: `VERTICALS` (demo-data.ts), reconciliado con los
+   tenants demo REALES sembrados en prod. El hub solo lista y enlaza. */
+const CODOS = VERTICALS;
 
 export default function DemosPage() {
   const t = useT();
@@ -108,7 +40,7 @@ export default function DemosPage() {
                 <span className="ic"><Icon name={c.icon} size={20} /></span>
                 <div>
                   <h3>{t(c.label)}</h3>
-                  <div className="mono" style={{ fontSize: 12, color: "var(--fg-subtle)", margin: "2px 0 6px" }}>{c.codo} · {c.entity}</div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--fg-subtle)", margin: "2px 0 6px" }}>{c.codo} · {t(c.entity)}</div>
                   <p>{t(c.blurb)}</p>
                   <div className="dc2-docs" style={{ marginTop: 10 }}>
                     {c.docs.map((d, i) => (

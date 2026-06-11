@@ -48,63 +48,32 @@ interface DemoDoc {
   qa: DemoQA[];
 }
 
+// Reconciliado con el tenant demo REAL `demo-hero` (acetona + metanol SDS, EN).
+// Las sugeridas son consultas VERIFICADAS; la respuesta se compone del grafo real
+// vía /demo/query (codo="hero") — cero enlatado. Los campos de respuesta van nulos:
+// el contenido llega del backend. El SDS está en inglés → consulta ES, span EN.
+const _NA = { cite: null, page: null, span: null, mark: null, spanLang: null };
 const DEMO_DOCS: DemoDoc[] = [
   {
     key: "msds",
-    name: { es: "MSDS — Acetona", en: "MSDS — Acetone" },
+    name: { es: "SDS — Acetona", en: "SDS — Acetone" },
     langTag: "EN",
     icon: "file-text",
     qa: [
-      {
-        q: { es: "¿Cuál es el límite de exposición OSHA?", en: "What is the OSHA exposure limit?" },
-        value: "1,000",
-        unit: "ppm",
-        note: { es: "PEL (TWA 8 h) según OSHA. El TLV de ACGIH es más estricto: 250 ppm.", en: "OSHA PEL (8-hr TWA). The ACGIH TLV is stricter: 250 ppm." },
-        cite: "MSDS Acetone · Sec. 8",
-        page: 5,
-        span: "Exposure controls — OSHA PEL (TWA 8 hr): 1000 ppm. ACGIH TLV (TWA): 250 ppm.",
-        mark: "OSHA PEL (TWA 8 hr): 1000 ppm",
-        spanLang: "EN",
-      },
-      {
-        q: { es: "¿Qué protección personal requiere su manejo?", en: "What personal protection does handling require?" },
-        text: { es: "Gafas de seguridad con protección lateral y guantes de nitrilo. Manejar en área ventilada, lejos de fuentes de ignición.", en: "Safety glasses with side shields and nitrile gloves. Handle in a ventilated area, away from ignition sources." },
-        cite: "MSDS Acetone · Sec. 8",
-        page: 5,
-        span: "Personal protective equipment: safety glasses with side shields; nitrile gloves. Use only with adequate ventilation. Keep away from ignition sources.",
-        mark: "safety glasses with side shields; nitrile gloves",
-        spanLang: "EN",
-      },
+      { q: { es: "¿Cuál es el límite de exposición?", en: "What is the exposure limit?" }, ..._NA },
+      { q: { es: "¿Cuál es la concentración IDLH?", en: "What is the IDLH concentration?" }, ..._NA },
+      { q: { es: "¿Cuál es la distancia de aislamiento en caso de incendio?", en: "What is the isolation distance in case of fire?" }, ..._NA },
     ],
   },
   {
-    key: "ficha",
-    name: { es: "Ficha técnica — Compresor GA-22", en: "Datasheet — GA-22 compressor" },
-    langTag: "ES",
+    key: "metanol",
+    name: { es: "SDS — Metanol", en: "SDS — Methanol" },
+    langTag: "EN",
     icon: "file-text",
     qa: [
-      {
-        q: { es: "¿Rango de presión de operación?", en: "What is the operating pressure range?" },
-        value: "4.0 – 8.5",
-        unit: "bar",
-        note: { es: "Presión nominal de trabajo: 7.5 bar. Verificar el manómetro antes de cada arranque.", en: "Nominal working pressure: 7.5 bar. Check the gauge before every start-up." },
-        cite: "Ficha técnica GA-22 · §4.1",
-        page: 12,
-        span: "Rango de presión de operación: 4.0 – 8.5 bar. Presión nominal de trabajo: 7.5 bar. Verificar manómetro antes de cada arranque.",
-        mark: "4.0 – 8.5 bar",
-        spanLang: "ES",
-      },
-      {
-        q: { es: "¿Intervalo de cambio de aceite?", en: "What is the oil change interval?" },
-        value: "4,000",
-        unit: "h",
-        note: { es: "Con aceite Roto-Inject; reducir a 2,000 h en ambientes con polvo.", en: "With Roto-Inject oil; reduce to 2,000 h in dusty environments." },
-        cite: "Ficha técnica GA-22 · §7.2",
-        page: 23,
-        span: "Intervalo de cambio de aceite: cada 4,000 horas con aceite Roto-Inject. En ambientes con alta carga de polvo, reducir el intervalo a 2,000 horas.",
-        mark: "cada 4,000 horas",
-        spanLang: "ES",
-      },
+      { q: { es: "¿Cuál es el límite de exposición?", en: "What is the exposure limit?" }, ..._NA },
+      { q: { es: "¿Cuál es el punto de inflamación?", en: "What is the flash point?" }, ..._NA },
+      { q: { es: "¿Cuál es la presión de vapor?", en: "What is the vapor pressure?" }, ..._NA },
     ],
   },
 ];
@@ -112,24 +81,6 @@ const DEMO_DOCS: DemoDoc[] = [
 const demoDelay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 type AnswerState = DemoQA;
-
-/* coincidencia laxa: una pregunta libre que comparte palabras clave con una
-   consulta preparada usa su respuesta citada real */
-function matchQA(doc: DemoDoc, v: string, t: (o: Bilingual) => string): DemoQA | null {
-  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const words = norm(v).split(/[^a-z0-9]+/).filter((w) => w.length > 3);
-  let best: DemoQA | null = null;
-  let bestScore = 0;
-  for (const qa of doc.qa) {
-    const hay = norm(t(qa.q) + " " + (qa.mark || "") + " " + t(qa.note || qa.text || { es: "", en: "" }));
-    const score = words.filter((w) => hay.includes(w)).length;
-    if (score > bestScore) {
-      best = qa;
-      bestScore = score;
-    }
-  }
-  return bestScore >= 1 ? best : null;
-}
 
 type Phase = "idle" | "typing" | "loading" | "answered";
 
@@ -157,70 +108,39 @@ function LiveDemo() {
 
   const doc = DEMO_DOCS.find((d) => d.key === docKey) ?? DEMO_DOCS[0];
 
-  const runAnswer = async (question: string, hit: DemoQA | null) => {
+  const runAnswer = async (question: string) => {
     setQ(question);
     setPhase("loading");
     setA(null);
     setShowSrc(false);
-    if (hit) {
-      await demoDelay(520);
-      setA(hit);
-    } else {
-      // input libre sin match: backend real (codo="hero"). Respuesta servida o
-      // fallback honesto — NUNCA se fabrica una respuesta.
-      let res: AnswerState;
-      try {
-        const o = await demoQuery(question, "hero");
-        if (o.servido && o.resultado) {
-          const r = o.resultado as Record<string, unknown>;
-          const answer =
-            (typeof r.respuesta === "string" && r.respuesta) ||
-            (typeof r.answer === "string" && r.answer) ||
-            (typeof r.texto === "string" && r.texto) ||
-            "";
-          const cite =
-            (typeof r.cita === "string" && r.cita) ||
-            (typeof r.cite === "string" && r.cite) ||
-            t(doc.name) + " · §";
-          const span =
-            (typeof r.span === "string" && r.span) ||
-            (typeof r.fragmento === "string" && r.fragmento) ||
-            answer ||
-            null;
-          res = {
-            q: { es: question, en: question },
-            text: { es: answer, en: answer },
-            cite: cite || null,
-            page: "—",
-            span,
-            mark: null,
-            spanLang: lang.toUpperCase(),
-          };
-        } else {
-          const msg = o.fallback || DEMO_FALLBACK;
-          res = {
-            q: { es: question, en: question },
-            text: { es: msg, en: msg },
-            cite: null,
-            page: null,
-            span: null,
-            mark: null,
-            spanLang: null,
-          };
-        }
-      } catch {
+    // SIEMPRE backend real (codo="hero"): la respuesta se compone de las
+    // especificaciones del grafo real con su cita. Cero enlatado (D3). Fallback
+    // honesto si el documento no la sostiene — nunca se fabrica.
+    let res: AnswerState;
+    try {
+      const o = await demoQuery(question, "hero");
+      const payload = ((o.resultado || {}) as Record<string, unknown>).payload as Record<string, unknown> | undefined;
+      const especs = (payload?.especificaciones as Array<{ nombre?: string; valor?: string; cita?: { documento_nombre?: string } }>) || [];
+      if (o.servido && especs.length > 0) {
+        const e = especs[0];
         res = {
           q: { es: question, en: question },
-          text: { es: DEMO_FALLBACK, en: DEMO_FALLBACK },
-          cite: null,
-          page: null,
-          span: null,
-          mark: null,
-          spanLang: null,
+          value: e.nombre || "",
+          note: e.valor ? { es: e.valor, en: e.valor } : undefined,
+          cite: `${t(doc.name)} · ${e.cita?.documento_nombre || "msds"}`,
+          page: "—",
+          span: `${e.nombre || ""}${e.valor ? " — " + e.valor : ""}`,
+          mark: e.nombre || null,
+          spanLang: "EN",
         };
+      } else {
+        const msg = o.fallback || DEMO_FALLBACK;
+        res = { q: { es: question, en: question }, text: { es: msg, en: msg }, cite: null, page: null, span: null, mark: null, spanLang: null };
       }
-      setA(res);
+    } catch {
+      res = { q: { es: question, en: question }, text: { es: DEMO_FALLBACK, en: DEMO_FALLBACK }, cite: null, page: null, span: null, mark: null, spanLang: null };
     }
+    setA(res);
     setPhase("answered");
     setTimeout(() => setShowSrc(true), 480);
   };
@@ -240,7 +160,7 @@ function LiveDemo() {
     await demoDelay(240);
     setText("");
     typingRef.current = false;
-    runAnswer(question, qa);
+    runAnswer(question);
   };
 
   const submitFree = (e?: React.FormEvent | React.MouseEvent) => {
@@ -249,8 +169,7 @@ function LiveDemo() {
     const v = text.trim();
     if (!v) return;
     setText("");
-    const exact = doc.qa.find((x) => t(x.q).toLowerCase() === v.toLowerCase());
-    runAnswer(v, exact || matchQA(doc, v, t) || null);
+    runAnswer(v);
   };
 
   const pickDoc = (k: string) => {

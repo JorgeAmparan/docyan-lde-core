@@ -656,3 +656,10 @@
 .s2 .faq-cta{margin-top:56px;padding:32px;border-radius:var(--radius-xl);background:var(--amate-100);text-align:center;}
 .s2 .faq-cta h2{font-size:clamp(20px,3vw,26px);font-weight:700;letter-spacing:-.01em;margin:0 0 18px;}
 .s2 .faq-cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+
+/* F3 — CoDo demo: render de respuesta citada (especificaciones reales del grafo). */
+.s2 .fa-specs{display:flex;flex-direction:column;gap:12px;margin-top:4px;}
+.s2 .fa-spec{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--amate-50);}
+.s2 .fa-spec-v{font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--fg);letter-spacing:-.01em;}
+.s2 .fa-spec .fa-note{margin:4px 0 8px;}
+.s2 .dc-fallback .fa-mode{color:var(--fg-muted);}
