@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { useT, type Bilingual } from "@/lib/site-i18n";
-import { VERTICALS, DOC_TIPO_LABEL, type DemoVertical } from "@/lib/demo-data";
+import { VERTICALS, DOC_TIPO_LABEL, type DemoVertical, type DemoDoc } from "@/lib/demo-data";
 import { demoQuery } from "@/lib/demo-query";
 import { DemoAnswerCard, type DemoCardData } from "@/components/commercial/demo-answer-card";
 
@@ -23,6 +23,8 @@ interface Espec {
   cita?: {
     documento_id?: string;
     documento_nombre?: string;
+    documento_tipo?: string;
+    documento_url?: string | null;
     fragmento?: string | null;
     span_inicio?: number | null;
     span_fin?: number | null;
@@ -43,6 +45,7 @@ interface Answer {
   pasos: Paso[];                // procedimiento del manual (manual_tecnico)
   titulo: string;
   docNombre: string;            // tipo/nombre del documento de la cita (p.ej. manual_tecnico)
+  docTipo: string;              // tipo documental REAL de la cita (atribución §2.3)
   doc: string;
   fallback: string | null;
 }
@@ -52,7 +55,15 @@ interface Answer {
    + extras; ProcedureCard: pasos numerados; vacío: fallback honesto.
    B13.3 §2.5: el copy del fallback NO invita a "preguntas sugeridas abajo" cuando
    el CoDo no tiene sugeridas (p. ej. lab) — invita a reformular sobre su dominio. */
-function toCardData(a: Answer, t: T, hasSugeridas: boolean, dominio: string): DemoCardData {
+/* Atribución correcta (B13.3 §2.3): la etiqueta de la cita nombra el documento
+   REAL de origen (por su tipo), nunca el primer doc del CoDo. Evita "Operating
+   Manual · ..._calibration_cert.pdf" (nombre de un doc + archivo de otro). */
+function fuenteLabel(docs: DemoDoc[], tipo?: string, fallback?: string): string {
+  const d = tipo ? docs.find((x) => x.tipo === tipo) : undefined;
+  return d?.name || fallback || "documento";
+}
+
+function toCardData(a: Answer, t: T, hasSugeridas: boolean, dominio: string, docs: DemoDoc[]): DemoCardData {
   const esProc = a.kind === "procedure_card";
   const sinRespuesta = !a.servido || (esProc ? a.pasos.length === 0 : a.especificaciones.length === 0);
   if (sinRespuesta) {
@@ -72,7 +83,7 @@ function toCardData(a: Answer, t: T, hasSugeridas: boolean, dominio: string): De
         descripcion: p.descripcion,
         meta: (p.herramientas ?? []).concat(p.epp ?? []).join(" · ") || undefined,
       })),
-      citeLabel: `${a.doc} · ${a.docNombre || "manual_tecnico"}`,
+      citeLabel: fuenteLabel(docs, a.docTipo, a.docNombre),
       verbatim: null, // los procedimientos muestran los pasos reales; sin span por paso
     };
   }
@@ -83,7 +94,7 @@ function toCardData(a: Answer, t: T, hasSugeridas: boolean, dominio: string): De
     unit: primary?.unidad,
     note: primary?.valor,
     extras: a.especificaciones.slice(1, 4).map((e) => ({ nombre: e.nombre, valor: e.valor })),
-    citeLabel: `${a.doc} · ${primary?.cita?.documento_nombre || "msds"}`,
+    citeLabel: fuenteLabel(docs, primary?.cita?.documento_tipo, primary?.cita?.documento_nombre),
     verbatim: primary?.cita?.fragmento?.trim() || null,
   };
 }
@@ -107,7 +118,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
     const kind = (payload?.kind as string) || "info_card";
     let especificaciones = (payload?.especificaciones as Espec[]) || [];
     const pasos = (payload?.pasos as Paso[]) || [];
-    const citas = (payload?.citas as Array<{ documento_nombre?: string }>) || [];
+    const citas = (payload?.citas as Array<{ documento_nombre?: string; documento_tipo?: string }>) || [];
     // alerts_dashboard (B13.3 §2.4 — "¿cuándo vence?"): mapea las alertas
     // administrativas (vencimientos con cita) al render de info para mostrarlas.
     if (kind === "alerts_dashboard") {
@@ -123,6 +134,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
       pasos,
       titulo: (payload?.titulo as string) || "",
       docNombre: citas[0]?.documento_nombre || "",
+      docTipo: citas[0]?.documento_tipo || (payload?.especificaciones as Espec[] | undefined)?.[0]?.cita?.documento_tipo || "",
       doc: vert.docs[0]?.name || (t(vert.entity) as string),
       fallback: res.fallback,
     };
@@ -216,7 +228,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
             m.role === "user" ? (
               <div className="fa-user" key={i}>{m.text}</div>
             ) : (
-              <DemoAnswerCard key={i} data={toCardData(m.a, t, vert.questions.length > 0, t(vert.entity) as string)} />
+              <DemoAnswerCard key={i} data={toCardData(m.a, t, vert.questions.length > 0, t(vert.entity) as string, vert.docs)} />
             ),
           )}
           {loading && <div className="demo-shimmer dc-load"><span className="sh-dot" />{t({ es: "DOCYAN está buscando en el documento…", en: "DOCYAN is searching the document…" })}</div>}
