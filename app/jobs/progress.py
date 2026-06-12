@@ -95,8 +95,12 @@ class DocProgress(BaseModel):
     retryAttempt: int = 0
     error: ProgressError | None = None
     consultUrl: str | None = None
-    # Disponibilidad explícita para consulta (F1 §2.1): true al completar.
+    # Disponibilidad explícita para consulta (F1 §2.1). B13.3 fix: ÚNICA FUENTE DE
+    # VERDAD de "vivo" = el `:DocumentoSource` existe en el grafo (live), NO el estado
+    # del job. Evita el banner "quedó vivo" sobre un doc borrado/no-creado.
     disponibleParaConsulta: bool = False
+    # True ⇒ job completado PERO sin :DocumentoSource (no quedó vivo) — estado visible.
+    completedSinDocumento: bool = False
 
 
 def _kind_from_name(nombre: str, tipo: str | None) -> str:
@@ -110,10 +114,15 @@ def build_doc_progress(
     *,
     queue_position: int | None = None,
     consult_url: str | None = None,
+    documento_vivo: bool | None = None,
 ) -> DocProgress:
     """
     Construye el `DocProgress` de un job. `pct` y `etaSeconds` se calculan aquí
     (los pesos viven en el backend; handoff §4) salvo en estados terminales.
+
+    `documento_vivo` (B13.3): estado REAL del grafo (`:DocumentoSource` existe),
+    consultado en vivo por el endpoint. Es la ÚNICA fuente de verdad de "vivo": si
+    se pasa, manda sobre el estado del job. None ⇒ compat (se deriva de completado).
     """
     status = derive_status(job)
 
@@ -144,6 +153,10 @@ def build_doc_progress(
             message=job.error or "La ingesta falló de forma persistente.",
         )
 
+    # "Vivo" = el grafo lo confirma (documento_vivo); compat: si no se consultó el
+    # grafo (None), se deriva del estado completado (comportamiento previo).
+    vivo = documento_vivo if documento_vivo is not None else (status == "completado")
+
     return DocProgress(
         docId=job.job_id,
         name=job.nombre_archivo,
@@ -157,6 +170,7 @@ def build_doc_progress(
         counters=job.counters or {},
         retryAttempt=job.retry_attempt,
         error=err,
-        consultUrl=consult_url if status == "completado" else None,
-        disponibleParaConsulta=status == "completado",
+        consultUrl=consult_url if vivo else None,
+        disponibleParaConsulta=vivo,
+        completedSinDocumento=(status == "completado" and documento_vivo is False),
     )

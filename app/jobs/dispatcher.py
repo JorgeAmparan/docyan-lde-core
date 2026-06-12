@@ -71,6 +71,7 @@ class QueueBackend:
     # Idempotencia por contenido (SHA-256), aislada por tenant.
     def record_ingested(self, tenant_id: str, content_sha256: str, payload: dict) -> None: ...
     def lookup_ingested(self, tenant_id: str, content_sha256: str) -> dict | None: ...
+    def borrar_ingested(self, tenant_id: str, content_sha256: str) -> None: ...
 
 
 # ── Backend en memoria (tests / dev sin Redis) ───────────────────────────────
@@ -109,6 +110,9 @@ class InMemoryQueueBackend:
 
     def lookup_ingested(self, tenant_id: str, content_sha256: str) -> dict | None:
         return self._ingested.get(_ingested_key(tenant_id, content_sha256))
+
+    def borrar_ingested(self, tenant_id: str, content_sha256: str) -> None:
+        self._ingested.pop(_ingested_key(tenant_id, content_sha256), None)
 
 
 # ── Backend Redis (producción) ────────────────────────────────────────────────
@@ -175,6 +179,9 @@ class RedisQueueBackend:
 
         raw = self._r().get(_ingested_key(tenant_id, content_sha256))
         return json.loads(raw) if raw else None
+
+    def borrar_ingested(self, tenant_id: str, content_sha256: str) -> None:
+        self._r().delete(_ingested_key(tenant_id, content_sha256))
 
 
 # ── Dispatcher ─────────────────────────────────────────────────────────────────
@@ -411,6 +418,13 @@ class JobDispatcher:
     def buscar_idempotente(self, tenant_id: str, content_sha256: str) -> dict | None:
         """Devuelve el resultado previo si ese contenido ya se ingirió, o None."""
         return self.backend.lookup_ingested(tenant_id, content_sha256)
+
+    def borrar_idempotencia(self, tenant_id: str, content_sha256: str) -> None:
+        """Limpia la marca de idempotencia de un contenido (B13.3 fix). Se llama al
+        BORRAR el documento: sin esto, re-subir el MISMO archivo hace idempotency-skip
+        (worker lo cierra "completed" reusando el resultado viejo, sin re-extraer ni
+        recrear el `:DocumentoSource`) — el bug del 'quedó vivo' que no quedó vivo."""
+        self.backend.borrar_ingested(tenant_id, content_sha256)
 
     # ── Reintento manual (F1 §2.5) ────────────────────────────────────────────
     def reintentar(self, job_id: str) -> IngestJob:

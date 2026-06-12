@@ -52,6 +52,8 @@ export interface DocProgress {
   error?: { code: string; message: string } | null;
   consultUrl?: string | null;
   disponibleParaConsulta?: boolean;
+  // B13.3: job completado PERO sin :DocumentoSource (no quedó vivo) — estado visible.
+  completedSinDocumento?: boolean;
 }
 
 /** Construido EN EL CLIENTE agregando N DocProgress. NO es un endpoint. */
