@@ -24,7 +24,6 @@ from app.pipelines.dkg_reader import (
 )
 from app.pipelines.retrieval_hibrido import Candidato, rankear
 
-
 # ── Detector de intención ───────────────────────────────────────────────────
 
 
