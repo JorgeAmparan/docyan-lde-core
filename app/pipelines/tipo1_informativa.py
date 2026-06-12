@@ -24,6 +24,11 @@ def _cita(row: dict) -> Cita | None:
         documento_nombre=row.get("documento_nombre"),
         seccion=row.get("seccion"),
         pagina=row.get("pagina"),
+        span_inicio=row.get("span_inicio"),
+        span_fin=row.get("span_fin"),
+        # Verbatim del documento (chunk[start:end]) cuando hay span; None ⇒ la UI
+        # muestra "fragmento no disponible". Nunca se rellena con texto sintetizado.
+        fragmento=row.get("fragmento"),
     )
 
 

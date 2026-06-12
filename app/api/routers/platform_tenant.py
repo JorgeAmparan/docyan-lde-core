@@ -32,6 +32,7 @@ async def redeem_access_code(
 ) -> RedeemAccessCodeResponse:
     # Reusa el canje compartido (B13): provisiona user+budget+billing+fila `orgs`
     # formalizada y marca el código usado. Misma lógica que el signup con código.
+    from app.ingesta.providers import get_quota_manager
     from app.onboarding.service import OnboardingError, canjear_codigo
 
     store = providers.get_store()
@@ -39,7 +40,7 @@ async def redeem_access_code(
     try:
         prov = canjear_codigo(
             store, audit, code=code, email=body.email, password=body.password,
-            name=body.name, org_name=body.org_name,
+            name=body.name, org_name=body.org_name, quota=get_quota_manager(),
         )
     except OnboardingError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)

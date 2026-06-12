@@ -1,0 +1,7 @@
+{
+  "demo-lab": ["docs/demo/lab_ethanol_sds.pdf"],
+  "demo-maq": ["docs/demo/maq_isopropanol_sds.pdf"],
+  "demo-pharma": ["docs/demo/pharma_naoh_cip_sds.pdf"],
+  "demo-min": ["docs/demo/min_hcl_sds.pdf"],
+  "demo-agri": ["docs/demo/agri_hipoclorito_sds.pdf"]
+}

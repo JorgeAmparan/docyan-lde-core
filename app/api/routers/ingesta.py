@@ -159,6 +159,7 @@ async def cotizar_documento(
             aprobado=cotizacion.aprobado,
             decision=cotizacion.decision.value,
             precio_setup_usd=cotizacion.precio_setup_usd,
+            dentro_de_cupo=cotizacion.dentro_de_cupo,
         ),
     )
 
@@ -210,6 +211,19 @@ async def confirmar_ingesta(
         "encolado": encolado,
         "idempotente": job.idempotente,
     }
+
+
+@router.get("/cupo")
+async def cupo_ingestas(
+    ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
+):
+    """
+    Cupo de ingestas incluidas del plan (F3 §C). La UI de carga y `/cuenta` lo
+    muestran ("te quedan N ingestas incluidas"). `aplica=False` para planes sin
+    cupo (freemium opera con su saldo de cortesía).
+    """
+    quota = providers.get_quota_manager()
+    return quota.estado(ctx["org_id"]).to_dict()
 
 
 @router.get("/documents/{job_id}")

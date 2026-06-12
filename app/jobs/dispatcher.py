@@ -194,9 +194,14 @@ class JobDispatcher:
         self,
         backend: QueueBackend | None = None,
         budget_manager=None,
+        quota_manager=None,
     ):
         self.backend = backend or RedisQueueBackend()
         self.budget = budget_manager
+        # Cupo de ingestas (F3 §C). Si se inyecta y la ingesta fue cotizada DENTRO de
+        # cupo, al confirmar se descuenta 1 (idempotente por job_id). Si es None, no
+        # se toca cupo (tests ortogonales al cupo / planes sin cupo).
+        self.quota = quota_manager
 
     def crear_job(self, job: IngestJob) -> IngestJob:
         """
@@ -257,6 +262,18 @@ class JobDispatcher:
                 )
             job.reserva_usd = res.monto_reservado
             job.reserva_estado = "retenido"
+
+        # Cupo de ingestas (F3 §C): si esta ingesta fue cotizada DENTRO de cupo,
+        # descuenta 1 al confirmar. Idempotente por job_id (un reintento de confirm
+        # del mismo job NO vuelve a descontar — lo garantiza el ledger de la RPC /
+        # el store en memoria). El cupo gobierna el setup comercial, no el cómputo:
+        # el saldo ya se reservó arriba por separado.
+        if (
+            self.quota is not None
+            and job.cotizacion is not None
+            and getattr(job.cotizacion, "dentro_de_cupo", False)
+        ):
+            self.quota.decrementar(job.tenant_id, job_id)
 
         job.status = JobStatus.queued
         self.backend.save_job(job)

@@ -42,6 +42,9 @@ class CotizacionSnapshot(BaseModel):
     # Precio de setup comercial (Modelo Comercial §2.3, F1.5). Informativo en el
     # job; el SALDO reserva/liquida `costo_estimado_usd` (cómputo), no este precio.
     precio_setup_usd: float = 0.0
+    # Cupo de ingestas (F3 §C): True si esta ingesta va INCLUIDA en el plan. Al
+    # confirmar, el dispatcher descuenta 1 del cupo (idempotente por job_id).
+    dentro_de_cupo: bool = False
 
 
 class IngestJob(BaseModel):

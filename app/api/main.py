@@ -11,6 +11,7 @@ from app.api.routers import (
     admin,
     billing,
     chat,
+    demo,
     documents,
     governance,
     ingest_sources,
@@ -46,9 +47,18 @@ if not ALLOWED_ORIGINS:
     )
 _origins = [o.strip() for o in ALLOWED_ORIGINS.split(",") if o.strip()]
 
+# Previews de Vercel (F3 B5): los deploys de preview usan dominios DINÁMICOS
+# (`https://docyan-<hash>-<scope>.vercel.app`) que no pueden listarse fijos en
+# ALLOWED_ORIGINS, así que auth desde un preview da "No pudimos conectar" (CORS).
+# `ALLOWED_ORIGIN_REGEX` (opcional) permite un PATRÓN de origen — se activa SOLO en
+# el backend de staging para probar auth desde previews. **Producción lo deja sin
+# setear** (CORS estricto por lista exacta). Ver docs/runbook_cors_previews.md.
+_origin_regex = os.getenv("ALLOWED_ORIGIN_REGEX") or None
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
+    allow_origin_regex=_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,6 +84,7 @@ app.include_router(recursos.router)
 app.include_router(onboarding.router)
 app.include_router(invitations.router)
 app.include_router(mis_documentos.router)
+app.include_router(demo.router)
 
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

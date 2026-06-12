@@ -10,6 +10,7 @@ import { ValueAside, AsideMock, PwField, pwScore } from "@/components/onboarding
 import { signup } from "@/lib/onboarding";
 import { ApiError } from "@/lib/api-client";
 import { useAuth, type AuthUser } from "@/lib/auth";
+import { useT } from "@/lib/site-i18n";
 
 /**
  * Pantalla 1 (B13) — Signup Freemium. Credenciales primero: solo email +
@@ -19,6 +20,7 @@ import { useAuth, type AuthUser } from "@/lib/auth";
  * `ui_kits/onboarding/auth.jsx` → SignupFreemium.
  */
 export default function SignupFreemiumPage() {
+  const t = useT();
   const router = useRouter();
   const setSession = useAuth((s) => s.setSession);
   const [email, setEmail] = useState("");
@@ -48,10 +50,10 @@ export default function SignupFreemiumPage() {
     } catch (e) {
       setErr(
         e instanceof ApiError && e.status === 409
-          ? "Ese correo ya tiene una cuenta. Inicia sesión."
+          ? t({ es: "Ese correo ya tiene una cuenta. Inicia sesión.", en: "That email already has an account. Sign in." })
           : e instanceof ApiError
             ? e.message
-            : "No pudimos conectar. Revisa tu red e intenta de nuevo.",
+            : t({ es: "No pudimos conectar. Revisa tu red e intenta de nuevo.", en: "We couldn't connect. Check your network and try again." }),
       );
       setBusy(false);
     }
@@ -62,13 +64,28 @@ export default function SignupFreemiumPage() {
     <div className="auth-stage">
       <div className="auth-split">
         <ValueAside
-          tag="Gratis · sin tarjeta"
-          title="Empieza hoy. Sin fricción."
-          sub="Crea tu cuenta y vive el producto: ingiere un documento y haz tu primera consulta con cita a la fuente. El plan viene después."
+          tag={t({ es: "Gratis · sin tarjeta", en: "Free · no card" })}
+          title={t({ es: "Empieza hoy. Sin fricción.", en: "Start today. No friction." })}
+          sub={t({
+            es: "Crea tu cuenta y vive el producto: ingiere un documento y haz tu primera consulta con cita a la fuente. El plan viene después.",
+            en: "Create your account and experience the product: ingest a document and run your first query with a citation to the exact source. The plan comes later.",
+          })}
           points={[
-            ["file-check", "3 documentos vivos · 30 días", "Suficiente para ver el valor en tu propia operación."],
-            ["scan-line", "Ingiere tus documentos como están", "PDF, manual, MSDS o ficha. DOCYAN los lee tal cual."],
-            ["link", "Cada respuesta cita su fuente exacta", "Pedigree a span exacto, no resúmenes opacos."],
+            [
+              "file-check",
+              t({ es: "3 documentos vivos · 30 días", en: "3 live documents · 30 days" }),
+              t({ es: "Suficiente para ver el valor en tu propia operación.", en: "Enough to see the value in your own operation." }),
+            ],
+            [
+              "scan-line",
+              t({ es: "Ingiere tus documentos como están", en: "Ingest your documents as they are" }),
+              t({ es: "PDF, manual, MSDS o ficha. DOCYAN los lee tal cual.", en: "PDF, manual, MSDS or datasheet. DOCYAN reads them as-is." }),
+            ],
+            [
+              "link",
+              t({ es: "Cada respuesta cita su fuente exacta", en: "Every answer cites its exact source" }),
+              t({ es: "Pedigree a span exacto, no resúmenes opacos.", en: "Pedigree to the exact span, not opaque summaries." }),
+            ],
           ]}
           object={<AsideMock />}
         />
@@ -82,53 +99,73 @@ export default function SignupFreemiumPage() {
             noValidate
           >
             <div className="ac-head">
-              <BrandRow size={26} />
-              <h2>Crea tu cuenta</h2>
+              <Link href="/" style={{ textDecoration: "none", color: "inherit" }}>
+                <BrandRow size={26} />
+              </Link>
+              <h2>{t({ es: "Crea tu cuenta", en: "Create your account" })}</h2>
               <p className="ac-sub">
-                Solo necesitas un correo y una contraseña. Sin plan, sin datos fiscales, sin pago.
+                {t({
+                  es: "Solo necesitas un correo y una contraseña. Sin plan, sin datos fiscales, sin pago.",
+                  en: "All you need is an email and a password. No plan, no tax details, no payment.",
+                })}
               </p>
             </div>
             <div className="field">
-              <label>Correo de trabajo</label>
+              <label>{t({ es: "Correo de trabajo", en: "Work email" })}</label>
               <input
                 type="email"
                 autoComplete="email"
-                placeholder="nombre@laboratorio.mx"
+                placeholder={t({ es: "nombre@laboratorio.mx", en: "name@lab.com" })}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div className="field">
-              <label>Nombre de tu organización <span className="hint">(opcional)</span></label>
+              <label>
+                {t({ es: "Nombre de tu organización", en: "Your organization's name" })}{" "}
+                <span className="hint">{t({ es: "(opcional)", en: "(optional)" })}</span>
+              </label>
               <input
                 type="text"
-                placeholder="Laboratorio Estándar"
+                placeholder={t({ es: "Laboratorio Estándar", en: "Acme Laboratory" })}
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
               />
             </div>
-            <PwField value={pw} onChange={setPw} show={show} setShow={setShow} strength autoComplete="new-password" />
+            <PwField
+              label={t({ es: "Contraseña", en: "Password" })}
+              placeholder={t({ es: "Mínimo 8 caracteres", en: "At least 8 characters" })}
+              value={pw}
+              onChange={setPw}
+              show={show}
+              setShow={setShow}
+              strength
+              autoComplete="new-password"
+            />
             {err && (
               <p className="warn" role="alert" style={{ marginTop: 4 }}>
                 {err}
               </p>
             )}
             <button className="btn primary full lg" style={{ marginTop: 6 }} type="submit" disabled={!valid || busy}>
-              {busy ? "Creando cuenta…" : "Crear cuenta gratis"}
+              {busy ? t({ es: "Creando cuenta…", en: "Creating account…" }) : t({ es: "Crear cuenta gratis", en: "Create free account" })}
               {!busy && <Icon name="arrow-right" size={17} />}
             </button>
             <p className="auth-foot" style={{ marginTop: 14 }}>
-              Al crear tu cuenta aceptas los términos y el aviso de privacidad de DOCYAN.
+              {t({
+                es: "Al crear tu cuenta aceptas los términos y el aviso de privacidad de DOCYAN.",
+                en: "By creating your account you accept DOCYAN's terms and privacy notice.",
+              })}
             </p>
-            <div className="auth-div">o</div>
+            <div className="auth-div">{t({ es: "o", en: "or" })}</div>
             <Link href="/codigo" className="btn sec full" style={{ textDecoration: "none" }}>
               <Icon name="ticket" size={16} />
-              Tengo un código de acceso
+              {t({ es: "Tengo un código de acceso", en: "I have an access code" })}
             </Link>
             <p className="auth-foot">
-              ¿Ya tienes cuenta?{" "}
+              {t({ es: "¿Ya tienes cuenta?", en: "Already have an account?" })}{" "}
               <Link className="link" href="/login">
-                Inicia sesión
+                {t({ es: "Inicia sesión", en: "Sign in" })}
               </Link>
             </p>
           </form>

@@ -99,12 +99,13 @@ BGE_M3_COMPUTE_USD_PER_1M = _env_float("PRICE_BGE_M3_USD_PER_1M", 0.01)
 # Throughput efectivo observado incluyendo latencia de red y rate limiting.
 SECONDS_PER_1K_DOC_TOKENS = 642.0 / 22.4  # ≈ 28.7 s por 1k tokens (NOM 32pp≈22.4k)
 
-# ── Fórmula de cobro de setup (Modelo Comercial §2.3, cableada en F1.5) ────────
+# ── Fórmula de cobro de setup (Modelo Comercial §2.3 v1.1, cableada en F1.5) ───
 #   precio_setup = MAX( PISO , costo_base_real × MULTIPLICADOR ) × factor_complejidad
-# El piso ($25) protege márgenes en documentos chicos; el múltiplo (×25) cubre
-# documentos caros. `factor_complejidad` arranca en 1.0 (perilla futura por tipo
-# documental). Los tres son configurables por env var sin tocar código.
-SETUP_PRICE_FLOOR_USD = _env_float("SETUP_PRICE_FLOOR_USD", 25.0)
+# El piso ($15, definición vigente v1.1 confirmada en F3) protege márgenes en
+# documentos chicos; el múltiplo (×25) cubre documentos caros. `factor_complejidad`
+# arranca en 1.0 (perilla futura por tipo documental). Los tres son configurables
+# por env var sin tocar código. (El piso histórico $25 de v1.0 quedó desactualizado.)
+SETUP_PRICE_FLOOR_USD = _env_float("SETUP_PRICE_FLOOR_USD", 15.0)
 SETUP_COST_MULTIPLIER = _env_float("SETUP_COST_MULTIPLIER", 25.0)
 FACTOR_COMPLEJIDAD = _env_float("FACTOR_COMPLEJIDAD", 1.0)
 

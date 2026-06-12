@@ -174,6 +174,16 @@
 .dc-ctx .ml{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);}
 .dc-ctx .mn{font-size:15px;font-weight:600;}
 .dc-tag{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--fg-muted);background:var(--amate-100);padding:5px 10px;border-radius:var(--radius-full);}
+/* Chip expandible de documentos del CoDo (F3): lista nombre + tipo, sin selector. */
+.dc-docchip{margin-left:auto;position:relative;}
+.dc-docchip .dc-tag{margin-left:0;display:inline-flex;align-items:center;gap:6px;}
+.dc-tag-btn{border:none;cursor:pointer;transition:background .15s;}
+.dc-tag-btn:hover{background:var(--amate-200,var(--amate-100));}
+.dc-doclist{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:240px;max-width:320px;list-style:none;margin:0;padding:6px;background:var(--bg,#fff);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);}
+.dc-doclist li{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;font-size:12.5px;color:var(--ink-800,var(--fg));}
+.dc-doclist li+li{margin-top:2px;}
+.dc-doclist-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dc-doclist-t{flex:none;font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-subtle);background:var(--amate-100);padding:2px 7px;border-radius:var(--radius-full);}
 .dc-body{flex:1;padding:24px 0;display:flex;flex-direction:column;gap:14px;min-height:300px;}
 .dc-intro p{font-size:15px;line-height:1.6;color:var(--fg-muted);margin:0 0 16px;}
 .dc-docs{display:flex;flex-wrap:wrap;gap:8px;}
@@ -181,6 +191,7 @@
 .dc-doc svg{color:var(--fg-subtle);}
 .dc-foot{border-top:1px solid var(--border);padding-top:14px;}
 .dc-sugs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.dc-sugs-empty{font-size:12.5px;color:var(--fg-subtle);font-style:italic;}
 .dc-box{margin:0;}
 
 @media(max-width:920px){

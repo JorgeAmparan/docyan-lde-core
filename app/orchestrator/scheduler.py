@@ -130,6 +130,22 @@ def pcl_metrics_aggregation_job() -> dict:
     }
 
 
+def cupo_reposicion_mensual_job() -> dict:
+    """
+    Reposición mensual del cupo de ingestas recurrente (F3 §C — día 1 de cada mes).
+
+    Suma el `cupo_recurrente_mensual` al `cupo_restante` de cada org con cupo, sin
+    pasar del techo (`cupo_inicial`). Lo ejecuta la RPC `cupo_reponer_mensual` de la
+    migración 021 (atómica). Las orgs sin cupo recurrente (freemium / enterprise sin
+    configurar) no se tocan.
+    """
+    from app.ingesta.quota_manager import QuotaManager
+
+    repuestas = QuotaManager().reponer_mensual()
+    logger.info("cupo_reposicion_mensual: %d org(s) repuestas", repuestas)
+    return {"evaluado": True, "tipo": "cupo_reposicion_mensual", "orgs_repuestas": repuestas}
+
+
 def fat_retention_job() -> dict:
     """
     Rutina de retención del FAT por familia (decisión #12 / doc 08, B7).
@@ -170,6 +186,8 @@ DEFAULT_JOBS: tuple[JobSpec, ...] = (
     JobSpec("patrones_edb", patrones_edb_job, "cron", {"hour": 5}),
     JobSpec("fat_retention", fat_retention_job, "cron", {"day_of_week": "sun", "hour": 4}),
     JobSpec("pcl_metrics_aggregation", pcl_metrics_aggregation_job, "cron", {"hour": 3}),
+    # F3 §C: reposición del cupo de ingestas el día 1 de cada mes a las 00:00.
+    JobSpec("cupo_reposicion_mensual", cupo_reposicion_mensual_job, "cron", {"day": 1, "hour": 0}),
 )
 
 

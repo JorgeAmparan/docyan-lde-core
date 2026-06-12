@@ -422,6 +422,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ingesta/cupo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cupo Ingestas
+         * @description Cupo de ingestas incluidas del plan (F3 §C). La UI de carga y `/cuenta` lo
+         *     muestran ("te quedan N ingestas incluidas"). `aplica=False` para planes sin
+         *     cupo (freemium opera con su saldo de cortesía).
+         */
+        get: operations["cupo_ingestas_ingesta_cupo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ingesta/documents/{job_id}": {
         parameters: {
             query?: never;
@@ -1619,6 +1641,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/demo/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Demo Query
+         * @description Consulta real contra un tenant demo (solo lectura), sin auth, rate-limited por IP.
+         *     Devuelve la respuesta citada si el grafo demo la sostiene; si no, el fallback honesto.
+         */
+        post: operations["demo_query_demo_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -1942,6 +1985,11 @@ export interface components {
         /**
          * Cita
          * @description Cita de procedencia: documento + sección + página (+ span de caracteres).
+         *
+         *     `fragmento` es el texto VERBATIM del documento (recortado del chunk de origen por
+         *     `span_inicio:span_fin`), no texto sintetizado. Integridad de cita (regla absoluta):
+         *     una cita "exacta" SOLO puede mostrarse si `fragmento` viene del documento real; si
+         *     `fragmento` es None, la UI dice "fragmento no disponible" en vez de inventar.
          */
         Cita: {
             /** Documento Id */
@@ -1956,6 +2004,8 @@ export interface components {
             span_inicio?: number | null;
             /** Span Fin */
             span_fin?: number | null;
+            /** Fragmento */
+            fragmento?: string | null;
         };
         /**
          * CodoContextoOut
@@ -2339,6 +2389,33 @@ export interface components {
             usados: number;
             /** Disponibles */
             disponibles?: number | null;
+        };
+        /** DemoQueryRequest */
+        DemoQueryRequest: {
+            /** Texto */
+            texto: string;
+            /**
+             * Codo
+             * @default hero
+             */
+            codo: string;
+        };
+        /** DemoQueryResponse */
+        DemoQueryResponse: {
+            /** Servido */
+            servido: boolean;
+            /** Kind */
+            kind?: string | null;
+            /** Resultado */
+            resultado?: {
+                [key: string]: unknown;
+            } | null;
+            /** Fallback */
+            fallback?: string | null;
+            /** Codo */
+            codo: string;
+            /** Tenant Demo */
+            tenant_demo: string;
         };
         /** DiagnosticTreePayload */
         DiagnosticTreePayload: {
@@ -4423,6 +4500,26 @@ export interface operations {
             };
         };
     };
+    cupo_ingestas_ingesta_cupo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     estado_job_ingesta_documents__job_id__get: {
         parameters: {
             query?: never;
@@ -6435,6 +6532,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteDocumentoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_query_demo_query_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemoQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoQueryResponse"];
                 };
             };
             /** @description Validation Error */
