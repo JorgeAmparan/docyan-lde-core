@@ -74,3 +74,13 @@ invita a reformular); sus 3 preguntas naturales (rango, vence, trazable) se publ
 bucket público de solo lectura para documentos demo (NUNCA para docs de cliente) y
 el servicio de URL firmada por tenant. Hasta entonces el chip "Abrir PDF" no aparece
 (degradación honesta), pero nombre+tipo+fragmento ya dan procedencia completa.
+
+---
+## ESTADO POST-EJECUCIÓN (verificado contra PROD, 12 jun 2026)
+- ✅ API desplegado (Fly). DEF-1/DEF-2 LIVE en `docyan-lde-api.fly.dev` y en Vercel.
+- ✅ Acceptance #1 (lab) cerrado LIVE: rango, **vence→15 January 2027 (citado, doc correcto: Calibration Certificate)**, trazable; 3 sugeridas publicadas y verificadas (ES+EN).
+- ✅ Acceptance #2-estilo (maq isopropanol) LIVE: "chemical name"→Sustancia citada; "OSHA PEL"→400 ppm citado; flash point citado.
+- ✅ Paráfrasis suite PASA contra prod (demo-maq, demo-hero), incl. OSHA PEL→TLV.
+- ✅ Atribución §2.3 corregida en UI (cita nombra el doc real por tipo).
+- ✅ Rename Maquiladoras→Manufactura LIVE. Fallback §2.5 LIVE.
+- ⛔ §2.6 re-siembra de NUEVOS docs (Haas/Komatsu/CIP) y **bucket público "Abrir PDF"**: BLOQUEADOS por el guardrail del harness (mutación autónoma de estado de ingesta/infra de prod — política correcta por el incidente $5k). PDFs + `manifest_b133.json` + comandos listos; requieren ejecución humana-en-el-loop por la ruta API (este runbook §2) o `--manifest docs/demo/manifest_b133.json`.
