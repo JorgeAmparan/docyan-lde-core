@@ -17,6 +17,7 @@ const SHOTS = [
   ["lab", "¿cuál es el rango de medición?", "lab-rango"],
   ["maq", "what is the chemical name?", "maq-chemical"],
   ["maq", "OSHA PEL", "maq-osha"],
+  ["pharma", "¿Cuál es el procedimiento CIP?", "pharma-cip-procedure"],
 ];
 
 const browser = await chromium.launch();
@@ -37,6 +38,17 @@ for (const [device, vp] of Object.entries(VIEWPORTS)) {
     const file = `${OUT}/${device}-${slug}.png`;
     await page.screenshot({ path: file, fullPage: false });
     console.log("✓", file);
+    // Expande el desglose de la cita (muestra el verbatim + "Abrir PDF").
+    if (query) {
+      const chip = page.locator(".cite2").first();
+      if (await chip.count()) {
+        await chip.click();
+        await page.waitForTimeout(700);
+        const f2 = `${OUT}/${device}-${slug}-open.png`;
+        await page.screenshot({ path: f2, fullPage: false });
+        console.log("✓", f2);
+      }
+    }
   }
   await ctx.close();
 }
