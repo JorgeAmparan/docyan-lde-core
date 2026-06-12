@@ -26,10 +26,16 @@ from typing import Protocol, runtime_checkable
 # para el retrieval léxico. Sin esto, el `termino` cae a la PREGUNTA COMPLETA y el
 # CONTAINS nunca casa el nombre/valor de un nodo (la frase entera no es substring).
 _STOPWORDS = frozenset(
+    # Español
     "el la los las un una unos unas de del al a en y o u que cual cuales cuanto cuanta "
     "cuantos cuantas como cuando donde quien quienes es son esta estan ser para por con "
     "sin sobre se su sus mi mis lo le les me te nos hay tiene tienen dame muestrame dime "
-    "cuál cuáles qué cómo cuándo dónde quién necesito quiero".split()
+    "cuál cuáles qué cómo cuándo dónde quién necesito quiero "
+    # Inglés (los SDS demo están en inglés; las preguntas llegan EN/ES). Sin esto,
+    # "what is the chemical name" tokeniza con "what/the" y diluye el score léxico.
+    "the a an of for in on to is are was were be what which who whom how when where why "
+    "do does did this that these those with and or its their there here it as at by from "
+    "i you we they my your our give show tell me us need want".split()
 )
 
 
@@ -176,7 +182,8 @@ class PipelineGraphReader(Protocol):
 # `:Especificacion` es el caso canónico (etiqueta = su propio nombre) y se lee aparte.
 _LABELS_INFORMATIVA: tuple[tuple[str, str, str], ...] = (
     ("Sustancia", "Sustancia",
-     "sustancia quimico químico chemical substance compuesto componente material ingrediente nombre"),
+     "sustancia quimico químico chemical substance compuesto componente material "
+     "ingrediente nombre name producto agente"),
     ("Producto", "Producto", "producto product articulo artículo equipo modelo"),
     ("NumeroCAS", "Número CAS", "cas numero número registro identificador"),
     ("Riesgo", "Riesgo", "riesgo peligro peligros riesgos hazard ghs clasificacion clasificación"),
