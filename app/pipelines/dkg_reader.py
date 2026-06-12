@@ -198,6 +198,9 @@ _LABELS_INFORMATIVA: tuple[tuple[str, str, str], ...] = (
     ("CertificadoCalibracion", "Certificado de calibración",
      "certificado calibracion calibración trazable trazabilidad patron patrón norma "
      "acreditacion acreditación traceable standard"),
+    ("FechaVencimiento", "Vence",
+     "vence vencimiento vigencia caduca caducidad expira expiración expiry expires "
+     "valid until due fecha renovacion renovación"),
 )
 
 # Campos de texto candidatos a CONTENIDO del nodo, en orden de preferencia. Son los

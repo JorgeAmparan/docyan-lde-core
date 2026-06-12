@@ -229,6 +229,7 @@ _CAMPO_PRIMARIO_DESDE_NAME: dict[str, str] = {
     "MedicionRegistrada": "descripcion",
     "CertificadoVigencia": "nombre",
     "CertificadoCalibracion": "nombre",
+    "FechaVencimiento": "fecha",
     "Alerta": "descripcion",
     "Norma": "nombre",
     "RequisitoNormativo": "descripcion",
