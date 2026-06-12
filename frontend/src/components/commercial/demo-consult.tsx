@@ -46,6 +46,7 @@ interface Answer {
   titulo: string;
   docNombre: string;            // tipo/nombre del documento de la cita (p.ej. manual_tecnico)
   docTipo: string;              // tipo documental REAL de la cita (atribución §2.3)
+  docUrl: string | null;        // URL del PDF de origen (Abrir PDF)
   doc: string;
   fallback: string | null;
 }
@@ -84,6 +85,7 @@ function toCardData(a: Answer, t: T, hasSugeridas: boolean, dominio: string, doc
         meta: (p.herramientas ?? []).concat(p.epp ?? []).join(" · ") || undefined,
       })),
       citeLabel: fuenteLabel(docs, a.docTipo, a.docNombre),
+      citeUrl: a.docUrl,
       verbatim: null, // los procedimientos muestran los pasos reales; sin span por paso
     };
   }
@@ -95,6 +97,7 @@ function toCardData(a: Answer, t: T, hasSugeridas: boolean, dominio: string, doc
     note: primary?.valor,
     extras: a.especificaciones.slice(1, 4).map((e) => ({ nombre: e.nombre, valor: e.valor })),
     citeLabel: fuenteLabel(docs, primary?.cita?.documento_tipo, primary?.cita?.documento_nombre),
+    citeUrl: primary?.cita?.documento_url ?? null,
     verbatim: primary?.cita?.fragmento?.trim() || null,
   };
 }
@@ -118,7 +121,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
     const kind = (payload?.kind as string) || "info_card";
     let especificaciones = (payload?.especificaciones as Espec[]) || [];
     const pasos = (payload?.pasos as Paso[]) || [];
-    const citas = (payload?.citas as Array<{ documento_nombre?: string; documento_tipo?: string }>) || [];
+    const citas = (payload?.citas as Array<{ documento_nombre?: string; documento_tipo?: string; documento_url?: string | null }>) || [];
     // alerts_dashboard (B13.3 §2.4 — "¿cuándo vence?"): mapea las alertas
     // administrativas (vencimientos con cita) al render de info para mostrarlas.
     if (kind === "alerts_dashboard") {
@@ -135,6 +138,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
       titulo: (payload?.titulo as string) || "",
       docNombre: citas[0]?.documento_nombre || "",
       docTipo: citas[0]?.documento_tipo || (payload?.especificaciones as Espec[] | undefined)?.[0]?.cita?.documento_tipo || "",
+      docUrl: citas[0]?.documento_url || (payload?.especificaciones as Espec[] | undefined)?.[0]?.cita?.documento_url || null,
       doc: vert.docs[0]?.name || (t(vert.entity) as string),
       fallback: res.fallback,
     };
