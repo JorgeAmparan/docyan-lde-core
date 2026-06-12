@@ -115,7 +115,14 @@ def generar_alertas_vencimiento(
                 a.urgencia = $urgencia,
                 a.tipo = 'vencimiento',
                 a.entidad_id = $entidad_id,
+                a.cert_id = $cert_id,
                 a.administrativa = true
+            WITH a
+            // B13.3 §2.4 — enlaza la alerta a su certificado fuente para que el
+            // reader hidrate la CITA verbatim (atribución + fragmento del documento).
+            OPTIONAL MATCH (c {id: $cert_id})
+            FOREACH (_ IN CASE WHEN c IS NULL THEN [] ELSE [1] END |
+                MERGE (a)-[:DERIVA_DE]->(c))
             WITH a
             OPTIONAL MATCH (ent:EntidadOperativa {id: $entidad_id})
             FOREACH (_ IN CASE WHEN ent IS NULL THEN [] ELSE [1] END |
@@ -127,6 +134,7 @@ def generar_alertas_vencimiento(
                 "fecha": fecha.isoformat(),
                 "urgencia": _urgencia(dias),
                 "entidad_id": r.get("entidad_id"),
+                "cert_id": r.get("cert_id"),
             },
         )
         counters["creadas"] += 1

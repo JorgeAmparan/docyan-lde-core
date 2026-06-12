@@ -36,11 +36,18 @@ class Cita(_Base):
 
     documento_id: str | None = None
     documento_nombre: str | None = None
+    # Tipo documental del MISMO doc de origen (B13.3 §2.3): nombre+tipo nunca se
+    # mezclan entre documentos distintos. El front muestra el badge correcto.
+    documento_tipo: str | None = None
     seccion: str | None = None
     pagina: int | None = None
     span_inicio: int | None = None
     span_fin: int | None = None
     fragmento: str | None = None
+    # Camino a "abrir documento" (B13.3 §2.3): URL del PDF (bucket público de solo
+    # lectura para docs demo; URL firmada del propio tenant en producto autenticado).
+    # None ⇒ el chip no ofrece "Abrir PDF". Nunca se expone un doc de otro tenant.
+    documento_url: str | None = None
 
 
 class CruceSugerido(_Base):
@@ -221,6 +228,9 @@ class AlertaItem(_Base):
     entidad_id: str | None = None
     # Línea ABSOLUTA (CLAUDE.md §11.1): toda alerta servida es administrativa.
     administrativa: bool = True
+    # B13.3 §2.4: cita verbatim del documento de origen del vencimiento (cuando el
+    # nodo fuente tiene span anclable). None ⇒ sin fragmento, atribución honesta.
+    cita: Cita | None = None
 
 
 class AlertsDashboardPayload(_Base):

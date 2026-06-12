@@ -1,0 +1,22 @@
+{
+  "demo-lab": [
+    { "path": "docs/demo/lab_mitutoyo_caliper_manual.pdf", "tipo": "manual_tecnico", "nombre": "Mitutoyo Caliper 500 — Operating Manual" },
+    { "path": "docs/demo/lab_mitutoyo_calibration_cert.pdf", "tipo": "calibracion", "nombre": "Mitutoyo Caliper 500 — Calibration Certificate" }
+  ],
+  "demo-maq": [
+    { "path": "docs/demo/maq_isopropanol_sds.pdf", "tipo": "msds", "nombre": "Isopropyl Alcohol — Safety Data Sheet" }
+  ],
+  "demo-pharma": [
+    { "path": "docs/demo/pharma_naoh_cip_sds.pdf", "tipo": "msds", "nombre": "Sodium Hydroxide — Safety Data Sheet" }
+  ],
+  "demo-min": [
+    { "path": "docs/demo/min_hcl_sds.pdf", "tipo": "msds", "nombre": "Hydrochloric Acid — Safety Data Sheet" }
+  ],
+  "demo-agri": [
+    { "path": "docs/demo/agri_hipoclorito_sds.pdf", "tipo": "msds", "nombre": "Sodium Hypochlorite — Safety Data Sheet" }
+  ],
+  "demo-hero": [
+    { "path": "docs/demo/acetone_sds_en.pdf", "tipo": "msds", "nombre": "Acetone — Safety Data Sheet" },
+    { "path": "docs/demo/methanol_sds_en.pdf", "tipo": "msds", "nombre": "Methanol — Safety Data Sheet" }
+  ]
+}

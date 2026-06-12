@@ -526,7 +526,7 @@ function MoatSection() {
 
 const CODOS_BRIDGE: { key: string; label: string; icon: string; entity: string }[] = [
   { key: "lab", label: "Laboratorios", icon: "flask-conical", entity: "Centrífuga Hettich Rotina 380" },
-  { key: "maq", label: "Maquiladoras", icon: "factory", entity: "Línea CNC Haas VF-4" },
+  { key: "maq", label: "Manufactura", icon: "factory", entity: "Centro de maquinado Haas VF-4" },
   { key: "pharma", label: "Farma", icon: "pill", entity: "Bioreactor B-3" },
   { key: "min", label: "Minería", icon: "mountain", entity: "Excavadora Komatsu PC-2000" },
   { key: "agri", label: "Agroindustria", icon: "sprout", entity: "Tanque enfriamiento leche T-7" },

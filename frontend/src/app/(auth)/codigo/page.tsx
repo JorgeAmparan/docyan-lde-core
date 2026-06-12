@@ -146,7 +146,7 @@ export default function RedeemCodePage() {
               </label>
               <input
                 type="text"
-                placeholder={t({ es: "Maquiladora del Norte", en: "Northern Manufacturing Co." })}
+                placeholder={t({ es: "Manufactura del Norte", en: "Northern Manufacturing Co." })}
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
               />

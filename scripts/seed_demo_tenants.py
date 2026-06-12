@@ -47,12 +47,26 @@ from pathlib import Path
 DEMO_SALDO_USD = 50.0
 
 
-def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool, tipo_override: str | None = None) -> dict:
+def _doc_spec(entry) -> dict:
+    """Normaliza una entrada del manifiesto a {path, tipo, nombre}.
+
+    Acepta una ruta string (compat) o un objeto:
+        {"path": "...", "tipo": "manual_tecnico", "nombre": "Mitutoyo 500 — Manual"}
+    `tipo` fuerza el schema de extracción; `nombre` es el NOMBRE DISPLAY que verá la
+    cita (atribución legible: el cert deja de citarse como "lab_..._cert.pdf").
+    """
+    if isinstance(entry, str):
+        return {"path": entry, "tipo": None, "nombre": None}
+    return {"path": entry["path"], "tipo": entry.get("tipo"), "nombre": entry.get("nombre")}
+
+
+def _ingest_one(tenant_id: str, spec: dict, *, dry_run: bool, tipo_override: str | None = None) -> dict:
     """Cotiza y (si no es dry-run) confirma+encola la ingesta de un documento.
 
-    `tipo_override` fuerza el `tipo_documento` (schema de extracción) en vez del
-    heurístico — p. ej. un manual de operación que el heurístico clasifica como
-    `especificacion` pero debe ir como `manual_tecnico` para extraer `:Procedimiento`.
+    `spec` = {path, tipo, nombre}. El `tipo` por-doc del manifiesto manda sobre el
+    `tipo_override` global (CLI) y sobre el heurístico — p. ej. un manual de operación
+    que el heurístico clasifica como `especificacion` pero debe ir como `manual_tecnico`
+    para extraer `:Procedimiento`. `nombre` fija la atribución display de la cita.
     """
     import hashlib
     import uuid
@@ -62,6 +76,7 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool, tipo_override: str
     from app.ingesta.text_extract import extraer_texto
     from app.jobs.job_models import CotizacionSnapshot, IngestJob
 
+    path = Path(spec["path"])
     data = path.read_bytes()
     texto, _confiable = extraer_texto(data, path.name)
 
@@ -74,7 +89,9 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool, tipo_override: str
     tipo_heuristico, _conf = _prov.get_selector().clasificar_heuristica(
         texto[:8000], path.name
     )
-    tipo_documento = tipo_override or tipo_heuristico
+    tipo_documento = spec.get("tipo") or tipo_override or tipo_heuristico
+    # Nombre display de la cita (B13.3 §2.3/§2.5): el del manifiesto, o el filename.
+    nombre_display = spec.get("nombre") or path.name
 
     # Asegura saldo de cómputo del tenant demo (sin auto-recharge en prod; aquí lo
     # provisionamos explícitamente para la siembra).
@@ -84,16 +101,16 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool, tipo_override: str
         tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_documento
     )
     if not cot.aprobado:
-        return {"doc": path.name, "ok": False, "motivo": cot.motivo}
+        return {"doc": nombre_display, "ok": False, "motivo": cot.motivo}
     if dry_run:
-        return {"doc": path.name, "ok": True, "dry_run": True,
+        return {"doc": nombre_display, "ok": True, "dry_run": True,
                 "tipo": tipo_documento, "costo_usd": cot.costo_estimado_usd}
 
     store = get_document_store()
     ref = store.put(tenant_id, path.name, data)
     job = IngestJob(
         job_id=uuid.uuid4().hex, tenant_id=tenant_id, documento_ref=ref,
-        nombre_archivo=path.name, content_sha256=hashlib.sha256(data).hexdigest(),
+        nombre_archivo=nombre_display, content_sha256=hashlib.sha256(data).hexdigest(),
         tipo_documento=tipo_documento,  # ← el worker lo usa para elegir el schema
         bytes_originales=len(data),
         cotizacion=CotizacionSnapshot(
@@ -106,7 +123,7 @@ def _ingest_one(tenant_id: str, path: Path, *, dry_run: bool, tipo_override: str
     disp = get_dispatcher()
     disp.crear_job(job)
     disp.confirmar(job.job_id)  # reserva saldo + encola hacia el worker
-    return {"doc": path.name, "ok": True, "job_id": job.job_id,
+    return {"doc": nombre_display, "ok": True, "job_id": job.job_id,
             "tipo": tipo_documento, "costo_usd": cot.costo_estimado_usd}
 
 
@@ -121,14 +138,15 @@ def main() -> int:
     total_ok = total_fail = 0
     for tenant_id, docs in manifest.items():
         print(f"\n── {tenant_id} ({len(docs)} documento(s)) ──")
-        for rel in docs:
-            p = Path(rel)
+        for entry in docs:
+            spec = _doc_spec(entry)
+            p = Path(spec["path"])
             if not p.exists():
-                print(f"  ✗ {rel}: NO EXISTE (PENDIENTE DE JORGE — provee el archivo)")
+                print(f"  ✗ {spec['path']}: NO EXISTE (PENDIENTE DE JORGE — provee el archivo)")
                 total_fail += 1
                 continue
             try:
-                res = _ingest_one(tenant_id, p, dry_run=args.dry_run, tipo_override=args.tipo)
+                res = _ingest_one(tenant_id, spec, dry_run=args.dry_run, tipo_override=args.tipo)
             except Exception as exc:  # noqa: BLE001 — un doc no debe tumbar la siembra.
                 print(f"  ✗ {p.name}: error {type(exc).__name__}: {exc}")
                 total_fail += 1

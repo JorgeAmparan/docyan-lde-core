@@ -32,6 +32,8 @@ def _cita(data: dict) -> Cita | None:
     return Cita(
         documento_id=data.get("documento_id"),
         documento_nombre=data.get("documento_nombre"),
+        documento_tipo=data.get("documento_tipo"),
+        documento_url=data.get("documento_url"),
     )
 
 
