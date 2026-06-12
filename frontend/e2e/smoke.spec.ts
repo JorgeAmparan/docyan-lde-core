@@ -75,16 +75,17 @@ test("integridad de cita: el fragmento inline muestra el VERBATIM del documento,
   await expect(page.locator(".dc2-src")).not.toContainText(GENERADO);
 });
 
-test("demo-CoDo lab: estructura honesta sin sugeridas (caso de aceptación B13.3)", async ({ page, context }) => {
+test("demo-CoDo lab: sus 3 sugeridas verificadas citan (caso de aceptación B13.3 cerrado)", async ({ page, context }) => {
   await context.addCookies([SITE_COOKIE]);
   await mockDemo(page);
   await page.goto("/demo/lab");
   await expect(page.getByText(/CODO-LAB-04/).first()).toBeVisible();
-  // El chip lista los documentos vivos (tipos reales); el lab NO publica sugeridas
-  // rotas — muestra estructura + input invitando hasta que B13.3 cierre DEF-2.
-  await expect(page.getByText(/documentos vivos/).first()).toBeVisible();
-  await expect(page.locator(".demo-sug")).toHaveCount(0);
-  await expect(page.locator(".dc-sugs-empty").first()).toBeVisible();
+  // B13.3 cerró DEF-1+DEF-2: el expediente Mitutoyo (manual_tecnico + calibracion)
+  // ya cita rango/vence/trazable → el lab publica sus 3 sugeridas verificadas.
+  await expect(page.locator(".demo-sug")).toHaveCount(3);
+  await page.locator(".demo-sug").first().click();
+  // Render UNIFICADO con cita (mismo .cite2 del hero).
+  await expect(page.locator(".dc2-a .cite2").first()).toBeVisible({ timeout: 5000 });
 });
 
 test("precios conmuta la banda en vivo (3 bandas v2.1)", async ({ page, context }) => {
