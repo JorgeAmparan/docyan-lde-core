@@ -161,6 +161,24 @@ def test_def2_sin_embedder_es_lexico_estricto():
     assert "ACGIH TLV" not in nombres
 
 
+def test_def1_fechavencimiento_responde_vence_con_cita():
+    # "¿cuándo vence?" surface :FechaVencimiento (la fecha de VENCIMIENTO, no la de
+    # emisión) con cita anclada. El bridge proyecta name→fecha; el reader lo lee.
+    chunk = ("## CALIBRATION CERTIFICATE\n\nCalibration date:\n\n15 January 2026\n\n"
+             "Next due / expires:\n\n15 January 2027\n")
+    fv = _row(id="fv1", fecha="15 January 2027",
+              spans=_spans(start=chunk.find("15 January 2027")),
+              documento_id="cert", documento_nombre="mitutoyo_cert.pdf",
+              documento_tipo="calibracion")
+    g = FakeGraph({"FechaVencimiento": [fv]}, chunks={CHUNK_ID: chunk})
+    pay = _pay(DKGReader(g), "¿cuándo vence la calibración?")
+    item = next((e for e in pay.especificaciones if e.nombre == "Vence"), None)
+    assert item is not None
+    assert item.valor == "15 January 2027"           # vencimiento (2027), no emisión (2026)
+    assert item.cita and item.cita.fragmento and "2027" in item.cita.fragmento
+    assert item.cita.documento_tipo == "calibracion"
+
+
 def test_informativa_combina_especificacion_y_labels_def1():
     # Una consulta amplia recupera specs Y la sustancia, cada una con su etiqueta.
     emb = FakeEmbedder()
