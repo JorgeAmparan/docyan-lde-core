@@ -470,6 +470,14 @@ class DKGReader:
             MATCH (p:Procedimiento)
             WHERE size($toks) = 0
                OR ANY(w IN $toks WHERE toLower(coalesce(p.nombre,'')) CONTAINS w)
+            // Entre los procedimientos que casan, elige el de MÁS pasos: la
+            // extracción puede producir varios :Procedimiento homónimos y solo
+            // algunos traen los :Paso enlazados (`:CONTIENE`). Sin esto, el LIMIT 1
+            // tomaba uno vacío y la procedure_card salía sin pasos (visto en CIP).
+            OPTIONAL MATCH (p)-[:CONTIENE]->(paso0:Paso)
+            WITH p, count(paso0) AS _npasos
+            ORDER BY _npasos DESC, p.nombre
+            LIMIT 1
             OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(p)
             OPTIONAL MATCH (p)-[:CONTIENE]->(paso:Paso)
             OPTIONAL MATCH (paso)-->(epp:EPP)
