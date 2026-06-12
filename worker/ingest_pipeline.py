@@ -475,12 +475,17 @@ class IngestPipeline:
         return sorted(ids)
 
     def _invalidar_cache(self, tenant_id: str, ingest_result, document_id: str) -> int:
-        """Invalida las entradas del caché PCL afectadas. Best-effort (doc §5.3)."""
+        """Invalida el caché PCL del tenant tras una ingesta. Best-effort (doc §5.3).
+
+        B13.3 §5 fix: invalidación a nivel TENANT, no solo por-entidad. Una ingesta
+        (especialmente una RE-ingesta de un doc borrado/re-extraído) puede cambiar la
+        respuesta a preguntas YA cacheadas — incluidas las que devolvieron VACÍO con el
+        documento viejo (sin `entidad_ids`, que la invalidación por-entidad no captura).
+        Es un evento de ciclo de vida: el grafo cambió, la caché vieja muere."""
         try:
             from app.pcl.pcl_cache import PCLCache
 
-            entidades = self._entidades_modificadas(ingest_result, document_id)
-            return PCLCache().invalidate_by_entities(tenant_id, entidades)
+            return PCLCache().invalidar_tenant(tenant_id)
         except Exception as exc:  # noqa: BLE001 — el caché no es gate de la ingesta
             logger.warning("no se pudo invalidar el caché PCL: %s", type(exc).__name__)
             return 0

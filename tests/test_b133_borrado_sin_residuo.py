@@ -52,3 +52,25 @@ def test_borrar_idempotencia_permite_reextraer():
     assert disp.buscar_idempotente(t, sha) is not None        # estaba marcado
     disp.borrar_idempotencia(t, sha)
     assert disp.buscar_idempotente(t, sha) is None             # ya no → re-extrae
+
+
+def test_invalidar_tenant_borra_caché_incluidas_las_vacías_y_aísla_tenants():
+    """B13.3 §5: invalidar_tenant borra TODA la caché del tenant —incluidas las
+    respuestas VACÍAS (sin entidad_ids, que la invalidación por-entidad NO captura)—
+    y NO toca otros tenants (multi-tenant absoluto)."""
+    from app.pcl.pcl_cache import InMemoryCacheBackend, PCLCache
+
+    b = InMemoryCacheBackend()
+    cache = PCLCache(backend=b)
+    # T: una entrada con entidades + una VACÍA (el caso del doc viejo de Jorge).
+    b.setex("pcl:cache:T:h1:fp", 600, '{"entidad_ids":["e1"]}'); b.sadd("pcl:idx:T:fp", "pcl:cache:T:h1:fp")
+    b.sadd("pcl:ent:T:e1", "pcl:cache:T:h1:fp")
+    b.setex("pcl:cache:T:h2:fp", 600, '{"entidad_ids":[]}'); b.sadd("pcl:idx:T:fp", "pcl:cache:T:h2:fp")
+    # Otro tenant, intacto.
+    b.setex("pcl:cache:U:h9:fp", 600, '{"entidad_ids":["x"]}')
+
+    n = cache.invalidar_tenant("T")
+    assert n == 2                                  # las DOS entradas de T (incl. la vacía)
+    assert b.scan("pcl:cache:T:*") == []           # nada de T sobrevive
+    assert b.scan("pcl:ent:T:*") == []
+    assert b.get("pcl:cache:U:h9:fp") is not None   # U intacto
