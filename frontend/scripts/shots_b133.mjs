@@ -16,6 +16,11 @@ const SHOTS = [
   ["lab", "¿cuándo vence la calibración?", "lab-vence"],
   ["lab", "¿cuál es el rango de medición?", "lab-rango"],
   ["maq", "what is the chemical name?", "maq-chemical"],
+  // Cierre acceptance #2 (ranking por intención): la frase de IDENTIDAD en español
+  // que antes devolvía un :Riesgo ahora encabeza la :Sustancia; "LEL?" ya no
+  // encabeza un :Riesgo de pura cercanía semántica (sale el dato de inflamabilidad).
+  ["maq", "¿cómo se llama el químico?", "maq-nombre-quimico"],
+  ["maq", "LEL?", "maq-lel"],
   ["maq", "OSHA PEL", "maq-osha"],
   ["pharma", "¿Cuál es el procedimiento CIP?", "pharma-cip-procedure"],
 ];

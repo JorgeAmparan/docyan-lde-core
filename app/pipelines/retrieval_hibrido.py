@@ -197,6 +197,13 @@ class Candidato:
     estricto: bool = False
     vec: float | None = None
     banda: str = field(default="")
+    # Sesgo de ORDEN por intención×label (B13.3 §ranking). NO es relevancia: el
+    # `score`/`banda` siguen siendo la confianza honesta (léxico+semántica) que se
+    # muestra y cita. `prioridad` solo reordena — p. ej. una pregunta de IDENTIDAD
+    # ("¿cómo se llama?") prioriza :Sustancia sobre un :Riesgo que casualmente
+    # contiene "químicos". Lo fija el reader (dueño de la ontología), no este módulo
+    # (que es label-agnóstico). 0.0 = sin sesgo.
+    prioridad: float = 0.0
 
 
 def _embeder_query(query: str, embedder) -> list[float] | None:
@@ -252,5 +259,9 @@ def rankear(
         c for c in candidatos
         if c.estricto or (c.vec is not None and c.score >= PISO_RELEVANCIA_SEMANTICA)
     ]
-    relevantes.sort(key=lambda c: c.score, reverse=True)
+    # Orden = relevancia honesta (`score`) + sesgo de intención (`prioridad`). El
+    # `prioridad` reordena pero NO admite (la admisión de arriba es solo por score/
+    # estricto): un candidato ruidoso no entra por tener buen sesgo, y un :Riesgo
+    # demotado no desaparece — solo deja de encabezar cuando el query no es de riesgo.
+    relevantes.sort(key=lambda c: c.score + c.prioridad, reverse=True)
     return relevantes[:limite]
