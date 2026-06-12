@@ -193,10 +193,13 @@ _LABELS_INFORMATIVA: tuple[tuple[str, str, str], ...] = (
      "acreditacion acreditación traceable standard"),
 )
 
-# Campos de texto candidatos a CONTENIDO del nodo, en orden de preferencia. Cubre el
-# shape post-bridge (campo canónico) y el SDK-nativo (`name`). El primero no vacío gana.
+# Campos de texto candidatos a CONTENIDO del nodo, en orden de preferencia. Son los
+# campos CANÓNICOS que el bridge proyecta por label (`_CAMPO_PRIMARIO_DESDE_NAME`).
+# A propósito NO incluye el `name` SDK-nativo: el reader lee lo proyectado por el
+# bridge, no el crudo del SDK — así se preserva el invariante "sin bridge no hay
+# lectura" (es el bridge, no el azar, lo que cierra la costura escritura↔lectura).
 _CAMPOS_CONTENIDO = ("nombre", "valor", "descripcion", "texto", "termino", "magnitud",
-                     "folio", "fecha", "name")
+                     "folio", "fecha")
 
 
 def _emb(row: dict) -> list[float] | None:
@@ -280,8 +283,10 @@ class DKGReader:
 
         candidatos: list[Candidato] = []
         # :Especificacion — caso canónico (la etiqueta de la tarjeta es su propio nombre).
+        # Lee el `nombre` CANÓNICO (proyectado por el bridge), no el `name` SDK-nativo:
+        # sin bridge, `nombre` es NULL ⇒ "—" ⇒ no casa ⇒ no se lee (invariante de costura).
         for row in self._leer_especificaciones(tenant_id, toks, semantica):
-            nombre = _primer_no_vacio(row, ("nombre", "name")) or "—"
+            nombre = _primer_no_vacio(row, ("nombre",)) or "—"
             data = self._normalizar(row, nombre=nombre, valor=row.get("valor"),
                                     unidad=row.get("unidad"), ancla=nombre, label="Especificacion")
             tm = f"{nombre} {row.get('valor') or ''}".strip()

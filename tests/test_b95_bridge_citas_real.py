@@ -139,7 +139,9 @@ def test_bridge_cierra_cita_tipo1(grafo_poblado):
     assert len(pay.citas) >= 1, "Tipo 1 debe traer al menos una cita tras el bridge"
     cita = pay.citas[0]
     assert cita.documento_id == DOC_ID
-    assert cita.documento_nombre == "Manual Rotina 380"
+    # Atribución B13.3 §2.3: nombre = archivo real; tipo = tipo documental (mismo doc).
+    assert cita.documento_nombre == "rotina380.pdf"
+    assert cita.documento_tipo == "Manual Rotina 380"
     # Regla de integridad de cita (paquete F3): la PRESENCIA de documento_nombre NO
     # es verificación de cita — "citado" = verbatim del documento. Estos specs
     # sintéticos no llevan `spans`, así que NO debe fabricarse un fragmento: el
