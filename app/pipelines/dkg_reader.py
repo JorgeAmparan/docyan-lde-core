@@ -309,7 +309,13 @@ class DKGReader:
                 tm = f"{etiqueta} {sinonimos} {contenido}"
                 candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data))
 
-        elegidos = rankear(termino or "", candidatos, embedder=embedder, limite=8)
+        # Puntuar con la consulta SIN stopwords (mismos tokens de contenido que el
+        # recall). Pasar el `termino` crudo diluía el score léxico ("what is the
+        # chemical name" → tokens what/is/the bajaban :Sustancia de banda alta y
+        # :Riesgo ganaba por pura semántica). El embedding de los tokens limpios es
+        # igual de bueno (menos ruido) para la pasada vectorial.
+        query_score = " ".join(toks) if toks else (termino or "")
+        elegidos = rankear(query_score, candidatos, embedder=embedder, limite=8)
         especs = [c.data for c in elegidos]
         # Integridad de cita: VERBATIM del documento anclado en el término real del dato.
         self._hidratar_fragmentos(tenant_id, especs)
