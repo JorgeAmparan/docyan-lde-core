@@ -51,8 +51,11 @@ test("hero v2: la consulta sugerida devuelve respuesta con cita", async ({ page,
 test("demo-CoDo: consulta sugerida → respuesta citada", async ({ page, context }) => {
   await context.addCookies([SITE_COOKIE]);
   await mockDemo(page);
-  await page.goto("/demo/lab");
-  await expect(page.getByText(/CODO-LAB-04/).first()).toBeVisible();
+  // `maq` es un CoDo con sugeridas que citan. `lab` se re-modeló a estructura sin
+  // sugeridas (DEF-2, caso de aceptación B13.3) — su cobertura va en el test de
+  // estructura, no aquí.
+  await page.goto("/demo/maq");
+  await expect(page.getByText(/CODO-MAQ-12/).first()).toBeVisible();
   await page.locator(".demo-sug").first().click();
   // Render UNIFICADO: el CoDo usa la misma tarjeta del hero (.dc2-a + .cite2).
   await expect(page.locator(".dc2-a .cite2").first()).toBeVisible({ timeout: 5000 });
@@ -61,7 +64,7 @@ test("demo-CoDo: consulta sugerida → respuesta citada", async ({ page, context
 test("integridad de cita: el fragmento inline muestra el VERBATIM del documento, no el texto generado", async ({ page, context }) => {
   await context.addCookies([SITE_COOKIE]);
   await mockDemo(page);
-  await page.goto("/demo/lab");
+  await page.goto("/demo/maq");
   await page.locator(".demo-sug").first().click();
   await page.locator(".dc2-a .cite2").first().click();
   // El fragmento inline (.dc2-src) bajo el sello es el verbatim del documento…
@@ -70,6 +73,18 @@ test("integridad de cita: el fragmento inline muestra el VERBATIM del documento,
   await expect(mark).toHaveText(VERBATIM);
   // …y NUNCA el texto sintetizado por el LLM (regla de integridad de cita).
   await expect(page.locator(".dc2-src")).not.toContainText(GENERADO);
+});
+
+test("demo-CoDo lab: estructura honesta sin sugeridas (caso de aceptación B13.3)", async ({ page, context }) => {
+  await context.addCookies([SITE_COOKIE]);
+  await mockDemo(page);
+  await page.goto("/demo/lab");
+  await expect(page.getByText(/CODO-LAB-04/).first()).toBeVisible();
+  // El chip lista los documentos vivos (tipos reales); el lab NO publica sugeridas
+  // rotas — muestra estructura + input invitando hasta que B13.3 cierre DEF-2.
+  await expect(page.getByText(/documentos vivos/).first()).toBeVisible();
+  await expect(page.locator(".demo-sug")).toHaveCount(0);
+  await expect(page.locator(".dc-sugs-empty").first()).toBeVisible();
 });
 
 test("precios conmuta la banda en vivo (3 bandas v2.1)", async ({ page, context }) => {
