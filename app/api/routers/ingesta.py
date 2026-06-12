@@ -242,6 +242,7 @@ async def estado_job(
         "tipo_documento": job.tipo_documento,
         "resultado": job.resultado,
         "error": job.error,
+        "documento_vivo": _documento_vivo(ctx["org_id"], job),
     }
 
 
@@ -249,6 +250,22 @@ def _consult_url_for(job) -> str | None:
     """Destino de 'Consultar →' al completar (relativo; la UI lo navega)."""
     doc_id = (job.resultado or {}).get("document_id") or job.content_sha256 or job.job_id
     return f"/consulta?doc={doc_id}"
+
+
+def _documento_vivo(org_id: str, job) -> bool | None:
+    """ÚNICA fuente de verdad de 'vivo' (B13.3 fix): el `:DocumentoSource` EXISTE en
+    el grafo del tenant, consultado EN VIVO. `doc_id` == SHA == `:DocumentoSource.id`.
+    Refleja borrados (el banner ya no miente sobre un doc que no quedó vivo). None si
+    aún no hay SHA (job recién creado) ⇒ el builder cae al estado del job (compat)."""
+    sha = job.content_sha256 or (job.resultado or {}).get("document_id")
+    if not sha:
+        return None
+    try:
+        from app.graph import dkg_documents
+        from app.graph.dkg_client import dkg_client
+        return dkg_documents.documento_existe(dkg_client, org_id, sha)
+    except Exception:  # noqa: BLE001 — si el grafo no responde, no afirmamos "vivo"
+        return None
 
 
 @router.get("/documents/{job_id}/status", response_model=DocProgress)
@@ -266,7 +283,7 @@ async def progreso_job(
     if job is None:
         raise HTTPException(status_code=404, detail="Job no encontrado.")
     pos = reader.backend.queue_position(job_id)
-    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job))
+    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job), documento_vivo=_documento_vivo(ctx["org_id"], job))
 
 
 @router.post("/documents/{job_id}/retry", response_model=DocProgress)
@@ -289,4 +306,4 @@ async def reintentar_job(
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     pos = reader.backend.queue_position(job_id)
-    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job))
+    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job), documento_vivo=_documento_vivo(ctx["org_id"], job))

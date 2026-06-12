@@ -64,25 +64,34 @@ export function IngestProgressRow({
   };
 
   const isError = status === "error";
-  const done = status === "completado";
+  // B13.3 fix: "vivo" = el grafo lo confirma (disponibleParaConsulta), NO solo el
+  // estado del job. Un job "completado" SIN :DocumentoSource (completedSinDocumento)
+  // NO está vivo — se muestra honesto + reintentar, jamás "vivo" en silencio.
+  const completado = status === "completado";
+  const vivo = completado && d?.disponibleParaConsulta === true;
+  const sinDoc = completado && !vivo; // procesado pero no quedó vivo
+  const done = vivo;
+  const label = sinDoc
+    ? "Procesado, pero no quedó vivo. Reintenta la carga."
+    : STATUS_LABEL[status];
 
   return (
-    <div className={"ingest-row" + (isError ? " err" : done ? " done" : "")}>
+    <div className={"ingest-row" + (isError || sinDoc ? " err" : done ? " done" : "")}>
       <span className="ir-ic">
         <Icon
-          name={isError ? "triangle-alert" : done ? "check-circle-2" : "loader-2"}
+          name={isError || sinDoc ? "triangle-alert" : done ? "check-circle-2" : "loader-2"}
           size={18}
-          style={!isError && !done ? { animation: "spin 1s linear infinite" } : undefined}
+          style={!isError && !sinDoc && !done ? { animation: "spin 1s linear infinite" } : undefined}
         />
       </span>
       <div className="ir-main">
         <div className="ir-n">{docName}</div>
         <div className="ir-m">
-          {STATUS_LABEL[status]}
-          {d?.phase && !done && !isError ? ` · ${PHASE_LABEL[d.phase] ?? d.phase}` : ""}
+          {label}
+          {d?.phase && !done && !isError && !sinDoc ? ` · ${PHASE_LABEL[d.phase] ?? d.phase}` : ""}
           {status === "encolado" && d?.queuePosition ? ` · posición ${d.queuePosition}` : ""}
         </div>
-        {!done && !isError && (
+        {!done && !isError && !sinDoc && (
           <span className="opbar" style={{ marginTop: 8, display: "block" }}>
             <i style={{ width: pct + "%" }} />
           </span>
@@ -93,8 +102,8 @@ export function IngestProgressRow({
           </p>
         )}
       </div>
-      {!done && !isError && <span className="ir-pct mono">{pct}%</span>}
-      {isError && (
+      {!done && !isError && !sinDoc && <span className="ir-pct mono">{pct}%</span>}
+      {(isError || sinDoc) && (
         <button className="btn sec" onClick={retry} type="button">
           <Icon name="refresh-cw" size={15} />
           Reintentar

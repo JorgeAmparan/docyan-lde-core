@@ -124,11 +124,33 @@ async def _procesar_un_job(
     job.content_sha256 = sha
 
     # ── Idempotencia: contenido ya ingerido → cerrar sin reprocesar ───────────
+    # B13.3 fix: la marca de idempotencia NO basta — hay que RE-VALIDAR que el
+    # `:DocumentoSource` siga VIVO en el grafo. Si el doc fue BORRADO (la marca
+    # quedó stale porque el borrado no la limpió, o por carrera), re-ingerir de
+    # verdad en vez de cerrar "completed" reusando un resultado de un doc inexistente
+    # (el bug del 'quedó vivo' que no quedó vivo). Se auto-sana la marca stale.
     previo = dispatcher.buscar_idempotente(job.tenant_id, sha)
     if previo is not None:
-        logger.info("job %s: contenido SHA-256 ya ingerido; idempotente (no reprocesa)", job_id)
-        dispatcher.marcar_completado_idempotente(job_id, previo.get("resultado", {}))
-        return
+        # ¿Sigue VIVO el doc en el grafo? Solo se valida si hay cliente de grafo
+        # (producción). Sin él (o si el grafo no responde) se honra el marcador
+        # —conservador: no re-ingiere de más por una incertidumbre transitoria—.
+        vivo = True
+        dkgc = getattr(pipeline, "dkg_client", None)
+        if dkgc is not None:
+            try:
+                from app.graph import dkg_documents
+                vivo = dkg_documents.documento_existe(dkgc, job.tenant_id, sha)
+            except Exception as exc:  # noqa: BLE001 — grafo inalcanzable → honra marcador
+                logger.warning("job %s: no se pudo validar vivencia (%s); honra marcador",
+                               job_id, type(exc).__name__)
+        if vivo:
+            logger.info("job %s: contenido ya ingerido y VIVO; idempotente (no reprocesa)", job_id)
+            dispatcher.marcar_completado_idempotente(job_id, previo.get("resultado", {}))
+            return
+        logger.warning(
+            "job %s: marca de idempotencia STALE (DocumentoSource ausente); re-ingiriendo de verdad", job_id
+        )
+        dispatcher.borrar_idempotencia(job.tenant_id, sha)
 
     # ── Procesar con reintento (backoff exponencial + jitter, tope duro) ──────
     tmp_path = None

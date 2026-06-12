@@ -111,8 +111,48 @@ def eliminar_documento(client: Any, tenant_id: str, doc_id: str) -> dict[str, in
         {"doc_id": doc_id},
     )
 
-    logger.info(
-        "documento eliminado | tenant=%s doc=%s | contenido=%d",
-        tenant_id, doc_id[:12], contenido,
+    # RESIDUO DEL SDK (B13.3 fix): el `:Document {id}` de GraphRAG-SDK y sus `:Chunk`
+    # (vía `:PART_OF`) NO cuelgan de `:CONTIENE`, así que la limpieza por contenido
+    # no los toca. Sin esto, borrar deja cientos de `:Chunk` huérfanos — el bug del
+    # "documento desaparecido que deja rastro". `doc_id` == SHA == `:Document.id`.
+    rc = client.query(
+        tenant_id,
+        "MATCH (doc:Document {id: $doc_id})-[:PART_OF]->(ch:Chunk) RETURN count(ch) AS c",
+        {"doc_id": doc_id},
     )
-    return {"contenido_eliminado": contenido, "documento_eliminado": 1}
+    chunks_sdk = int((rc[0].get("c") if rc else 0) or 0)
+    client.query(
+        tenant_id,
+        "MATCH (doc:Document {id: $doc_id})-[:PART_OF]->(ch:Chunk) DETACH DELETE ch",
+        {"doc_id": doc_id},
+    )
+    client.query(
+        tenant_id,
+        "MATCH (doc:Document {id: $doc_id}) DETACH DELETE doc",
+        {"doc_id": doc_id},
+    )
+
+    logger.info(
+        "documento eliminado | tenant=%s doc=%s | contenido=%d chunks_sdk=%d",
+        tenant_id, doc_id[:12], contenido, chunks_sdk,
+    )
+    return {"contenido_eliminado": contenido, "documento_eliminado": 1,
+            "chunks_sdk_eliminados": chunks_sdk}
+
+
+def rastro_documento(client: Any, tenant_id: str, doc_id: str) -> int:
+    """Cuenta TODO rastro del documento: `:DocumentoSource` + su contenido por
+    `:CONTIENE` + el residuo del SDK (`:Document` + `:Chunk` por `:PART_OF`). 0 ⇒
+    borrado verdaderamente sin residuo (aserción del test de borrado)."""
+    rows = client.query(
+        tenant_id,
+        """
+        OPTIONAL MATCH (d:DocumentoSource {id: $doc_id})
+        OPTIONAL MATCH (d)-[:CONTIENE*1..]->(x) WHERE NOT 'DocumentoSource' IN labels(x)
+        OPTIONAL MATCH (doc:Document {id: $doc_id})
+        OPTIONAL MATCH (doc)-[:PART_OF]->(ch:Chunk)
+        RETURN count(DISTINCT d)+count(DISTINCT x)+count(DISTINCT doc)+count(DISTINCT ch) AS total
+        """,
+        {"doc_id": doc_id},
+    )
+    return int((rows[0].get("total") if rows else 0) or 0)

@@ -374,6 +374,20 @@ class IngestPipeline:
         # entero: solo lo afectado. Best-effort: el caché es optimización, no gate.
         invalidadas = self._invalidar_cache(job.tenant_id, ingest_result, doc_id)
 
+        # B13.3 fix: ÚNICA FUENTE DE VERDAD de "vivo" = el `:DocumentoSource` existe.
+        # Si el bridge no lo dejó (falla/0), el job NO debe declararse vivo en silencio.
+        try:
+            from app.graph import dkg_documents
+            doc_vivo = dkg_documents.documento_existe(self.dkg_client, job.tenant_id, doc_id)
+        except Exception:  # noqa: BLE001
+            doc_vivo = bool((bridge_counters or {}).get("documento_source"))
+        completed_sin_documento = not doc_vivo
+        if completed_sin_documento:
+            logger.warning(
+                "job %s: COMPLETED_SIN_DOCUMENTO — no quedó :DocumentoSource (no es vivo)",
+                job.job_id,
+            )
+
         # Campos del IngestionResult del SDK (como reporta el PoC).
         return {
             "tipo_documento": schema.tipo_documento if schema else None,
@@ -389,6 +403,8 @@ class IngestPipeline:
             "cotizado_contra": primary,                   # el cotizador estima contra la primaria
             "costo_discrepancia": costo_discrepancia,     # True ⇒ corrió capa 2/3 (no se cobra al cliente)
             "completed_sin_ontologia": sin_ontologia,     # True ⇒ 0 entidades incluso tras retry de calidad
+            "completed_sin_documento": completed_sin_documento,  # True ⇒ NO quedó :DocumentoSource (no vivo)
+            "documento_vivo": doc_vivo,                   # ÚNICA fuente de verdad de "vivo"
             "cache_invalidadas": invalidadas,
             "bridge": bridge_counters,
             "visuales_materializados": visuales,

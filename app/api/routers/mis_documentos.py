@@ -71,6 +71,16 @@ async def eliminar_documento(
 
     contadores = dkg_documents.eliminar_documento(dkg, tenant_id, doc_id)
 
+    # B13.3 fix: limpiar la marca de idempotencia del SHA (doc_id == SHA). Sin esto,
+    # re-subir el MISMO archivo tras borrarlo hace idempotency-skip en el worker
+    # ("completed" reusando el resultado viejo, sin recrear el :DocumentoSource) — el
+    # bug del documento que "queda vivo" pero no aparece. Best-effort: no es gate.
+    try:
+        from app.ingesta.providers import get_dispatcher
+        get_dispatcher().borrar_idempotencia(tenant_id, doc_id)
+    except Exception as exc:  # noqa: BLE001 — limpiar idempotencia no debe romper el borrado
+        logger.warning("no se pudo limpiar idempotencia de %s: %s", doc_id[:12], type(exc).__name__)
+
     # FAT: el evento de borrado queda en auditoría (sin el contenido del documento).
     actor = ctx.get("email") or ctx.get("user_id") or tenant_id
     providers.get_audit().record("document_deleted", actor, {
