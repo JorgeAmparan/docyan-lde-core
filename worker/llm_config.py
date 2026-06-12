@@ -19,12 +19,21 @@ from __future__ import annotations
 
 import os
 
-# Default validado con el PoC sobre NOM-052 (Adenda §3): Gemini 2.5 Flash con
-# prefijo `gemini/` OBLIGATORIO. El modelo de extracción/resolution es
-# OVERRIDEABLE por env (INGEST_EXTRACTION_MODEL / INGEST_RESOLUTION_MODEL) para
-# pruebas o por presupuesto (p. ej. `anthropic/claude-sonnet-4-6` si Gemini no
-# tiene saldo). El default NO cambia; el override es explícito y por proveedor.
+# CADENA CANÓNICA DE TRES CAPAS (decisión de Jorge, jun 2026). Cada capa es
+# overrideable por env, pero el DEFAULT es la decisión canónica:
+#   Capa 1 — Primaria:        gemini/gemini-2.5-flash (prefijo `gemini/` OBLIGATORIO;
+#            sin él LiteLLM defaultea a Vertex AI y falla pidiendo credenciales GCP).
+#   Capa 2 — Retry de calidad: gemini/gemini-2.5-pro — se invoca cuando la corrida
+#            PRIMARIA rinde 0 entidades de ontología o timeout. MISMA FAMILIA = mismo
+#            estilo de extracción, sin varianza entre documentos del tenant (escalera
+#            determinista Flash→Pro; NO re-tirar la lotería con Flash).
+#   Capa 3 — Fallback de PROVEEDOR: claude-opus-4-8 — SOLO ante falla de proveedor
+#            (key inválida, cuota, outage de Google). Ya NO Sonnet.
+# Un tenant se ingiere con la primaria salvo escalada puntual registrada; jamás se
+# alterna modelo por conveniencia. Toda corrida registra `modelo_usado` (visible).
 _DEFAULT_EXTRACTION_MODEL = "gemini/gemini-2.5-flash"
+_DEFAULT_QUALITY_RETRY_MODEL = "gemini/gemini-2.5-pro"
+_DEFAULT_PROVIDER_FALLBACK_MODELS = "claude-opus-4-8"
 
 LLM_CONFIG = {
     "qa_model": "gpt-4o-mini",
@@ -35,24 +44,35 @@ LLM_CONFIG = {
 
 
 def extraction_model() -> str:
+    """Capa 1 — modelo PRIMARIO de extracción (Gemini 2.5 Flash)."""
     return os.getenv("INGEST_EXTRACTION_MODEL", _DEFAULT_EXTRACTION_MODEL)
 
 
-def extraction_fallback_models() -> list[str]:
-    """
-    Modelos de respaldo (CSV en INGEST_EXTRACTION_FALLBACK_MODELS). Si el modelo
-    primario falla (presupuesto/quota/rate-limit/API error), el worker reintenta
-    la ingesta del documento con el siguiente del chain. Resiliencia multi-modelo
-    (análoga a los tiers del Model Router de traducción).
-    """
-    raw = os.getenv("INGEST_EXTRACTION_FALLBACK_MODELS", "")
+def quality_retry_model() -> str | None:
+    """Capa 2 — retry de CALIDAD (Gemini 2.5 Pro) ante 0 ontología/timeout del
+    primario. Misma familia que la primaria. `""` lo desactiva."""
+    v = os.getenv("INGEST_QUALITY_RETRY_MODEL", _DEFAULT_QUALITY_RETRY_MODEL).strip()
+    return v or None
+
+
+def provider_fallback_models() -> list[str]:
+    """Capa 3 — fallback de PROVEEDOR (Claude Opus 4.8) ante falla de proveedor.
+    CSV en INGEST_PROVIDER_FALLBACK_MODELS. Es la red de seguridad cuando Google
+    cae; si opera en >5% de ingestas es incidente de key/cuota, no costo a absorber."""
+    raw = os.getenv("INGEST_PROVIDER_FALLBACK_MODELS", _DEFAULT_PROVIDER_FALLBACK_MODELS)
     return [m.strip() for m in raw.split(",") if m.strip()]
 
 
+# Compat retro: algunos llamadores leían la "cadena" plana [primario, *fallbacks].
+# Se mantiene como [primario, *fallbacks de proveedor] (la capa 2 de calidad tiene
+# su propio disparador por 0-ontología, no es un eslabón de la cadena de proveedor).
+def extraction_fallback_models() -> list[str]:
+    return provider_fallback_models()
+
+
 def extraction_model_chain() -> list[str]:
-    """Cadena ordenada [primario, *fallbacks] que el worker prueba en orden."""
     chain = [extraction_model()]
-    for m in extraction_fallback_models():
+    for m in provider_fallback_models():
         if m not in chain:
             chain.append(m)
     return chain

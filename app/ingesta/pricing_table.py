@@ -73,6 +73,19 @@ PRICING: dict[str, ModelPricing] = {
         input_usd_per_1m=_env_float("PRICE_GPT4O_MINI_IN_USD_PER_1M", 0.15),
         output_usd_per_1m=_env_float("PRICE_GPT4O_MINI_OUT_USD_PER_1M", 0.60),
     ),
+    # Capas 2 y 3 de la cadena de extracción (decisión Jorge). El cotizador SIGUE
+    # estimando contra la primaria (Flash); estos precios existen para CUANTIFICAR la
+    # discrepancia cuando opera una capa superior (no se traslada al cliente).
+    "gemini/gemini-2.5-pro": ModelPricing(
+        model="gemini/gemini-2.5-pro",
+        input_usd_per_1m=_env_float("PRICE_GEMINI_PRO_IN_USD_PER_1M", 1.25),
+        output_usd_per_1m=_env_float("PRICE_GEMINI_PRO_OUT_USD_PER_1M", 10.0),
+    ),
+    "claude-opus-4-8": ModelPricing(
+        model="claude-opus-4-8",
+        input_usd_per_1m=_env_float("PRICE_OPUS_IN_USD_PER_1M", 5.0),
+        output_usd_per_1m=_env_float("PRICE_OPUS_OUT_USD_PER_1M", 25.0),
+    ),
 }
 
 
