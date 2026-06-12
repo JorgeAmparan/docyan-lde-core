@@ -667,11 +667,47 @@ class DKGReader:
             """,
             {"eid": entidad_id},
         )
-        # B13.3 §2.4 — cita verbatim del vencimiento: ancla en el AÑO de la fecha de
-        # vencimiento (que SÍ aparece literal en el documento; la fecha ISO del nodo
-        # no), no en la de emisión. Sin span anclable → fragmento None (honesto).
+        # B13.3 §2.4 — además de las :Alerta pre-generadas (vencimientos inminentes
+        # del generador, acotados por horizonte), surface las FECHAS DE VENCIMIENTO
+        # administrativas directamente: "¿cuándo vence?" debe responder la fecha
+        # citada aunque el vencimiento NO sea inminente (es un dato, no una alarma).
+        # Solo administrativas (fechas) — la LÍNEA ABSOLUTA se mantiene.
+        rows = list(rows) + self._vencimientos_administrativos(tenant_id, entidad_id)
+        # Cita verbatim: ancla en el AÑO del vencimiento (que SÍ aparece literal en el
+        # documento; la fecha ISO del nodo no), no en la de emisión.
         self._hidratar_alertas(tenant_id, rows)
         return rows
+
+    def _vencimientos_administrativos(self, tenant_id: str, entidad_id: str | None) -> list[dict]:
+        """Lee :FechaVencimiento (dato administrativo) con su doc + spans, como filas de
+        alerta administrativa para el dashboard. Cada una cita el AÑO en el documento."""
+        scope = (
+            "MATCH (ent:EntidadOperativa {id: $eid})-[]->(n:FechaVencimiento)"
+            if entidad_id else "MATCH (n:FechaVencimiento)"
+        )
+        try:
+            return self.client.query(
+                tenant_id,
+                f"""
+                {scope}
+                WHERE coalesce(n.fecha, n.nombre, n.name) IS NOT NULL
+                OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(n)
+                WITH n, collect(DISTINCT {{id: d.id, nombre: d.nombre_archivo,
+                                          tipo: d.tipo_documento, url: d.url_publica}}) AS _docs
+                RETURN n.id AS alerta_id,
+                       'Vencimiento: ' + coalesce(n.fecha, n.nombre, n.name) AS descripcion,
+                       coalesce(n.fecha, n.nombre, n.name) AS fecha_vencimiento,
+                       'baja' AS urgencia, 'vencimiento' AS tipo, n.entidad_id AS entidad_id,
+                       n.spans AS _src_spans, coalesce(n.fecha, n.nombre, n.name) AS _src_nombre,
+                       _docs[0].id AS documento_id,
+                       coalesce(_docs[0].nombre, _docs[0].tipo) AS documento_nombre,
+                       _docs[0].tipo AS documento_tipo, _docs[0].url AS documento_url
+                LIMIT 25
+                """,
+                {"eid": entidad_id},
+            )
+        except Exception:  # noqa: BLE001 — label ausente no rompe el dashboard
+            return []
 
     def _hidratar_alertas(self, tenant_id: str, rows: list[dict]) -> None:
         if not rows:
