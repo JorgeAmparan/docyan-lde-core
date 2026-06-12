@@ -203,6 +203,67 @@ _LABELS_INFORMATIVA: tuple[tuple[str, str, str], ...] = (
      "valid until due fecha renovacion renovación"),
 )
 
+# ── Ranking por intención del query (B13.3 §ranking — cierre acceptance #2) ─────
+#
+# El léxico+semántica solo NO basta para la RELEVANCIA: un :Riesgo cuyo texto
+# contiene "QUIMICOS" o cuyo embedding cae cerca de cualquier consulta de seguridad
+# encabeza preguntas que NO son de riesgo (diagnóstico real sobre el grafo de prod:
+# "¿cómo se llama el químico?" devolvía :Riesgo 'PRODUCTOS DE COMBUSTION', y "LEL?"
+# devolvía :Riesgo 'IRRITACION', sepultando la :Sustancia y la :Especificacion de
+# inflamabilidad reales). Regla de relevancia (directiva de Jorge): una pregunta de
+# IDENTIDAD prioriza :Sustancia/:Producto/:Instrumento sobre :Riesgo; y los labels de
+# SEGURIDAD no encabezan salvo que el query sea, en efecto, sobre riesgos.
+#
+# Esto NO toca el score/banda (la confianza honesta que se muestra y cita) — solo el
+# ORDEN (Candidato.prioridad): un :Riesgo demotado sigue en el resultado, solo deja
+# de encabezar. Label-agnóstico el scorer; la ontología vive aquí.
+_LABELS_IDENTIDAD = frozenset({"Sustancia", "Producto", "Instrumento", "NumeroCAS"})
+_LABELS_SEGURIDAD = frozenset({"Riesgo", "MedidaProteccion", "EquipoProteccion", "Advertencia"})
+# Marcadores de IDENTIDAD: la pregunta busca el NOMBRE/identidad de algo ("¿cómo se
+# llama?", "nombre del químico", "what is it called", "chemical name"). Se evita el
+# "¿qué es / what is" pelado (genérico: "what is the OSHA PEL" NO es identidad).
+_MARCADORES_IDENTIDAD = frozenset(
+    "nombre name llama llamado llamada llaman denomina denominacion denominado "
+    "identifica identificacion identificar identidad called identity".split()
+)
+# Marcadores de SEGURIDAD: la pregunta SÍ es de riesgo/peligro → no se demota nada.
+_MARCADORES_SEGURIDAD = frozenset(
+    "riesgo riesgos peligro peligros peligroso peligrosa peligrosas peligrosidad "
+    "hazard hazards hazardous ghs precaucion precauciones toxico toxica toxicidad "
+    "corrosivo corrosiva irritante nocivo seguridad daninos danino".split()
+)
+# Magnitudes del sesgo de orden (no de score). Identidad es DECISIVA (boost + pena
+# fuertes: el dato de identidad debe encabezar sobre un homónimo de :Riesgo). La
+# democión GENERAL (query ni de identidad ni de seguridad) es leve: solo rompe
+# cuasi-empates donde un :Riesgo semántico sepulta la :Especificacion relevante (LEL).
+_BONUS_IDENTIDAD = 0.30
+_PENA_IDENTIDAD = 0.30
+_PENA_GENERAL = 0.10
+
+
+def _sesgo_intencion(termino: str | None) -> dict[str, float]:
+    """Sesgo de ORDEN por label según la intención del query (no altera relevancia).
+
+    · Query de SEGURIDAD (menciona riesgo/peligro/hazard/…): sin sesgo — los :Riesgo
+      deben encabezar. Tiene precedencia si coexiste con marcadores de identidad
+      ("riesgos del químico" → es de seguridad, no de identidad).
+    · Query de IDENTIDAD (nombre/se llama/called/…): +bonus a Sustancia/Producto/
+      Instrumento/NumeroCAS, −pena a los labels de seguridad.
+    · Resto: −pena leve a los labels de seguridad, para que el dato específico
+      (Especificacion/Sustancia) no quede sepultado por un :Riesgo de pura cercanía
+      semántica (caso "LEL"→"IRRITACION").
+    """
+    norm = _sin_acentos((termino or "").lower())
+    palabras = set(re.findall(r"[a-z0-9]+", norm))
+    if palabras & _MARCADORES_SEGURIDAD:
+        return {}
+    if palabras & _MARCADORES_IDENTIDAD:
+        sesgo = {lbl: _BONUS_IDENTIDAD for lbl in _LABELS_IDENTIDAD}
+        sesgo.update({lbl: -_PENA_IDENTIDAD for lbl in _LABELS_SEGURIDAD})
+        return sesgo
+    return {lbl: -_PENA_GENERAL for lbl in _LABELS_SEGURIDAD}
+
+
 # Campos de texto candidatos a CONTENIDO del nodo, en orden de preferencia. Son los
 # campos CANÓNICOS que el bridge proyecta por label (`_CAMPO_PRIMARIO_DESDE_NAME`).
 # A propósito NO incluye el `name` SDK-nativo: el reader lee lo proyectado por el
@@ -290,17 +351,23 @@ class DKGReader:
         toks = tokenizar_busqueda(termino)
         embedder = self._get_embedder()
         semantica = embedder is not None
+        # Sesgo de ORDEN por intención del query (no toca relevancia): identidad
+        # prioriza Sustancia/Producto/Instrumento; los labels de seguridad no
+        # encabezan salvo query de riesgo. `_label` → prioridad (0.0 = neutral).
+        sesgo = _sesgo_intencion(termino)
 
         candidatos: list[Candidato] = []
         # :Especificacion — caso canónico (la etiqueta de la tarjeta es su propio nombre).
         # Lee el `nombre` CANÓNICO (proyectado por el bridge), no el `name` SDK-nativo:
         # sin bridge, `nombre` es NULL ⇒ "—" ⇒ no casa ⇒ no se lee (invariante de costura).
+        # :Especificacion es el dato neutral de referencia: nunca se demota ni se bonifica.
         for row in self._leer_especificaciones(tenant_id, toks, semantica):
             nombre = _primer_no_vacio(row, ("nombre",)) or "—"
             data = self._normalizar(row, nombre=nombre, valor=row.get("valor"),
                                     unidad=row.get("unidad"), ancla=nombre, label="Especificacion")
             tm = f"{nombre} {row.get('valor') or ''}".strip()
-            candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data))
+            candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data,
+                                        prioridad=sesgo.get("Especificacion", 0.0)))
         # DEF-1 — resto de la ontología legible (Sustancia, Riesgo, Instrumento, …).
         for label, etiqueta, sinonimos in _LABELS_INFORMATIVA:
             for row in self._leer_label(tenant_id, label, toks, semantica):
@@ -310,7 +377,8 @@ class DKGReader:
                 data = self._normalizar(row, nombre=etiqueta, valor=contenido,
                                         unidad=row.get("unidad"), ancla=contenido, label=label)
                 tm = f"{etiqueta} {sinonimos} {contenido}"
-                candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data))
+                candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data,
+                                            prioridad=sesgo.get(label, 0.0)))
 
         # Puntuar con la consulta SIN stopwords (mismos tokens de contenido que el
         # recall). Pasar el `termino` crudo diluía el score léxico ("what is the
