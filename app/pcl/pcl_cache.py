@@ -60,6 +60,7 @@ class CacheBackend(Protocol):
     def smembers(self, key: str) -> set[str]: ...
     def srem(self, key: str, *members: str) -> int: ...
     def expire(self, key: str, ttl: int) -> None: ...
+    def scan(self, match: str) -> list[str]: ...
 
 
 class InMemoryCacheBackend:
@@ -115,6 +116,12 @@ class InMemoryCacheBackend:
     def expire(self, key: str, ttl: int) -> None:  # noqa: D401 - los sets de índice
         return None  # no expiran por sí solos; se limpian al invalidar.
 
+    def scan(self, match: str) -> list[str]:
+        import fnmatch
+
+        claves = set(self._kv) | set(self._sets)
+        return [k for k in claves if fnmatch.fnmatch(k, match)]
+
 
 class RedisCacheBackend:
     """Backend real sobre el cliente Redis del repo (`app/cache/redis_client`)."""
@@ -149,6 +156,12 @@ class RedisCacheBackend:
 
     def expire(self, key: str, ttl: int) -> None:
         self._c().expire(key, ttl)
+
+    def scan(self, match: str) -> list[str]:
+        out = []
+        for k in self._c().scan_iter(match=match, count=500):
+            out.append(k.decode() if isinstance(k, bytes) else k)
+        return out
 
 
 # ── Configuración por DoCo (umbral + TTL) ──────────────────────────────────────
@@ -452,6 +465,30 @@ class PCLCache:
                 eliminadas.add(ck)
             self.backend.delete(ek)
         return len(eliminadas)
+
+    def invalidar_tenant(self, tenant_id: str) -> int:
+        """
+        Invalida TODA la caché de consulta del tenant (B13.3 §5 fix): toda entrada
+        `pcl:cache:{tenant}:*` + sus índices `pcl:idx:*`/`pcl:ent:*`. Se invoca en
+        CAMBIOS DE CICLO DE VIDA del documento (borrado, re-ingesta): respuestas
+        cacheadas del documento VIEJO (incluidas las VACÍAS, que no tienen
+        `entidad_ids` y por eso la invalidación por-entidad no captura) jamás se
+        sirven como "RESPUESTA INSTANTÁNEA · CACHÉ" sobre un grafo ya cambiado.
+        La invalidación es parte del ciclo de vida, igual que el done-marker.
+        """
+        try:
+            claves = (
+                self.backend.scan(f"pcl:cache:{tenant_id}:*")
+                + self.backend.scan(f"pcl:idx:{tenant_id}:*")
+                + self.backend.scan(f"pcl:ent:{tenant_id}:*")
+            )
+        except Exception:  # noqa: BLE001 — caché es optimización, no dependencia
+            logger.warning("no se pudo escanear caché PCL del tenant %s", tenant_id)
+            return 0
+        cache_keys = [k for k in claves if k.startswith(f"pcl:cache:{tenant_id}:")]
+        if claves:
+            self.backend.delete(*claves)
+        return len(cache_keys)
 
     def _eliminar_entrada(self, tenant_id: str, ck: str, entry: dict | None, ctx_fp: str) -> None:
         """Borra una entrada y la descuelga de los índices de contexto y entidad."""

@@ -81,6 +81,17 @@ async def eliminar_documento(
     except Exception as exc:  # noqa: BLE001 — limpiar idempotencia no debe romper el borrado
         logger.warning("no se pudo limpiar idempotencia de %s: %s", doc_id[:12], type(exc).__name__)
 
+    # B13.3 §5 fix: invalidar la caché de CONSULTA (PCL) del tenant. Sin esto, las
+    # preguntas del documento borrado siguen sirviendo respuestas cacheadas viejas
+    # ("RESPUESTA INSTANTÁNEA · CACHÉ", incluidas las VACÍAS) sobre un grafo ya
+    # cambiado. La invalidación es parte del ciclo de vida del documento.
+    try:
+        from app.pcl.pcl_cache import PCLCache
+        n = PCLCache().invalidar_tenant(tenant_id)
+        logger.info("caché PCL invalidada tras borrado | tenant=%s entradas=%d", tenant_id, n)
+    except Exception as exc:  # noqa: BLE001 — el caché es optimización, no gate del borrado
+        logger.warning("no se pudo invalidar caché PCL de %s: %s", tenant_id, type(exc).__name__)
+
     # FAT: el evento de borrado queda en auditoría (sin el contenido del documento).
     actor = ctx.get("email") or ctx.get("user_id") or tenant_id
     providers.get_audit().record("document_deleted", actor, {
