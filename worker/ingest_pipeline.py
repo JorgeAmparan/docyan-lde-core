@@ -25,6 +25,7 @@ perezosa: este módulo se puede importar para introspección/tests sin el stack.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -225,66 +226,111 @@ class IngestPipeline:
         # produce el SDK al cerrar `ingest`.
         _emit("extraccion", 0.0, pg_counters)
 
-        # Fallback multi-modelo (B2.2): el worker prueba la cadena
-        # [primario, *fallbacks] de llm_config. Si la extracción falla con un
-        # modelo (presupuesto/quota/rate-limit/API error), reintenta el documento
-        # con el siguiente. Idempotente: `apply_changes` del SDK es crash-safe por
-        # SHA-256, así que re-ingerir el mismo document_id no duplica.
-        chain = llm_config.extraction_model_chain()
-        ingest_result = None
-        duplicados_resueltos = 0
-        modelo_usado = None
-        last_exc: Exception | None = None
-        for i, model in enumerate(chain):
+        # CADENA CANÓNICA DE TRES CAPAS (decisión Jorge, jun 2026 — llm_config):
+        #   Capa 1 primaria (Gemini Flash) → Capa 3 fallback de PROVEEDOR (Opus) ante
+        #   EXCEPCIÓN de proveedor (key/cuota/outage); Capa 2 retry de CALIDAD (Gemini
+        #   Pro) ante 0 ontología o timeout del primario (misma familia, determinista).
+        # Toda corrida registra `modelo_usado` + `capa` (visible, jamás silencioso).
+        # Idempotente: `apply_changes` es crash-safe por SHA-256; para FORZAR la
+        # re-extracción de calidad se borra el doc del SDK (`delete_document`) antes.
+        primary = llm_config.extraction_model()
+        quality = llm_config.quality_retry_model()
+        prov_fallbacks = llm_config.provider_fallback_models()
+
+        async def _intento(model: str):
             graphrag = _build_graphrag(job.tenant_id, schema)
             try:
-                # Wiring del PoC: extractor = modelo de extracción; resolver =
-                # LLMVerifiedResolution con el mismo LLM + el embedder BGE-M3.
                 extractor, resolver = llm_config.build_extractor_and_resolver(
                     graphrag.embedder, model=model
                 )
-                ingest_result = await graphrag.ingest(
-                    text=markdown,
-                    document_id=doc_id,
-                    extractor=extractor,
-                    resolver=resolver,
+                res = await graphrag.ingest(
+                    text=markdown, document_id=doc_id, extractor=extractor, resolver=resolver,
                 )
-                nodos = getattr(ingest_result, "nodes_created", None)
-                rels = getattr(ingest_result, "relationships_created", None)
-                _emit("extraccion", 1.0, {**pg_counters, "entities": nodos or 0})
-                # FASE grafo — relaciones escritas (las reporta el ingest_result).
-                _emit("grafo", 1.0, {
-                    "entities": nodos or 0,
-                    "relations": rels or 0,
-                    "relationsTotal": rels or 0,
-                })
-                # FASE dedup — fusión de duplicados (BUG PoC #1; async con await).
-                _emit("dedup", 0.0, {"entities": nodos or 0})
+                nodos = getattr(res, "nodes_created", None) or 0
+                rels = getattr(res, "relationships_created", None) or 0
+                _emit("extraccion", 1.0, {**pg_counters, "entities": nodos})
+                _emit("grafo", 1.0, {"entities": nodos, "relations": rels, "relationsTotal": rels})
+                _emit("dedup", 0.0, {"entities": nodos})
+                dups = 0
                 if llm_config.LLM_CONFIG["deduplicate_fuzzy"]:
-                    duplicados_resueltos = await graphrag.deduplicate_entities(fuzzy=True)
-                _emit("dedup", 1.0, {"merged": duplicados_resueltos, "entities": nodos or 0})
-                # Finalize (async; existe finalize_sync para contextos sync).
+                    dups = await graphrag.deduplicate_entities(fuzzy=True)
+                _emit("dedup", 1.0, {"merged": dups, "entities": nodos})
                 await graphrag.finalize()
-                modelo_usado = model
-                if i > 0:
-                    logger.warning(
-                        "job %s: extracción OK con modelo de fallback %s (#%d del chain)",
-                        job.job_id, model, i + 1,
-                    )
-                break
-            except Exception as exc:  # noqa: BLE001 — fallback de modelo deliberado
-                last_exc = exc
-                logger.warning(
-                    "job %s: extracción falló con modelo %s (%d/%d): %s",
-                    job.job_id, model, i + 1, len(chain), exc,
-                )
+                return res, dups, nodos
             finally:
                 graphrag.close()
+
+        ingest_result = None
+        duplicados_resueltos = 0
+        modelo_usado: str | None = None
+        capa_extraccion: str | None = None
+        last_exc: Exception | None = None
+        timeout_primario = False
+
+        # Capa 1 + Capa 3: primario; ante EXCEPCIÓN escala al fallback de proveedor.
+        secuencia = [(primary, "primaria")] + [(m, "fallback_proveedor") for m in prov_fallbacks]
+        for model, capa in secuencia:
+            try:
+                ingest_result, duplicados_resueltos, _n = await _intento(model)
+                modelo_usado, capa_extraccion = model, capa
+                if capa == "fallback_proveedor":
+                    # Señal VISIBLE para monitoreo: si Opus opera en >5% de ingestas
+                    # es incidente de key/cuota de Google a resolver, no costo a absorber.
+                    logger.warning(
+                        "job %s: EXTRACCION_FALLBACK_PROVEEDOR modelo=%s — falla del "
+                        "proveedor primario; alerta si recurrente (>5%%)", job.job_id, model,
+                    )
+                break
+            except (asyncio.TimeoutError, TimeoutError) as exc:
+                last_exc = exc
+                if capa == "primaria":
+                    timeout_primario = True
+                logger.warning("job %s: timeout de extracción con %s (capa %s)",
+                               job.job_id, model, capa)
+                break  # timeout → Capa 2 (calidad), no seguir con proveedor
+            except Exception as exc:  # noqa: BLE001 — escalada de proveedor deliberada
+                last_exc = exc
+                logger.warning("job %s: extracción falló con %s (capa %s): %s",
+                               job.job_id, model, capa, exc)
+
+        # Capa 2 — retry de CALIDAD (misma familia) ante 0 ontología o timeout primario.
+        nodos_primarios = (getattr(ingest_result, "nodes_created", 0) or 0) if ingest_result else 0
+        if quality and (timeout_primario or (ingest_result is not None and nodos_primarios == 0)):
+            logger.warning(
+                "job %s: EXTRACCION_RETRY_CALIDAD %s→%s (0 ontología/timeout del primario)",
+                job.job_id, primary, quality,
+            )
+            # Forzar la re-extracción: borrar el doc del SDK (si no, la dedup por SHA lo salta).
+            try:
+                g = _build_graphrag(job.tenant_id, schema)
+                try:
+                    await g.delete_document(doc_id)
+                finally:
+                    g.close()
+            except Exception as exc:  # noqa: BLE001 — best-effort previo al retry
+                logger.warning("job %s: delete_document falló antes del retry calidad: %s",
+                               job.job_id, exc)
+            try:
+                r2, d2, n2 = await _intento(quality)
+                if n2 > 0 or ingest_result is None:
+                    ingest_result, duplicados_resueltos = r2, d2
+                    modelo_usado, capa_extraccion = quality, "retry_calidad"
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                logger.warning("job %s: retry de calidad %s falló: %s", job.job_id, quality, exc)
+
         if ingest_result is None:
             raise RuntimeError(
-                f"job {job.job_id}: la extracción falló con todos los modelos del "
-                f"chain {chain}. Último error: {last_exc}"
+                f"job {job.job_id}: la extracción falló en las 3 capas "
+                f"(primaria={primary}, calidad={quality}, proveedor={prov_fallbacks}). "
+                f"Último error: {last_exc}"
             ) from last_exc
+
+        # Visibilidad de costo (decisión Jorge #4): el cotizador estima contra la
+        # PRIMARIA (Flash). Si operó la capa 2/3, el costo real difiere → se registra
+        # la discrepancia en el job; NO se traslada al cliente (protección vigente).
+        sin_ontologia = (getattr(ingest_result, "nodes_created", 0) or 0) == 0
+        costo_discrepancia = modelo_usado != primary
 
         # B9.5 §1.0 — Bridge de procedencia + normalización: crea el :DocumentoSource
         # y las aristas/propiedades que los pipelines de lectura (B8) esperan para
@@ -337,6 +383,12 @@ class IngestPipeline:
             "chunks_indexados": getattr(ingest_result, "chunks_indexed", None),
             "duplicados_resueltos": duplicados_resueltos,
             "modelo_extraccion": modelo_usado,
+            # Visibilidad de la cadena de 3 capas (decisión Jorge): qué capa/modelo
+            # corrió, contra qué se cotizó, y si hubo discrepancia de costo o ontología.
+            "capa_extraccion": capa_extraccion,           # primaria|retry_calidad|fallback_proveedor
+            "cotizado_contra": primary,                   # el cotizador estima contra la primaria
+            "costo_discrepancia": costo_discrepancia,     # True ⇒ corrió capa 2/3 (no se cobra al cliente)
+            "completed_sin_ontologia": sin_ontologia,     # True ⇒ 0 entidades incluso tras retry de calidad
             "cache_invalidadas": invalidadas,
             "bridge": bridge_counters,
             "visuales_materializados": visuales,
