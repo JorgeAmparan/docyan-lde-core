@@ -105,9 +105,15 @@ export function DemoConsult({ vkey }: { vkey: string }) {
     const res = await demoQuery(question, vert.key);
     const payload = ((res.resultado || {}) as Record<string, unknown>).payload as Record<string, unknown> | undefined;
     const kind = (payload?.kind as string) || "info_card";
-    const especificaciones = (payload?.especificaciones as Espec[]) || [];
+    let especificaciones = (payload?.especificaciones as Espec[]) || [];
     const pasos = (payload?.pasos as Paso[]) || [];
     const citas = (payload?.citas as Array<{ documento_nombre?: string }>) || [];
+    // alerts_dashboard (B13.3 §2.4 — "¿cuándo vence?"): mapea las alertas
+    // administrativas (vencimientos con cita) al render de info para mostrarlas.
+    if (kind === "alerts_dashboard") {
+      const alertas = (payload?.alertas as Array<{ descripcion?: string; fecha_vencimiento?: string; cita?: Espec["cita"] }>) || [];
+      especificaciones = alertas.map((al) => ({ nombre: al.descripcion || "Vencimiento", valor: al.fecha_vencimiento, cita: al.cita }));
+    }
     const tieneContenido = kind === "procedure_card" ? pasos.length > 0 : especificaciones.length > 0;
     const a: Answer = {
       q: question,
