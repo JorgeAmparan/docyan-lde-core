@@ -50,12 +50,15 @@ export const VERTICALS: DemoVertical[] = [
       { name: "Mitutoyo Caliper 500 — Operating Manual", tipo: "manual_tecnico" },
       { name: "Mitutoyo Caliper 500 — Calibration Certificate", tipo: "calibracion" },
     ],
-    // Sin sugeridas HOY: con tipos reales + retrieval léxico (DEF-2), ninguna pregunta
-    // del manual/cert cita verbatim LIMPIO de forma confiable (el manual pollutea el
-    // match). El CoDo lab muestra su estructura (chip de documentos + tipos reales) y
-    // el input invita a preguntar. Es el CASO DE ACEPTACIÓN #1 de B13.3: sus tres
-    // preguntas naturales (rango, vence, trazable) citando limpio = criterio de cierre.
-    questions: [],
+    // B13.3 cerrado: con DEF-1 (lee :Especificacion/:CertificadoCalibracion/
+    // :FechaVencimiento) + DEF-2 (híbrido), las tres preguntas naturales del
+    // expediente Mitutoyo citan verbatim LIMPIO. Verificadas contra prod (ES+EN,
+    // ≥1 cita cada una) antes de publicar — regla #6. "Vence" responde 2027 (§2.4).
+    questions: [
+      { es: "¿Cuál es el rango de medición?", en: "What is the measuring range?" },
+      { es: "¿Cuándo vence la calibración?", en: "When does the calibration expire?" },
+      { es: "¿A qué patrón es trazable?", en: "What standard is it traceable to?" },
+    ],
   },
   {
     key: "maq",
