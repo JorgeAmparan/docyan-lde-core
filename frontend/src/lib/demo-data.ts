@@ -82,15 +82,19 @@ export const VERTICALS: DemoVertical[] = [
     label: { es: "Farma", en: "Pharma" },
     icon: "pill",
     codo: "CODO-PHARMA-03",
-    entity: { es: "Agente de limpieza CIP (hidróxido de sodio)", en: "CIP cleaning agent (sodium hydroxide)" },
+    entity: { es: "Línea CIP — SDS del cáustico (NaOH) + SOP de limpieza", en: "CIP line — caustic (NaOH) SDS + cleaning SOP" },
     blurb: {
-      es: "SDS del cáustico de limpieza CIP: concentraciones peligrosas y controles.",
-      en: "CIP caustic cleaner SDS: hazardous concentrations and controls.",
+      es: "Expediente CIP: el SDS del cáustico (concentraciones, controles) y el SOP de limpieza (pasos del procedimiento).",
+      en: "CIP file: the caustic SDS (concentrations, controls) and the cleaning SOP (procedure steps).",
     },
-    docs: [{ name: "Sodium Hydroxide — Safety Data Sheet", tipo: "msds" }],
+    docs: [
+      { name: "Sodium Hydroxide — Safety Data Sheet", tipo: "msds" },
+      { name: "Clean-in-Place (CIP) — Cleaning SOP", tipo: "manual_tecnico" },
+    ],
     questions: [
       { es: "¿Cuál es la concentración IDLH del cáustico?", en: "What is the IDLH concentration of sodium hydroxide?" },
       { es: "¿Cuál es el límite OSHA del hidróxido de sodio?", en: "What is the OSHA PEL for sodium hydroxide?" },
+      { es: "¿Cuál es el procedimiento CIP?", en: "What is the CIP procedure?" },
     ],
   },
   {
