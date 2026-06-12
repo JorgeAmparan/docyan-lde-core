@@ -59,7 +59,7 @@ export const VERTICALS: DemoVertical[] = [
   },
   {
     key: "maq",
-    label: { es: "Maquiladoras", en: "Maquiladoras" },
+    label: { es: "Manufactura", en: "Manufacturing" },
     icon: "factory",
     codo: "CODO-MAQ-12",
     entity: { es: "Solvente de limpieza (isopropanol)", en: "Cleaning solvent (isopropanol)" },

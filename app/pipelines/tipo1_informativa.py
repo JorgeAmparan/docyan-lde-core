@@ -22,6 +22,8 @@ def _cita(row: dict) -> Cita | None:
     return Cita(
         documento_id=row.get("documento_id"),
         documento_nombre=row.get("documento_nombre"),
+        documento_tipo=row.get("documento_tipo"),
+        documento_url=row.get("documento_url"),
         seccion=row.get("seccion"),
         pagina=row.get("pagina"),
         span_inicio=row.get("span_inicio"),

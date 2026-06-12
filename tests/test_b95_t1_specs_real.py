@@ -67,7 +67,10 @@ def test_msds_limite_exposicion_osha_con_cita(client):
     espec = pay.especificaciones[0]
     assert espec.valor == "15"
     assert espec.unidad == "mg/m³"
-    assert espec.cita is not None and espec.cita.documento_nombre == "MSDS Óxido de Aluminio"
+    # Atribución B13.3 §2.3: nombre = archivo real; tipo = tipo documental (mismo doc).
+    assert espec.cita is not None
+    assert espec.cita.documento_nombre == "msds_am002.pdf"
+    assert espec.cita.documento_tipo == "MSDS Óxido de Aluminio"
     assert len(pay.citas) == 1
 
 
@@ -91,7 +94,8 @@ def test_calibracion_rango_manometro_con_cita(client):
     assert espec.valor == "0-4"
     assert espec.unidad == "bar"
     assert espec.cita is not None
-    assert "calibración" in (espec.cita.documento_nombre or "").lower()
+    assert espec.cita.documento_nombre == "cert.pdf"
+    assert "calibración" in (espec.cita.documento_tipo or "").lower()
 
     # "clase" también consultable.
     pay2 = _q(client, "clase")

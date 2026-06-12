@@ -96,7 +96,9 @@ def test_seam_specs_sdk_nativo_se_leen_con_cita(client):
     assert espec.nombre and "OSHA" in espec.nombre          # name → nombre
     assert espec.valor and "15" in espec.valor              # description → valor
     assert espec.cita is not None                           # cita vía :DocumentoSource
-    assert espec.cita.documento_nombre == "MSDS Óxido de Aluminio"
+    # Atribución B13.3 §2.3: nombre = archivo real; tipo = tipo documental (mismo doc).
+    assert espec.cita.documento_nombre == "msds.pdf"
+    assert espec.cita.documento_tipo == "MSDS Óxido de Aluminio"
 
 
 def test_seam_punto_fusion_busqueda_por_valor(client):

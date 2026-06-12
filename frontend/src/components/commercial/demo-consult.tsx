@@ -49,17 +49,19 @@ interface Answer {
 
 /* Normaliza la respuesta del CoDo al contrato de la tarjeta UNIFICADA
    (`DemoAnswerCard`, el mismo render del hero). InfoCard: primera spec prominente
-   + extras; ProcedureCard: pasos numerados; vacío: fallback honesto que invita a
-   las sugeridas. */
-function toCardData(a: Answer, t: T): DemoCardData {
+   + extras; ProcedureCard: pasos numerados; vacío: fallback honesto.
+   B13.3 §2.5: el copy del fallback NO invita a "preguntas sugeridas abajo" cuando
+   el CoDo no tiene sugeridas (p. ej. lab) — invita a reformular sobre su dominio. */
+function toCardData(a: Answer, t: T, hasSugeridas: boolean, dominio: string): DemoCardData {
   const esProc = a.kind === "procedure_card";
   const sinRespuesta = !a.servido || (esProc ? a.pasos.length === 0 : a.especificaciones.length === 0);
   if (sinRespuesta) {
+    const invita = hasSugeridas
+      ? t({ es: "Prueba una de las preguntas sugeridas abajo.", en: "Try one of the suggested questions below." })
+      : t({ es: `Reformúlala sobre ${dominio} (p. ej. rango, vigencia o trazabilidad).`, en: `Rephrase it about ${dominio} (e.g. range, validity or traceability).` });
     return {
       kind: "empty",
-      fallback: a.fallback
-        ? `${a.fallback} ${t({ es: "Prueba una de las preguntas sugeridas abajo.", en: "Try one of the suggested questions below." })}`
-        : t({ es: "Esa pregunta no está en este documento demo — prueba una de las preguntas sugeridas abajo.", en: "That question isn't in this demo document — try one of the suggested questions below." }),
+      fallback: a.fallback ? `${a.fallback} ${invita}` : `${t({ es: "Esa pregunta no está en este documento demo.", en: "That question isn't in this demo document." })} ${invita}`,
     };
   }
   if (esProc) {
@@ -208,7 +210,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
             m.role === "user" ? (
               <div className="fa-user" key={i}>{m.text}</div>
             ) : (
-              <DemoAnswerCard key={i} data={toCardData(m.a, t)} />
+              <DemoAnswerCard key={i} data={toCardData(m.a, t, vert.questions.length > 0, t(vert.entity) as string)} />
             ),
           )}
           {loading && <div className="demo-shimmer dc-load"><span className="sh-dot" />{t({ es: "DOCYAN está buscando en el documento…", en: "DOCYAN is searching the document…" })}</div>}
@@ -218,7 +220,7 @@ export function DemoConsult({ vkey }: { vkey: string }) {
           {vert.questions.length > 0 ? (
             <div className="dc-sugs">{vert.questions.map((q, i) => <button key={i} className="demo-sug" onClick={() => ask(t(q))} disabled={loading}>{t(q)}</button>)}</div>
           ) : (
-            <div className="dc-sugs dc-sugs-empty">{t({ es: "Escribe tu pregunta sobre este instrumento y su calibración.", en: "Type your question about this instrument and its calibration." })}</div>
+            <div className="dc-sugs dc-sugs-empty">{t({ es: `Escribe tu pregunta sobre ${t(vert.entity)}.`, en: `Type your question about ${t(vert.entity)}.` })}</div>
           )}
           <form className="demo-box dc-box" onSubmit={submit}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`${t({ es: "Pregunta sobre", en: "Ask about" })} ${t(vert.entity)}…`} aria-label={t({ es: "Pregunta", en: "Question" })} />

@@ -20,7 +20,7 @@ const STEPS: [string, string, string][] = [
 
 const VERTS: [string, string, string, string[], string][] = [
   ["flask-conical", "Laboratorios ISO 17025", "Calibraciones, vigencias y procedimientos por equipo.", ["ISO 17025"], "laboratorios"],
-  ["factory", "Maquiladoras IMMEX", "Manuales por línea, MSDS y procedimientos de seguridad.", ["NOM-018-STPS", "IATF 16949"], "maquiladoras"],
+  ["factory", "Manufactura IMMEX", "Manuales por línea, MSDS y procedimientos de seguridad.", ["NOM-018-STPS", "IATF 16949"], "manufactura"],
   ["pill", "Farmacéutica", "Documentación auditada con cadena criptográfica.", ["FDA", "TGA", "COFEPRIS"], "pharma"],
   ["sprout", "Agroexportación", "Documentación viva por mercado destino.", ["EU Organic"], "agribusiness"],
   ["mountain", "Minería", "Safety & compliance en el piso de mina.", ["AS/NZS"], "mining"],

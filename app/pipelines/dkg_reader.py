@@ -26,10 +26,16 @@ from typing import Protocol, runtime_checkable
 # para el retrieval léxico. Sin esto, el `termino` cae a la PREGUNTA COMPLETA y el
 # CONTAINS nunca casa el nombre/valor de un nodo (la frase entera no es substring).
 _STOPWORDS = frozenset(
+    # Español
     "el la los las un una unos unas de del al a en y o u que cual cuales cuanto cuanta "
     "cuantos cuantas como cuando donde quien quienes es son esta estan ser para por con "
     "sin sobre se su sus mi mis lo le les me te nos hay tiene tienen dame muestrame dime "
-    "cuál cuáles qué cómo cuándo dónde quién necesito quiero".split()
+    "cuál cuáles qué cómo cuándo dónde quién necesito quiero "
+    # Inglés (los SDS demo están en inglés; las preguntas llegan EN/ES). Sin esto,
+    # "what is the chemical name" tokeniza con "what/the" y diluye el score léxico.
+    "the a an of for in on to is are was were be what which who whom how when where why "
+    "do does did this that these those with and or its their there here it as at by from "
+    "i you we they my your our give show tell me us need want".split()
 )
 
 
@@ -163,40 +169,160 @@ class PipelineGraphReader(Protocol):
     ) -> dict: ...
 
 
+# ── DEF-1 — Ontología legible por la InfoCard (más allá de :Especificacion) ─────
+#
+# Cada entrada: (label, etiqueta_card, sinonimos_match). La ingesta real produce
+# ontología rica que hasta B13.2 nadie consultaba (el químico del MSDS vivía en
+# `:Sustancia`, extraído pero invisible). Aquí esos labels se vuelven legibles:
+#   · `etiqueta_card` = la ETIQUETA del dato en la tarjeta (p. ej. "Sustancia"); el
+#     VALOR mostrado y CITADO es el contenido VERBATIM del nodo (nunca fabricado).
+#   · `sinonimos_match` = sinónimos de la CLASE de dato (no contenido) que se suman
+#     SOLO al texto que se puntúa contra la pregunta, para que "¿nombre del químico?"
+#     alcance la `:Sustancia` sin inventar nada en la respuesta. ES+EN.
+# `:Especificacion` es el caso canónico (etiqueta = su propio nombre) y se lee aparte.
+_LABELS_INFORMATIVA: tuple[tuple[str, str, str], ...] = (
+    ("Sustancia", "Sustancia",
+     "sustancia quimico químico chemical substance compuesto componente material "
+     "ingrediente nombre name producto agente"),
+    ("Producto", "Producto", "producto product articulo artículo equipo modelo"),
+    ("NumeroCAS", "Número CAS", "cas numero número registro identificador"),
+    ("Riesgo", "Riesgo", "riesgo peligro peligros riesgos hazard ghs clasificacion clasificación"),
+    ("MedidaProteccion", "Medida de protección",
+     "medida proteccion protección control controles measure"),
+    ("EquipoProteccion", "Equipo de protección",
+     "epp equipo proteccion protección guantes respirador lentes ppe protection"),
+    ("Advertencia", "Advertencia", "advertencia precaucion precaución warning caution nota"),
+    ("Instrumento", "Instrumento", "instrumento equipo aparato modelo serie device gauge"),
+    ("MedicionRegistrada", "Medición registrada",
+     "medicion medición lectura magnitud reading measurement registrada"),
+    ("CertificadoCalibracion", "Certificado de calibración",
+     "certificado calibracion calibración trazable trazabilidad patron patrón norma "
+     "acreditacion acreditación traceable standard"),
+    ("FechaVencimiento", "Vence",
+     "vence vencimiento vigencia caduca caducidad expira expiración expiry expires "
+     "valid until due fecha renovacion renovación"),
+)
+
+# Campos de texto candidatos a CONTENIDO del nodo, en orden de preferencia. Son los
+# campos CANÓNICOS que el bridge proyecta por label (`_CAMPO_PRIMARIO_DESDE_NAME`).
+# A propósito NO incluye el `name` SDK-nativo: el reader lee lo proyectado por el
+# bridge, no el crudo del SDK — así se preserva el invariante "sin bridge no hay
+# lectura" (es el bridge, no el azar, lo que cierra la costura escritura↔lectura).
+_CAMPOS_CONTENIDO = ("nombre", "valor", "descripcion", "texto", "termino", "magnitud",
+                     "folio", "fecha")
+
+
+def _emb(row: dict) -> list[float] | None:
+    """Extrae el `embedding` del nodo (el SDK lo escribe como lista de floats; algunos
+    drivers lo devuelven como JSON string). None si no hay o no parsea."""
+    v = row.get("embedding")
+    if isinstance(v, list) and v:
+        return v
+    if isinstance(v, str) and v.strip():
+        try:
+            data = json.loads(v)
+            return data if isinstance(data, list) and data else None
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _primer_no_vacio(row: dict, campos: tuple[str, ...]) -> str | None:
+    for c in campos:
+        v = row.get(c)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+        if v not in (None, "") and not isinstance(v, (list, dict)):
+            return str(v)
+    return None
+
+
+# Columnas que todo nodo citable devuelve (uniforme entre real-graph y reader fake).
+_RETURN_CITABLE = (
+    "n.id AS id, n.nombre AS nombre, n.valor AS valor, n.unidad AS unidad, "
+    "n.descripcion AS descripcion, n.texto AS texto, n.termino AS termino, "
+    "n.magnitud AS magnitud, n.folio AS folio, n.fecha AS fecha, n.name AS name, "
+    "n.seccion AS seccion, n.pagina AS pagina, n.spans AS spans, n.embedding AS embedding, "
+    "_docs[0].id AS documento_id, "
+    "coalesce(_docs[0].nombre, _docs[0].tipo) AS documento_nombre, "
+    "_docs[0].tipo AS documento_tipo, _docs[0].url AS documento_url"
+)
+
+
 class DKGReader:
     """Implementación real sobre el `dkg_client` (FalkorDB multi-tenant)."""
 
-    def __init__(self, client=None) -> None:
+    def __init__(self, client=None, embedder=None) -> None:
         if client is None:
             from app.graph.dkg_client import dkg_client
 
             client = dkg_client
         self.client = client
+        # DEF-2: embedder para la pasada semántica (decisión #1, BGE-M3 self-hosted,
+        # SIN alterno). Inyectable en tests; en producción se carga `bge_client`
+        # perezosamente SOLO si está configurado (EMBEDDER_URL/BGE_M3_URL). Sin
+        # configurar → retrieval léxico estricto (idéntico a B13.2), sin tocar red.
+        self._embedder = embedder
+        self._embedder_resuelto = embedder is not None
 
-    # ── Tipo 1 — Informativa ──────────────────────────────────────────────────
+    def _get_embedder(self):
+        if self._embedder_resuelto:
+            return self._embedder
+        self._embedder_resuelto = True
+        import os
+
+        if not (os.getenv("EMBEDDER_URL") or os.getenv("BGE_M3_URL")):
+            self._embedder = None
+            return None
+        try:
+            from app.embeddings.bge_client import bge_client
+
+            self._embedder = bge_client
+        except Exception:  # noqa: BLE001 — sin embedder se degrada a léxico
+            self._embedder = None
+        return self._embedder
+
+    # ── Tipo 1 — Informativa (DEF-1 multi-label + DEF-2 híbrido) ────────────────
 
     def informativa(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+        from app.pipelines.retrieval_hibrido import Candidato, rankear
+
         toks = tokenizar_busqueda(termino)
-        especs = self.client.query(
-            tenant_id,
-            """
-            MATCH (e:Especificacion)
-            WHERE size($toks) = 0
-               OR ANY(w IN $toks WHERE toLower(coalesce(e.nombre,'')) CONTAINS w
-                                      OR toLower(coalesce(e.valor,'')) CONTAINS w)
-            OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(e)
-            RETURN e.id AS id, e.nombre AS nombre, e.valor AS valor,
-                   e.unidad AS unidad, e.seccion AS seccion, e.pagina AS pagina,
-                   e.spans AS spans,
-                   d.id AS documento_id, d.tipo_documento AS documento_nombre
-            LIMIT 25
-            """,
-            {"toks": toks},
-        )
-        # Integridad de cita: recupera el VERBATIM del documento (chunk[start:end])
-        # para cada spec que tenga span. El que no, queda con fragmento=None → la UI
-        # muestra "fragmento no disponible" en vez de pasar texto generado como fuente.
+        embedder = self._get_embedder()
+        semantica = embedder is not None
+
+        candidatos: list[Candidato] = []
+        # :Especificacion — caso canónico (la etiqueta de la tarjeta es su propio nombre).
+        # Lee el `nombre` CANÓNICO (proyectado por el bridge), no el `name` SDK-nativo:
+        # sin bridge, `nombre` es NULL ⇒ "—" ⇒ no casa ⇒ no se lee (invariante de costura).
+        for row in self._leer_especificaciones(tenant_id, toks, semantica):
+            nombre = _primer_no_vacio(row, ("nombre",)) or "—"
+            data = self._normalizar(row, nombre=nombre, valor=row.get("valor"),
+                                    unidad=row.get("unidad"), ancla=nombre, label="Especificacion")
+            tm = f"{nombre} {row.get('valor') or ''}".strip()
+            candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data))
+        # DEF-1 — resto de la ontología legible (Sustancia, Riesgo, Instrumento, …).
+        for label, etiqueta, sinonimos in _LABELS_INFORMATIVA:
+            for row in self._leer_label(tenant_id, label, toks, semantica):
+                contenido = _primer_no_vacio(row, _CAMPOS_CONTENIDO)
+                if not contenido:
+                    continue
+                data = self._normalizar(row, nombre=etiqueta, valor=contenido,
+                                        unidad=row.get("unidad"), ancla=contenido, label=label)
+                tm = f"{etiqueta} {sinonimos} {contenido}"
+                candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data))
+
+        # Puntuar con la consulta SIN stopwords (mismos tokens de contenido que el
+        # recall). Pasar el `termino` crudo diluía el score léxico ("what is the
+        # chemical name" → tokens what/is/the bajaban :Sustancia de banda alta y
+        # :Riesgo ganaba por pura semántica). El embedding de los tokens limpios es
+        # igual de bueno (menos ruido) para la pasada vectorial.
+        query_score = " ".join(toks) if toks else (termino or "")
+        elegidos = rankear(query_score, candidatos, embedder=embedder, limite=8)
+        especs = [c.data for c in elegidos]
+        # Integridad de cita: VERBATIM del documento anclado en el término real del dato.
         self._hidratar_fragmentos(tenant_id, especs)
+
         termino_def = self.client.query(
             tenant_id,
             """
@@ -216,14 +342,94 @@ class DKGReader:
             "definicion": td.get("definicion"),
         }
 
+    @staticmethod
+    def _normalizar(row: dict, *, nombre: str, valor, unidad, ancla: str, label: str) -> dict:
+        """Aplana un row del grafo al shape que el pipeline + `_cita` consumen.
+
+        Atribución de procedencia CORRECTA (B13.3 §2.3): `documento_nombre` y
+        `documento_tipo` provienen del MISMO `:DocumentoSource` (el que `:CONTIENE`
+        el nodo) — nunca el nombre de un doc con el tipo de otro. `_ancla` es el
+        término literal sobre el que se ancla el verbatim de la cita.
+        """
+        return {
+            "id": row.get("id"),
+            "nombre": nombre,
+            "valor": valor,
+            "unidad": unidad,
+            "seccion": row.get("seccion"),
+            "pagina": row.get("pagina"),
+            "spans": row.get("spans"),
+            "documento_id": row.get("documento_id"),
+            "documento_nombre": row.get("documento_nombre"),
+            "documento_tipo": row.get("documento_tipo"),
+            "documento_url": row.get("documento_url"),
+            "_ancla": ancla,
+            "_label": label,
+        }
+
+    def _leer_especificaciones(self, tenant_id: str, toks: list[str], semantica: bool) -> list[dict]:
+        """Lee `:Especificacion`. Recall léxico estricto (CONTAINS) salvo que la
+        semántica esté activa, en cuyo caso trae el universo (capado) para que la
+        pasada vectorial considere specs que el léxico no casaría (siglas, EN/ES)."""
+        filtro = (
+            "" if semantica else
+            "WHERE size($toks) = 0 OR ANY(w IN $toks WHERE "
+            "toLower(coalesce(e.nombre,'')) CONTAINS w OR toLower(coalesce(e.valor,'')) CONTAINS w)"
+        )
+        return self.client.query(
+            tenant_id,
+            f"""
+            MATCH (e:Especificacion)
+            {filtro}
+            OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(e)
+            WITH e, collect(DISTINCT {{id: d.id, nombre: d.nombre_archivo,
+                                       tipo: d.tipo_documento, url: d.url_publica}}) AS _docs
+            WITH e AS n, _docs
+            RETURN {_RETURN_CITABLE}
+            LIMIT 80
+            """,
+            {"toks": toks},
+        )
+
+    def _leer_label(self, tenant_id: str, label: str, toks: list[str], semantica: bool) -> list[dict]:
+        """Lee un label citable de la ontología (DEF-1). Mismo patrón de recall que
+        `:Especificacion`. El label es de una lista fija interna (no input de usuario)."""
+        filtro = (
+            "" if semantica else
+            "WHERE size($toks) = 0 OR ANY(w IN $toks WHERE "
+            "toLower(coalesce(n0.nombre, n0.descripcion, n0.texto, n0.valor, n0.termino, "
+            "n0.name, '')) CONTAINS w)"
+        )
+        try:
+            return self.client.query(
+                tenant_id,
+                f"""
+                MATCH (n0:{label})
+                {filtro}
+                OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(n0)
+                WITH n0 AS n, collect(DISTINCT {{id: d.id, nombre: d.nombre_archivo,
+                                                 tipo: d.tipo_documento, url: d.url_publica}}) AS _docs
+                RETURN {_RETURN_CITABLE}
+                LIMIT 60
+                """,
+                {"toks": toks},
+            )
+        except Exception as exc:  # noqa: BLE001 — un label ausente no rompe la consulta
+            import logging
+
+            logging.getLogger("docyan.dkg.reader").debug(
+                "lectura de label %s falló: %s", label, type(exc).__name__
+            )
+            return []
+
     def _hidratar_fragmentos(self, tenant_id: str, especs: list[dict]) -> None:
         """
         Anexa in-place el VERBATIM del documento a cada spec con chunk de origen, como
         `fragmento` (+ `span_inicio`/`span_fin` = posición REAL en el texto almacenado).
-        Una sola query extra: junta los chunks de origen y ancla por término
-        (`_fragmento_anclado`). Spec sin chunk, o cuyo término no aparece literal en él,
-        queda con `fragmento=None` ⇒ la UI muestra "fragmento no disponible". Nunca se
-        fabrica texto: el fragmento es siempre real y contiene el término.
+        Una sola query extra: junta los chunks de origen y ancla por término real del
+        dato (`_ancla` → `_fragmento_anclado`). Spec sin chunk, o cuyo término no
+        aparece literal en él, queda con `fragmento=None` ⇒ la UI muestra "fragmento no
+        disponible". Nunca se fabrica texto: el fragmento es real y contiene el término.
         """
         if not especs:
             return
@@ -247,7 +453,9 @@ class DKGReader:
             texto = textos.get(chunk_id)
             if not isinstance(texto, str):
                 continue
-            frag = _fragmento_anclado(texto, e.get("nombre"), pista)
+            # Ancla en el término real del dato (`_ancla`); cae a `nombre` por compat.
+            ancla = e.get("_ancla") or e.get("nombre")
+            frag = _fragmento_anclado(texto, ancla, pista)
             if frag is not None:
                 e["fragmento"] = frag["texto"]
                 e["span_inicio"], e["span_fin"] = frag["inicio"], frag["fin"]
@@ -274,7 +482,9 @@ class DKGReader:
             ORDER BY paso.orden
             RETURN p.id AS procedimiento_id, p.nombre AS titulo,
                    head(collect(DISTINCT d.id)) AS documento_id,
-                   head(collect(DISTINCT d.tipo_documento)) AS documento_nombre,
+                   head(collect(DISTINCT coalesce(d.nombre_archivo, d.tipo_documento))) AS documento_nombre,
+                   head(collect(DISTINCT d.tipo_documento)) AS documento_tipo,
+                   head(collect(DISTINCT d.url_publica)) AS documento_url,
                    collect({orden: paso.orden, descripcion: paso.descripcion,
                             epp: epps, herramientas: herrs, advertencias: advs,
                             precondiciones: paso.precondiciones,
@@ -435,19 +645,101 @@ class DKGReader:
             if entidad_id
             else "MATCH (a:Alerta)"
         )
-        return self.client.query(
+        rows = self.client.query(
             tenant_id,
             f"""
             {scope}
+            OPTIONAL MATCH (a)-[:DERIVA_DE]->(src)
+            OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(src)
+            WITH a, src, collect(DISTINCT {{id: d.id, nombre: d.nombre_archivo,
+                                            tipo: d.tipo_documento, url: d.url_publica}}) AS _docs
             RETURN a.id AS alerta_id, coalesce(a.descripcion, a.nombre, '') AS descripcion,
                    a.fecha_vencimiento AS fecha_vencimiento,
                    coalesce(a.urgencia, 'media') AS urgencia,
-                   a.tipo AS tipo, a.entidad_id AS entidad_id
+                   a.tipo AS tipo, a.entidad_id AS entidad_id,
+                   src.spans AS _src_spans,
+                   coalesce(src.nombre, src.folio, src.descripcion) AS _src_nombre,
+                   _docs[0].id AS documento_id,
+                   coalesce(_docs[0].nombre, _docs[0].tipo) AS documento_nombre,
+                   _docs[0].tipo AS documento_tipo, _docs[0].url AS documento_url
             ORDER BY a.fecha_vencimiento ASC
             LIMIT 100
             """,
             {"eid": entidad_id},
         )
+        # B13.3 §2.4 — además de las :Alerta pre-generadas (vencimientos inminentes
+        # del generador, acotados por horizonte), surface las FECHAS DE VENCIMIENTO
+        # administrativas directamente: "¿cuándo vence?" debe responder la fecha
+        # citada aunque el vencimiento NO sea inminente (es un dato, no una alarma).
+        # Solo administrativas (fechas) — la LÍNEA ABSOLUTA se mantiene.
+        rows = list(rows) + self._vencimientos_administrativos(tenant_id, entidad_id)
+        # Cita verbatim: ancla en el AÑO del vencimiento (que SÍ aparece literal en el
+        # documento; la fecha ISO del nodo no), no en la de emisión.
+        self._hidratar_alertas(tenant_id, rows)
+        return rows
+
+    def _vencimientos_administrativos(self, tenant_id: str, entidad_id: str | None) -> list[dict]:
+        """Lee :FechaVencimiento (dato administrativo) con su doc + spans, como filas de
+        alerta administrativa para el dashboard. Cada una cita el AÑO en el documento."""
+        scope = (
+            "MATCH (ent:EntidadOperativa {id: $eid})-[]->(n:FechaVencimiento)"
+            if entidad_id else "MATCH (n:FechaVencimiento)"
+        )
+        try:
+            return self.client.query(
+                tenant_id,
+                f"""
+                {scope}
+                WHERE coalesce(n.fecha, n.nombre, n.name) IS NOT NULL
+                OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(n)
+                WITH n, collect(DISTINCT {{id: d.id, nombre: d.nombre_archivo,
+                                          tipo: d.tipo_documento, url: d.url_publica}}) AS _docs
+                RETURN n.id AS alerta_id,
+                       'Vencimiento: ' + coalesce(n.fecha, n.nombre, n.name) AS descripcion,
+                       coalesce(n.fecha, n.nombre, n.name) AS fecha_vencimiento,
+                       'baja' AS urgencia, 'vencimiento' AS tipo, n.entidad_id AS entidad_id,
+                       n.spans AS _src_spans, coalesce(n.fecha, n.nombre, n.name) AS _src_nombre,
+                       _docs[0].id AS documento_id,
+                       coalesce(_docs[0].nombre, _docs[0].tipo) AS documento_nombre,
+                       _docs[0].tipo AS documento_tipo, _docs[0].url AS documento_url
+                LIMIT 25
+                """,
+                {"eid": entidad_id},
+            )
+        except Exception:  # noqa: BLE001 — label ausente no rompe el dashboard
+            return []
+
+    def _hidratar_alertas(self, tenant_id: str, rows: list[dict]) -> None:
+        if not rows:
+            return
+        pendientes: list[tuple[dict, str, int, str]] = []
+        for a in rows:
+            loc = _primer_span(a.get("_src_spans"))
+            if loc is None:
+                continue
+            chunk_id, ini, _fin = loc
+            fecha = str(a.get("fecha_vencimiento") or "")
+            anio = fecha[:4] if len(fecha) >= 4 and fecha[:4].isdigit() else None
+            ancla = anio or (a.get("_src_nombre") or "")
+            if ancla:
+                pendientes.append((a, chunk_id, ini, ancla))
+        if not pendientes:
+            return
+        ids = sorted({cid for _, cid, _, _ in pendientes})
+        chunks = self.client.query(
+            tenant_id,
+            "MATCH (c:Chunk) WHERE c.id IN $ids RETURN c.id AS id, c.text AS text",
+            {"ids": ids},
+        )
+        textos = {c.get("id"): c.get("text") for c in chunks}
+        for a, chunk_id, pista, ancla in pendientes:
+            texto = textos.get(chunk_id)
+            if not isinstance(texto, str):
+                continue
+            frag = _fragmento_anclado(texto, ancla, pista)
+            if frag is not None:
+                a["fragmento"] = frag["texto"]
+                a["span_inicio"], a["span_fin"] = frag["inicio"], frag["fin"]
 
     # ── Tipo 8 — Comparativa ──────────────────────────────────────────────────
 

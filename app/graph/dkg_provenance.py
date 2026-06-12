@@ -70,6 +70,7 @@ def bridge_and_normalize(
     version_documento: str | None = None,
     idioma_origen: str = "es",
     entidad_id: str | None = None,
+    url_publica: str | None = None,
 ) -> dict[str, int]:
     """
     Ejecuta el bridge de procedencia + la normalización sobre el grafo del tenant.
@@ -96,7 +97,8 @@ def bridge_and_normalize(
             d.hash_contenido = coalesce($sha, d.hash_contenido),
             d.version_documento = coalesce(d.version_documento, $version),
             d.idioma_origen = coalesce(d.idioma_origen, $idioma),
-            d.fuente_ingesta = coalesce(d.fuente_ingesta, 'manual')
+            d.fuente_ingesta = coalesce(d.fuente_ingesta, 'manual'),
+            d.url_publica = coalesce($url_publica, d.url_publica)
         """,
         {
             "doc_id": doc_id,
@@ -105,6 +107,7 @@ def bridge_and_normalize(
             "sha": content_sha256,
             "version": version,
             "idioma": idioma_origen,
+            "url_publica": url_publica,
         },
     )
     counters["documento_source"] = 1
@@ -226,6 +229,7 @@ _CAMPO_PRIMARIO_DESDE_NAME: dict[str, str] = {
     "MedicionRegistrada": "descripcion",
     "CertificadoVigencia": "nombre",
     "CertificadoCalibracion": "nombre",
+    "FechaVencimiento": "fecha",
     "Alerta": "descripcion",
     "Norma": "nombre",
     "RequisitoNormativo": "descripcion",
