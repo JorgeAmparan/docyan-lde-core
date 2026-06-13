@@ -4,6 +4,31 @@ DOCYAN LDE™ by XCID. Cierra junto con B13.2. **El cierre real es el recorrido 
 Jorge** (sus preguntas, su fraseo, su navegador) sobre el demo público y su cuenta
 freemium. Ningún reporte de Opus cierra este sprint.
 
+## ⚠️ Regla de deploy — INVALIDAR CACHÉ DE CONSULTA (PCL)
+
+**Todo deploy que altere retrieval, ranking o el bridge invalida la caché de
+consultas (PCL) de los tenants afectados — sin excepción.** La caché PCL (Redis
+DB 1, `pcl:cache:{tenant}:*`) guarda la respuesta YA renderizada; un cambio de
+código que cambie QUÉ se responde no invalida la caché por sí solo, así que el
+tenant sigue viendo la respuesta vieja con la etiqueta "RESPUESTA INSTANTÁNEA ·
+CACHÉ" — **mintió dos veces esta semana** por exactamente esta causa (§5 ciclo de
+vida + fix de ranking por intención).
+
+Tras desplegar `docyan-lde-api` (o el worker) con cambios en
+`app/pipelines/*`, `app/graph/*bridge*`, `_sesgo_intencion`/ranking o el reader:
+
+```bash
+# Por tenant afectado (org_id). Repetir por cada uno; demos: usar sus graph_name.
+flyctl ssh console -a docyan-lde-api -C \
+  "python -c \"from app.pcl.pcl_cache import PCLCache; print(PCLCache().invalidar_tenant('<ORG_ID>'))\""
+```
+
+`invalidar_tenant` borra TODA la caché del tenant —incluidas las respuestas
+VACÍAS, que la invalidación por-entidad NO captura— y respeta el aislamiento
+multi-tenant. La invalidación automática en `eliminar_documento` y en el worker
+(`_invalidar_cache`) cubre el ciclo de vida del documento; **un deploy de código
+NO la dispara — es responsabilidad del runbook.**
+
 ## 0. Qué cambió en código (ya mergeable, verificado offline)
 - **DEF-1** — `DKGReader.informativa` lee toda la ontología citable por tipo
   (`:Sustancia`, `:Riesgo`, `:Producto`, `:Instrumento`, `:CertificadoCalibracion`,
