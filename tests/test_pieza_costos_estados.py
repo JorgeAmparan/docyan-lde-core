@@ -21,7 +21,6 @@ from app.ingesta.cotizador import Cotizador, estimar_costo
 from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
 from app.jobs.job_models import CotizacionSnapshot, IngestJob
 
-
 # ── Pieza 3 — costo de visión + cap en el cotizador ───────────────────────────
 
 def _cotizador(saldo: float = 100.0, tenant: str = "t") -> Cotizador:

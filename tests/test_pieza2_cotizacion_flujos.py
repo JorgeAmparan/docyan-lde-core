@@ -14,7 +14,6 @@ Más: edge cases de `contar_figuras` (conteo ligero de figuras para el gate, Pie
 from __future__ import annotations
 
 import pathlib
-import re
 
 import pytest
 

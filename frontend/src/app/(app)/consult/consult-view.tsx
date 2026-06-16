@@ -179,11 +179,15 @@ export function ConsultView({
   // stateless y el seguimiento perdería el contexto. Se crea al montar / al cambiar
   // de CoDo (conversación nueva) y se reenvía en cada /mo/query.
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const codoRef = useRef<string | null>(null);
   useEffect(() => {
     if (!token) return;
     let cancelado = false;
-    setSessionId(null);
-    setMsgs([]); // CoDo nuevo ⇒ conversación nueva
+    // Reset de conversación al CAMBIAR de CoDo. Se hace dentro de los callbacks
+    // async (no síncrono en el effect, que dispararía renders en cascada) marcando
+    // si es un CoDo nuevo respecto al anterior visto.
+    const esNuevoCodo = codoRef.current !== ctx.codo;
+    codoRef.current = ctx.codo;
     firstAnswerRef.current = false;
     api
       .post<{ session_id: string }>(
@@ -192,7 +196,9 @@ export function ConsultView({
         { token },
       )
       .then((r) => {
-        if (!cancelado) setSessionId(r.session_id);
+        if (cancelado) return;
+        setSessionId(r.session_id);
+        if (esNuevoCodo) setMsgs([]); // CoDo nuevo ⇒ conversación nueva
       })
       .catch(() => {
         // Sin sesión, la consulta sigue funcionando (stateless): no se bloquea el CoDo.

@@ -119,9 +119,10 @@ def _contar_figuras_pdf(data: bytes) -> int:
     except Exception:
         return 0
 
-    def _name(v) -> str:
+    def _name(v: object) -> str:
         if isinstance(v, PSLiteral):
-            return v.name
+            n = v.name
+            return n.decode("latin-1") if isinstance(n, bytes) else str(n)
         return str(v).lstrip("/")
 
     total = 0
