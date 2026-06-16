@@ -137,7 +137,7 @@ export default function UsuariosPage() {
               <div>
                 <div className="ro-t">
                   {ROLE_LABELS[r]}
-                  <span className={"role-pill " + r}>{r === "viewer" ? "solo lectura" : r}</span>
+                  <span className={"role-pill rp-" + r}>{r === "viewer" ? "solo lectura" : r}</span>
                 </div>
                 <div className="ro-perms">{ROLE_DESCRIPTIONS[r]}</div>
               </div>
@@ -186,7 +186,7 @@ export default function UsuariosPage() {
                 <div className="ur-e">Invitación enviada · esperando que acepte</div>
               </div>
               <div className="ur-right">
-                <span className={"role-pill " + u.role}>{roleLabel(u.role)}</span>
+                <span className={"role-pill rp-" + u.role}>{roleLabel(u.role)}</span>
                 <span className="ur-stat pending">
                   <span className="d" />
                   pendiente
@@ -214,7 +214,7 @@ export default function UsuariosPage() {
               <div className="ur-e">{u.email}</div>
             </div>
             <div className="ur-right">
-              <span className={"role-pill " + u.role}>{roleLabel(u.role)}</span>
+              <span className={"role-pill rp-" + u.role}>{roleLabel(u.role)}</span>
               <span className="ur-stat active">
                 <span className="d" />
                 activo

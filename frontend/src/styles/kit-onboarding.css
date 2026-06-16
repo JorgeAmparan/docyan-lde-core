@@ -482,14 +482,19 @@
 .onb-kit .role-opt.on .ro-radio{border-color:var(--cinnabar-500);box-shadow:inset 0 0 0 4px var(--cinnabar-500);}
 .onb-kit .role-opt .ro-t{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px;}
 .onb-kit .role-opt .ro-perms{font-size:12px;color:var(--fg-muted);margin-top:3px;line-height:1.45;}
-.onb-kit .role-pill{font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:var(--radius-full);white-space:nowrap;}
-.onb-kit .role-pill.admin{background:var(--cinnabar-50);color:var(--accent-fg);border:1px solid var(--cinnabar-100);}
-.onb-kit .role-pill.editor{background:var(--info-100);color:var(--info-600);}
-/* El enum del backend es `viewer` (etiquetado "Consulta" en UI). La hoja antigua
-   sólo estilaba `.consulta`, que NUNCA se emite → pill sin estilo. Se estila el
-   valor real `viewer`; se conserva `.consulta` por compatibilidad. */
-.onb-kit .role-pill.viewer,
-.onb-kit .role-pill.consulta{background:var(--amate-100);color:var(--fg-muted);}
+/* Modificador de rol NAMESPACED (`rp-<rol>`): el valor crudo del rol NO se usa como
+   clase. Antes era `role-pill admin`, y `admin` COLISIONABA con `.admin` del kit
+   (marco demo fijo 1120×760 de kit-admin.css) → el pill se inflaba a un óvalo rosa
+   gigante (radius-full + cinnabar-50). El prefijo `rp-` lo aísla de clases de layout.
+   Defensa extra: width/height/display fijos al contenido por si algún modificador
+   futuro vuelve a chocar (mayor especificidad que una clase de layout suelta). */
+.onb-kit .role-pill{display:inline-block;width:auto;height:auto;box-shadow:none;font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:var(--radius-full);white-space:nowrap;}
+.onb-kit .role-pill.rp-admin{background:var(--cinnabar-50);color:var(--accent-fg);border:1px solid var(--cinnabar-100);}
+.onb-kit .role-pill.rp-editor{background:var(--info-100);color:var(--info-600);}
+/* El enum del backend es `viewer` (etiquetado "Consulta" en UI). Se estila el valor
+   real `viewer`; se conserva `consulta` por compatibilidad. */
+.onb-kit .role-pill.rp-viewer,
+.onb-kit .role-pill.rp-consulta{background:var(--amate-100);color:var(--fg-muted);}
 
 .onb-kit .user-section h2{font-size:14px;font-family:var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);font-weight:500;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
 .onb-kit .user-section h2 .cnt{background:var(--amate-100);color:var(--fg-muted);font-size:11px;padding:1px 8px;border-radius:var(--radius-full);}
