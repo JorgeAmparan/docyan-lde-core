@@ -488,7 +488,7 @@
    gigante (radius-full + cinnabar-50). El prefijo `rp-` lo aísla de clases de layout.
    Defensa extra: width/height/display fijos al contenido por si algún modificador
    futuro vuelve a chocar (mayor especificidad que una clase de layout suelta). */
-.onb-kit .role-pill{display:inline-block;width:auto;height:auto;box-shadow:none;font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:var(--radius-full);white-space:nowrap;}
+.onb-kit .role-pill{display:inline-flex;align-items:center;width:auto;height:auto;box-shadow:none;font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:var(--radius-full);white-space:nowrap;}
 .onb-kit .role-pill.rp-admin{background:var(--cinnabar-50);color:var(--accent-fg);border:1px solid var(--cinnabar-100);}
 .onb-kit .role-pill.rp-editor{background:var(--info-100);color:var(--info-600);}
 /* El enum del backend es `viewer` (etiquetado "Consulta" en UI). Se estila el valor
