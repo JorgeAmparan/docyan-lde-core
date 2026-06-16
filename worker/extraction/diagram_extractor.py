@@ -18,9 +18,9 @@ import base64
 import logging
 from typing import Callable
 
-from worker.extraction.models import DraftDiagrama, EtiquetaBorrador, LeyendaBorrador
 from worker.extraction._json import parse_llm_json
 from worker.extraction.docling_figures import FiguraExtraida
+from worker.extraction.models import DraftDiagrama, EtiquetaBorrador, LeyendaBorrador
 
 logger = logging.getLogger("docyan.worker.extraccion.diagrama")
 
@@ -52,11 +52,57 @@ def extraer_diagramas(
     *,
     complete_vision: Callable[[str, str], str] | None = None,
     put_asset: Callable[[str, str, bytes], str] | None = None,
+    storage_ok: Callable[[], bool] | None = None,
 ) -> list[DraftDiagrama]:
     """
     Extrae un `DraftDiagrama` por figura con rótulos. Best-effort: figuras sin
     etiquetas se omiten; nunca lanza (la auto-extracción no es gate).
+
+    CORTO-CIRCUITO DE COSTO (decisión Jorge 15-jun-2026): si el almacén de assets
+    NO está disponible (p. ej. el bucket `docyan-assets` no existe), se OMITE la
+    extracción entera — NO se llama a la visión de Gemini por figura, porque el
+    resultado (DiagramViewer servible) no se podría guardar. No se paga lo que no se
+    puede usar. El gate COMPLETO de figuras (estimar el costo de visión ANTES, en el
+    cotizador, + tope por documento) es el sprint de costo siguiente.
     """
+    if not figuras:
+        return []
+
+    # Cap de figuras por documento (Pieza 3): el cotizador solo cotizó el costo de
+    # visión hasta este tope; el worker extrae el MISMO tope para que el gasto real no
+    # exceda lo cotizado. Top-N por TAMAÑO de imagen (proxy de "figura informativa":
+    # un diagrama rotulado pesa más que un ícono/logo). Aviso honesto si se excede.
+    from app.ingesta.pricing_table import MAX_FIGURAS_POR_DOCUMENTO
+
+    if len(figuras) > MAX_FIGURAS_POR_DOCUMENTO:
+        excedidas = len(figuras) - MAX_FIGURAS_POR_DOCUMENTO
+        logger.warning(
+            "documento con %d figuras excede el tope de %d; se extraen las %d mayores "
+            "y se OMITEN %d (aviso honesto, gasto de visión acotado a lo cotizado)",
+            len(figuras), MAX_FIGURAS_POR_DOCUMENTO, MAX_FIGURAS_POR_DOCUMENTO, excedidas,
+        )
+        figuras = sorted(figuras, key=lambda f: len(f.png_bytes or b""), reverse=True)[
+            :MAX_FIGURAS_POR_DOCUMENTO
+        ]
+
+    # Corto-circuito de costo: se prueba el MISMO almacén que se va a usar. Con
+    # `put_asset` inyectado (test/custom), el caller garantiza el store → no se
+    # prueba. En prod (store por defecto), se prueba el bucket: si no está, se omite
+    # la extracción ENTERA antes de pagar visión por figura.
+    usa_store_default = put_asset is None
+    if storage_ok is None:
+        if usa_store_default:
+            from app.recursos.asset_store import almacenamiento_disponible as storage_ok
+        else:
+            storage_ok = lambda: True  # noqa: E731 — store inyectado ⇒ disponible
+    if not storage_ok():
+        logger.warning(
+            "almacenamiento de assets no disponible (bucket %s); se OMITE la "
+            "extracción de %d figura(s) para no gastar visión sin poder guardar el resultado",
+            "docyan-assets", len(figuras),
+        )
+        return []
+
     if complete_vision is None:
         from worker import llm_config
 

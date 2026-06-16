@@ -2,8 +2,8 @@
 
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type ProcedureCardPayload } from "../consult-data";
+import { CitaInline } from "./cita-inline";
+import { citaToSource, type ProcedureCardPayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
 /**
@@ -26,7 +26,6 @@ export function GuiaPasoAPaso({
   const eppAll = Array.from(new Set(pasos.flatMap((p) => p.epp ?? [])));
   const advertencias = pasos.flatMap((p) => p.advertencias ?? []);
   const cita = (payload.citas ?? [])[0] ?? pasos.find((p) => p.cita)?.cita ?? null;
-  const label = citaLabel(cita);
 
   return (
     <div className="acard">
@@ -61,11 +60,7 @@ export function GuiaPasoAPaso({
         </div>
       )}
       <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Sin cita de fuente</span>
-        )}
+        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} />
         <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>

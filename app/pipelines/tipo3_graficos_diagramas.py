@@ -22,7 +22,7 @@ from app.schemas.pipeline_payloads import (
 
 def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPipeline:
     termino = ctx.params.get("termino", ctx.pregunta)
-    data = reader.recurso_visual(ctx.tenant_id, termino, ctx.entidad_id)
+    data = reader.recurso_visual(ctx.tenant_id, termino, ctx.entidad_id, ctx.documento_id)
 
     etiquetas = [
         EtiquetaDiagrama(

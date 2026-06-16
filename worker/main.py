@@ -168,6 +168,19 @@ async def _procesar_un_job(
         last_exc: Exception | None = None
         for intento in range(MAX_RETRIES + 1):
             if intento > 0:
+                # Pieza 4c — RE-GATE de costo: cada reintento re-corre la extracción
+                # completa (gasto real adicional). El reintento debe pasar por el gate:
+                # si el tenant ya no puede absorber otra corrida, NO se reintenta (se
+                # cierra honesto en vez de multiplicar el costo ≤3× sin control).
+                permitido, motivo = dispatcher.gate_costo_reintento(job_id)
+                if not permitido:
+                    logger.warning(
+                        "job %s: reintento BLOQUEADO por gate de costo (%s)", job_id, motivo
+                    )
+                    last_exc = last_exc or RuntimeError(
+                        f"reintento sin saldo (gate de costo): {motivo}"
+                    )
+                    break
                 dispatcher.actualizar_progreso(job_id, retry_attempt=intento)
                 await sleep(_backoff_delay(intento - 1, rng))
                 logger.warning("job %s: reintento %d/%d", job_id, intento, MAX_RETRIES)

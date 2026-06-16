@@ -155,12 +155,25 @@ def _fragmento_anclado(texto: str, nombre: str | None, pista: int) -> dict | Non
 class PipelineGraphReader(Protocol):
     """Contrato que los 8 pipelines consumen (impl real + fake de tests)."""
 
-    def informativa(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict: ...
-    def procedimiento(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict: ...
-    def recurso_visual(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict: ...
-    def video(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict: ...
+    def informativa(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict: ...
+    def procedimiento(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict: ...
+    def recurso_visual(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict: ...
+    def video(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict: ...
     def arbol_diagnostico(
-        self, tenant_id: str, termino: str, entidad_id: str | None, nodo_id: str | None
+        self, tenant_id: str, termino: str, entidad_id: str | None, nodo_id: str | None,
+        documento_id: str | None = None,
     ) -> dict: ...
     def historial(self, tenant_id: str, entidad_id: str | None) -> dict: ...
     def alertas(self, tenant_id: str, entidad_id: str | None) -> list[dict]: ...
@@ -239,6 +252,37 @@ _MARCADORES_SEGURIDAD = frozenset(
 _BONUS_IDENTIDAD = 0.30
 _PENA_IDENTIDAD = 0.30
 _PENA_GENERAL = 0.10
+# Sprint UI-2 §1.4 — nombres GENÉRICOS de extracción (placeholders que el extractor
+# materializó como si fueran sustancias reales: "El Material", "COMPONENTES DE ESTE
+# PRODUCTO", "SUSTANCIA DEL PRODUCTO"). Rankeaban junto a sustancias reales (ALUMINA)
+# en respuestas de identidad. Esto es un sesgo de ORDEN (como el de intención): NO
+# elimina ni cambia el score/banda mostrado — sólo demota para que el nombre real
+# encabece. Filtro por LISTA CORTA y barato (la cirugía de extracción de fondo va a
+# la cola del catálogo de schemas). Coincidencia por nombre completo normalizado:
+# no toca un nombre real que contenga estas palabras (p. ej. "ácido + agua").
+_PENA_GENERICO = 0.20
+_NOMBRES_GENERICOS = frozenset({
+    "el material", "material", "los materiales", "el material del producto",
+    "componentes de este producto", "componentes del producto", "componentes",
+    "componente", "los componentes",
+    "sustancia del producto", "sustancia", "la sustancia", "sustancias",
+    "sustancia o mezcla", "sustancia quimica",
+    "el producto", "producto", "este producto", "del producto", "el producto quimico",
+    "ingrediente", "ingredientes", "los ingredientes",
+    "mezcla", "la mezcla", "la mezcla del producto",
+})
+
+
+def _es_nombre_generico(contenido: str | None) -> bool:
+    """¿El nombre/valor del nodo es un placeholder genérico de extracción?
+    Normaliza (sin acentos, minúsculas, sin puntuación de borde) y compara por
+    igualdad contra la lista corta — exacto, nunca substring, para no demotar un
+    nombre real que apenas contenga la palabra."""
+    if not contenido:
+        return False
+    n = _sin_acentos(contenido.lower()).strip(" .,:;-\t\n\"'()[]")
+    n = re.sub(r"\s+", " ", n)
+    return n in _NOMBRES_GENERICOS
 
 
 def _sesgo_intencion(termino: str | None) -> dict[str, float]:
@@ -343,9 +387,33 @@ class DKGReader:
             self._embedder = None
         return self._embedder
 
+    # ── Aislamiento documental (provenance) ─────────────────────────────────────
+    #
+    # ACOTA el universo de nodos de un label al DOCUMENTO o ENTIDAD consultados, en
+    # vez de barrer todo el grafo del tenant. Sin esto, una consulta sobre el doc A
+    # puntúa y cita el nodo que mejor casa los tokens de CUALQUIER documento del
+    # tenant (cross-citation: doc A → cita doc B). El scope es:
+    #   · documento_id → `(:DocumentoSource {id})-[:CONTIENE]->(n)` (documento suelto).
+    #   · entidad_id   → `(:EntidadOperativa {id})-[:CONTIENE]->(n)` (CoDo de entidad;
+    #     el bridge de procedencia espeja `:CONTIENE` del doc sobre la entidad).
+    #   · ninguno      → tenant-wide (compat: búsqueda libre sin contexto de CoDo).
+    # El parámetro `$doc_id`/`$eid` solo se referencia en la rama elegida; los demás
+    # quedan inertes en el dict de params.
+    @staticmethod
+    def _scope_prefix(alias: str, label: str, documento_id: str | None,
+                      entidad_id: str | None) -> str:
+        if documento_id:
+            return f"MATCH (:DocumentoSource {{id: $doc_id}})-[:CONTIENE]->({alias}:{label})"
+        if entidad_id:
+            return f"MATCH (:EntidadOperativa {{id: $eid}})-[:CONTIENE]->({alias}:{label})"
+        return f"MATCH ({alias}:{label})"
+
     # ── Tipo 1 — Informativa (DEF-1 multi-label + DEF-2 híbrido) ────────────────
 
-    def informativa(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+    def informativa(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict:
         from app.pipelines.retrieval_hibrido import Candidato, rankear
 
         toks = tokenizar_busqueda(termino)
@@ -361,7 +429,9 @@ class DKGReader:
         # Lee el `nombre` CANÓNICO (proyectado por el bridge), no el `name` SDK-nativo:
         # sin bridge, `nombre` es NULL ⇒ "—" ⇒ no casa ⇒ no se lee (invariante de costura).
         # :Especificacion es el dato neutral de referencia: nunca se demota ni se bonifica.
-        for row in self._leer_especificaciones(tenant_id, toks, semantica):
+        for row in self._leer_especificaciones(
+            tenant_id, toks, semantica, documento_id=documento_id, entidad_id=entidad_id
+        ):
             nombre = _primer_no_vacio(row, ("nombre",)) or "—"
             data = self._normalizar(row, nombre=nombre, valor=row.get("valor"),
                                     unidad=row.get("unidad"), ancla=nombre, label="Especificacion")
@@ -370,15 +440,23 @@ class DKGReader:
                                         prioridad=sesgo.get("Especificacion", 0.0)))
         # DEF-1 — resto de la ontología legible (Sustancia, Riesgo, Instrumento, …).
         for label, etiqueta, sinonimos in _LABELS_INFORMATIVA:
-            for row in self._leer_label(tenant_id, label, toks, semantica):
+            for row in self._leer_label(
+                tenant_id, label, toks, semantica,
+                documento_id=documento_id, entidad_id=entidad_id,
+            ):
                 contenido = _primer_no_vacio(row, _CAMPOS_CONTENIDO)
                 if not contenido:
                     continue
                 data = self._normalizar(row, nombre=etiqueta, valor=contenido,
                                         unidad=row.get("unidad"), ancla=contenido, label=label)
                 tm = f"{etiqueta} {sinonimos} {contenido}"
+                # §1.4 — demota (no elimina) nombres genéricos de extracción para que
+                # la sustancia real encabece. Sesgo de orden, sumado al de intención.
+                prioridad = sesgo.get(label, 0.0)
+                if _es_nombre_generico(contenido):
+                    prioridad -= _PENA_GENERICO
                 candidatos.append(Candidato(texto_match=tm, embedding=_emb(row), data=data,
-                                            prioridad=sesgo.get(label, 0.0)))
+                                            prioridad=prioridad))
 
         # Puntuar con la consulta SIN stopwords (mismos tokens de contenido que el
         # recall). Pasar el `termino` crudo diluía el score léxico ("what is the
@@ -435,10 +513,15 @@ class DKGReader:
             "_label": label,
         }
 
-    def _leer_especificaciones(self, tenant_id: str, toks: list[str], semantica: bool) -> list[dict]:
-        """Lee `:Especificacion`. Recall léxico estricto (CONTAINS) salvo que la
-        semántica esté activa, en cuyo caso trae el universo (capado) para que la
-        pasada vectorial considere specs que el léxico no casaría (siglas, EN/ES)."""
+    def _leer_especificaciones(
+        self, tenant_id: str, toks: list[str], semantica: bool,
+        *, documento_id: str | None = None, entidad_id: str | None = None,
+    ) -> list[dict]:
+        """Lee `:Especificacion` ACOTADA al documento/entidad consultados (aislamiento).
+        Recall léxico estricto (CONTAINS) salvo que la semántica esté activa, en cuyo
+        caso trae el universo (capado, dentro del scope) para que la pasada vectorial
+        considere specs que el léxico no casaría (siglas, EN/ES)."""
+        scope = self._scope_prefix("e", "Especificacion", documento_id, entidad_id)
         filtro = (
             "" if semantica else
             "WHERE size($toks) = 0 OR ANY(w IN $toks WHERE "
@@ -447,7 +530,7 @@ class DKGReader:
         return self.client.query(
             tenant_id,
             f"""
-            MATCH (e:Especificacion)
+            {scope}
             {filtro}
             OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(e)
             WITH e, collect(DISTINCT {{id: d.id, nombre: d.nombre_archivo,
@@ -456,12 +539,17 @@ class DKGReader:
             RETURN {_RETURN_CITABLE}
             LIMIT 80
             """,
-            {"toks": toks},
+            {"toks": toks, "doc_id": documento_id, "eid": entidad_id},
         )
 
-    def _leer_label(self, tenant_id: str, label: str, toks: list[str], semantica: bool) -> list[dict]:
-        """Lee un label citable de la ontología (DEF-1). Mismo patrón de recall que
-        `:Especificacion`. El label es de una lista fija interna (no input de usuario)."""
+    def _leer_label(
+        self, tenant_id: str, label: str, toks: list[str], semantica: bool,
+        *, documento_id: str | None = None, entidad_id: str | None = None,
+    ) -> list[dict]:
+        """Lee un label citable de la ontología (DEF-1) ACOTADO al documento/entidad
+        consultados. Mismo patrón de recall que `:Especificacion`. El label es de una
+        lista fija interna (no input de usuario)."""
+        scope = self._scope_prefix("n0", label, documento_id, entidad_id)
         filtro = (
             "" if semantica else
             "WHERE size($toks) = 0 OR ANY(w IN $toks WHERE "
@@ -472,7 +560,7 @@ class DKGReader:
             return self.client.query(
                 tenant_id,
                 f"""
-                MATCH (n0:{label})
+                {scope}
                 {filtro}
                 OPTIONAL MATCH (d:DocumentoSource)-[:CONTIENE]->(n0)
                 WITH n0 AS n, collect(DISTINCT {{id: d.id, nombre: d.nombre_archivo,
@@ -480,7 +568,7 @@ class DKGReader:
                 RETURN {_RETURN_CITABLE}
                 LIMIT 60
                 """,
-                {"toks": toks},
+                {"toks": toks, "doc_id": documento_id, "eid": entidad_id},
             )
         except Exception as exc:  # noqa: BLE001 — un label ausente no rompe la consulta
             import logging
@@ -530,12 +618,16 @@ class DKGReader:
 
     # ── Tipo 2 — Guía paso a paso ─────────────────────────────────────────────
 
-    def procedimiento(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+    def procedimiento(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict:
         toks = tokenizar_busqueda(termino)
+        scope = self._scope_prefix("p", "Procedimiento", documento_id, entidad_id)
         rows = self.client.query(
             tenant_id,
-            """
-            MATCH (p:Procedimiento)
+            f"""
+            {scope}
             WHERE size($toks) = 0
                OR ANY(w IN $toks WHERE toLower(coalesce(p.nombre,'')) CONTAINS w)
             // Entre los procedimientos que casan, elige el de MÁS pasos: la
@@ -561,63 +653,71 @@ class DKGReader:
                    head(collect(DISTINCT coalesce(d.nombre_archivo, d.tipo_documento))) AS documento_nombre,
                    head(collect(DISTINCT d.tipo_documento)) AS documento_tipo,
                    head(collect(DISTINCT d.url_publica)) AS documento_url,
-                   collect({orden: paso.orden, descripcion: paso.descripcion,
+                   collect({{orden: paso.orden, descripcion: paso.descripcion,
                             epp: epps, herramientas: herrs, advertencias: advs,
                             precondiciones: paso.precondiciones,
-                            postcondiciones: paso.postcondiciones}) AS pasos
+                            postcondiciones: paso.postcondiciones}}) AS pasos
             LIMIT 1
             """,
-            {"toks": toks},
+            {"toks": toks, "doc_id": documento_id, "eid": entidad_id},
         )
         return rows[0] if rows else {"procedimiento_id": None, "titulo": "", "pasos": []}
 
     # ── Tipo 3 — Gráficos / diagramas ─────────────────────────────────────────
 
-    def recurso_visual(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+    def recurso_visual(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict:
         toks = tokenizar_busqueda(termino)
+        scope = self._scope_prefix("r", "RecursoVisual", documento_id, entidad_id)
         rows = self.client.query(
             tenant_id,
-            """
-            MATCH (r:RecursoVisual)
+            f"""
+            {scope}
             WHERE size($toks) = 0
                OR ANY(w IN $toks WHERE toLower(coalesce(r.titulo, r.nombre, '')) CONTAINS w)
             OPTIONAL MATCH (r)-[:CONTIENE]->(et:Etiqueta)
             OPTIONAL MATCH (r)-[:CONTIENE]->(ls:LeyendaSimbolica)
             WITH r,
-                 collect(DISTINCT {texto: et.texto, x: et.x, y: et.y, w: et.w, h: et.h}) AS etiquetas,
-                 collect(DISTINCT {simbolo: ls.simbolo, significado: ls.significado}) AS leyenda
+                 collect(DISTINCT {{texto: et.texto, x: et.x, y: et.y, w: et.w, h: et.h}}) AS etiquetas,
+                 collect(DISTINCT {{simbolo: ls.simbolo, significado: ls.significado}}) AS leyenda
             RETURN r.id AS recurso_id, coalesce(r.titulo, r.nombre) AS titulo,
                    r.url AS recurso_url, etiquetas, leyenda
             LIMIT 1
             """,
-            {"toks": toks},
+            {"toks": toks, "doc_id": documento_id, "eid": entidad_id},
         )
         return rows[0] if rows else {"recurso_id": None, "titulo": "", "etiquetas": [], "leyenda": []}
 
     # ── Tipo 4 — Video ────────────────────────────────────────────────────────
 
-    def video(self, tenant_id: str, termino: str, entidad_id: str | None) -> dict:
+    def video(
+        self, tenant_id: str, termino: str, entidad_id: str | None,
+        documento_id: str | None = None,
+    ) -> dict:
         toks = tokenizar_busqueda(termino)
+        scope = self._scope_prefix("v", "RecursoVideo", documento_id, entidad_id)
         rows = self.client.query(
             tenant_id,
-            """
-            MATCH (v:RecursoVideo)
+            f"""
+            {scope}
             WHERE size($toks) = 0
                OR ANY(w IN $toks WHERE toLower(coalesce(v.titulo, v.nombre, '')) CONTAINS w)
             OPTIONAL MATCH (v)-[:CONTIENE]->(c:Capitulo)
             OPTIONAL MATCH (v)-[:CONTIENE]->(s:Subtitulo)
             OPTIONAL MATCH (v)-[:CONTIENE]->(tr:Transcripcion)
             WITH v,
-                 collect(DISTINCT {titulo: c.titulo, inicio_seg: c.inicio_seg}) AS capitulos,
-                 collect(DISTINCT {idioma: s.idioma, texto: s.texto,
-                                   inicio_seg: s.inicio_seg, fin_seg: s.fin_seg}) AS subtitulos,
+                 collect(DISTINCT {{titulo: c.titulo, inicio_seg: c.inicio_seg}}) AS capitulos,
+                 collect(DISTINCT {{idioma: s.idioma, texto: s.texto,
+                                   inicio_seg: s.inicio_seg, fin_seg: s.fin_seg}}) AS subtitulos,
                  head(collect(tr.texto)) AS transcripcion
             RETURN v.id AS recurso_id, coalesce(v.titulo, v.nombre) AS titulo,
                    v.url AS video_url, v.par_activo AS par_activo,
                    capitulos, subtitulos, transcripcion
             LIMIT 1
             """,
-            {"toks": toks},
+            {"toks": toks, "doc_id": documento_id, "eid": entidad_id},
         )
         return rows[0] if rows else {"recurso_id": None, "titulo": "", "capitulos": [],
                                      "subtitulos": [], "transcripcion": None}
@@ -625,7 +725,8 @@ class DKGReader:
     # ── Tipo 5 — Troubleshooting ──────────────────────────────────────────────
 
     def arbol_diagnostico(
-        self, tenant_id: str, termino: str, entidad_id: str | None, nodo_id: str | None
+        self, tenant_id: str, termino: str, entidad_id: str | None, nodo_id: str | None,
+        documento_id: str | None = None,
     ) -> dict:
         if nodo_id:
             rows = self.client.query(
@@ -648,21 +749,22 @@ class DKGReader:
             arbol = {"arbol_id": None, "titulo": termino}
         else:
             toks = tokenizar_busqueda(termino)
+            scope = self._scope_prefix("t", "ArbolDiagnostico", documento_id, entidad_id)
             rows = self.client.query(
                 tenant_id,
-                """
-                MATCH (t:ArbolDiagnostico)
+                f"""
+                {scope}
                 WHERE size($toks) = 0
                    OR ANY(w IN $toks WHERE toLower(coalesce(t.titulo, t.nombre, '')) CONTAINS w)
                 OPTIONAL MATCH (t)-[:CONTIENE]->(n:NodoDecision)
                 WITH t, n ORDER BY coalesce(n.orden, 0) LIMIT 1
                 OPTIONAL MATCH (n)-[rel]->(sig:NodoDecision)
-                WITH t, n, collect(DISTINCT {etiqueta: rel.etiqueta, siguiente_nodo_id: sig.id}) AS opciones
+                WITH t, n, collect(DISTINCT {{etiqueta: rel.etiqueta, siguiente_nodo_id: sig.id}}) AS opciones
                 RETURN t.id AS arbol_id, coalesce(t.titulo, t.nombre) AS titulo,
                        n.id AS nodo_actual_id, n.pregunta AS pregunta, opciones
                 LIMIT 1
                 """,
-                {"toks": toks},
+                {"toks": toks, "doc_id": documento_id, "eid": entidad_id},
             )
             arbol = {}
         if not rows:

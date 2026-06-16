@@ -1,11 +1,11 @@
 "use client";
 
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type InfoCardPayload } from "../consult-data";
+import { CitaInline } from "./cita-inline";
+import { citaToSource, type InfoCardPayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
-/** Tipo 1 · Informativa — big value + unit + CitationChip, from the real payload. */
+/** Tipo 1 · Informativa — big value + unit + cita en línea, from the real payload. */
 export function InformativaCard({
   payload,
   saved,
@@ -20,7 +20,6 @@ export function InformativaCard({
   const especs = payload.especificaciones ?? [];
   const primary = especs[0];
   const cita = primary?.cita ?? (payload.citas ?? [])[0] ?? null;
-  const label = citaLabel(cita);
   const extras = especs.slice(1);
 
   return (
@@ -58,11 +57,7 @@ export function InformativaCard({
       )}
 
       <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Sin cita de fuente</span>
-        )}
+        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} />
         <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>

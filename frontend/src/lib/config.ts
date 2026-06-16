@@ -25,6 +25,13 @@ export const SESSION_HARD_CAP_USD = Number(
   process.env.NEXT_PUBLIC_SESSION_HARD_CAP_USD ?? "20",
 );
 
+/**
+ * Montos de recarga del saldo de ingesta. El saldo es en USD (gate de cómputo del
+ * cotizador, `budget_manager.moneda = "USD"`), así que los presets son USD. (Antes
+ * vivían en el `pricing.ts` legacy, ya retirado — fuente de precio única: bands.ts.)
+ */
+export const RECHARGE_PRESETS_USD = [50, 100, 250, 500];
+
 /** Cookie that carries the access JWT (httpOnly, set by the route handler). */
 export const AUTH_COOKIE = "docyan_token";
 /** Cookie that carries the active CoDo (DoCo) id for multi-CoDo admins. */

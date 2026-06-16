@@ -15,6 +15,40 @@ import {
 import { api, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import { IngestProgressRow } from "@/components/ingesta/ingest-progress-row";
+import { QuoteCard } from "@/components/ingesta/quote-card";
+
+/** Respuesta de POST /ingesta/documents (cotización, NO ingiere). */
+interface UploadResponse {
+  job_id: string;
+  tipo_documento?: string | null;
+  tipo_resuelto_por?: string;
+  cotizacion: {
+    costo_estimado_usd: number;
+    saldo_disponible_usd: number;
+    aprobado: boolean;
+    precio_setup_usd?: number;
+    dentro_de_cupo?: boolean;
+    cupo_restante?: number | null;
+  };
+  cotizacion_local?: { moneda: string; precio_setup: number } | null;
+  advertencia?: string | null;
+}
+
+/** Cotización pendiente de APROBACIÓN explícita (control de gasto — todos los planes). */
+interface PendingQuote {
+  jobId: string;
+  name: string;
+  tipo: string | null;
+  setupUsd: number;
+  costUsd: number;
+  setupLocal: number | null;
+  aprobado: boolean;
+  saldo: number;
+  dentroCupo: boolean;
+  cupoRestante: number | null;
+  tipoNoCubierto: boolean;
+  advertencia: string | null;
+}
 
 /**
  * Pantalla 6 (B13) — Gestión de documentos vivos. Lista real (`GET /mis-documentos`),
@@ -49,6 +83,9 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [convert, setConvert] = useState<FreemiumExcedePayload | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Cotización pendiente de aprobación (gate de gasto SIEMPRE visible, incl. freemium).
+  const [pendingQuote, setPendingQuote] = useState<PendingQuote | null>(null);
+  const [approving, setApproving] = useState(false);
   // Job en ingesta activa: se sondea su estado real (D6) hasta término. No se
   // adivina con un timeout: el documento aparece cuando el worker termina.
   const [activeJob, setActiveJob] = useState<{ id: string; name: string } | null>(null);
@@ -84,19 +121,25 @@ export default function DocumentsPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.postForm<{ requiere_confirmacion?: boolean; job_id: string }>(
-        "/ingesta/documents",
-        form,
-        { token },
-      );
-      // Cotización aceptada → confirma y deja al worker procesar.
-      if (res.job_id) {
-        await api
-          .post(`/ingesta/documents/${res.job_id}/confirm`, undefined, { token })
-          .catch(() => null);
-        // Sondeo real del estado hasta término (D6); la lista se recarga al completar.
-        setActiveJob({ id: res.job_id, name: file.name });
-      }
+      const res = await api.postForm<UploadResponse>("/ingesta/documents", form, { token });
+      // PRINCIPIO CANÓNICO: la cotización con control de gasto + aprobación se muestra
+      // SIEMPRE, en TODOS los planes (freemium ve Total $0.00 tachado pero DEBE
+      // aprobar). NO se auto-confirma: se presenta la tarjeta y el usuario decide.
+      const c = res.cotizacion;
+      setPendingQuote({
+        jobId: res.job_id,
+        name: file.name,
+        tipo: res.tipo_documento ?? null,
+        setupUsd: c.precio_setup_usd ?? c.costo_estimado_usd,
+        costUsd: c.costo_estimado_usd,
+        setupLocal: res.cotizacion_local?.moneda === "MXN" ? res.cotizacion_local.precio_setup : null,
+        aprobado: c.aprobado,
+        saldo: c.saldo_disponible_usd,
+        dentroCupo: c.dentro_de_cupo ?? false,
+        cupoRestante: c.cupo_restante ?? null,
+        tipoNoCubierto: res.tipo_resuelto_por === "worker_generara" || !res.tipo_documento,
+        advertencia: res.advertencia ?? null,
+      });
     } catch (err) {
       // 402 = gate de tamaño freemium → payload de conversión (no muro seco).
       if (err instanceof ApiError && err.status === 402) {
@@ -115,6 +158,26 @@ export default function DocumentsPage() {
       setUploading(false);
     }
   };
+
+  // Aprobación explícita → recién aquí se confirma y encola (gate de gasto).
+  const approveQuote = async () => {
+    if (!pendingQuote || !token) return;
+    setApproving(true);
+    try {
+      await api.post(`/ingesta/documents/${pendingQuote.jobId}/confirm`, undefined, { token });
+      setActiveJob({ id: pendingQuote.jobId, name: pendingQuote.name });
+      setPendingQuote(null);
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "No pudimos confirmar la ingesta.");
+    } finally {
+      setApproving(false);
+    }
+  };
+  // Cancelar: el job queda en pending_confirmation y nunca se ingiere (sin cobro).
+  const cancelQuote = () => setPendingQuote(null);
+
+  const quoteCurrency: "USD" | "MXN" =
+    pendingQuote?.setupLocal != null ? "MXN" : "USD";
 
   const counter = limit !== null ? `${usados} de ${limit}` : null;
 
@@ -332,6 +395,52 @@ export default function DocumentsPage() {
               <button className="btn danger" onClick={confirmDelete} disabled={deleting}>
                 <Icon name="trash-2" size={16} />
                 {deleting ? "Eliminando…" : "Eliminar documento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* §1.1 — cotización SIEMPRE visible + aprobación explícita (todos los planes). */}
+      {pendingQuote && (
+        <div className="modal-overlay" onClick={() => !approving && cancelQuote()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div className="m-ic" style={{ background: "var(--cinnabar-50)", color: "var(--cinnabar-600)" }}>
+              <Icon name="receipt-text" size={22} />
+            </div>
+            <h3>Cotización de ingesta</h3>
+            <p style={{ marginBottom: 4 }}>
+              {isFreemium
+                ? "Tu plan gratuito cubre el 100% de esta ingesta. Revisa el valor y aprueba para procesar."
+                : "Revisa el costo de esta ingesta y aprueba para procesar. Sin aprobación no se cobra ni se ingiere."}
+            </p>
+            <div style={{ width: "100%", margin: "6px 0 4px" }}>
+              <QuoteCard
+                name={pendingQuote.name}
+                tipo={pendingQuote.tipo}
+                isFreemium={isFreemium}
+                valueUsd={quoteCurrency === "MXN" ? (pendingQuote.setupLocal ?? pendingQuote.setupUsd) : pendingQuote.setupUsd}
+                totalUsd={quoteCurrency === "MXN" ? (pendingQuote.setupLocal ?? pendingQuote.costUsd) : pendingQuote.costUsd}
+                currency={quoteCurrency}
+                saldoUsd={quoteCurrency === "USD" ? pendingQuote.saldo : null}
+                dentroCupo={pendingQuote.dentroCupo}
+                cupoRestante={pendingQuote.cupoRestante}
+                tipoNoCubierto={pendingQuote.tipoNoCubierto}
+                rejected={!pendingQuote.aprobado}
+                advertencia={pendingQuote.advertencia}
+              />
+            </div>
+            <div className="m-actions">
+              <button className="btn sec" onClick={cancelQuote} disabled={approving}>
+                Cancelar
+              </button>
+              <button
+                className="btn primary"
+                onClick={approveQuote}
+                disabled={approving || !pendingQuote.aprobado}
+              >
+                <Icon name="check" size={16} />
+                {approving ? "Aprobando…" : "Aprobar e ingerir"}
               </button>
             </div>
           </div>

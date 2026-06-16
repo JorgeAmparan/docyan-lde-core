@@ -87,6 +87,7 @@
     "doc": {
       "completed": "Completed",
       "completedAvailable": "Completed · available for queries",
+      "completedNoDoc": "Processed, but no live document resulted",
       "error": "Error · {{reason}}",
       "eta": "{{clock}} left"
     },
@@ -129,7 +130,9 @@
       "newIngest": "New ingestion",
       "minimize": "Minimize",
       "viewProgress": "View progress",
-      "consult": "Query →",
+      "consult": "Query",
+      "replace": "Replace",
+      "delete": "Delete",
       "retry": "Retry",
       "skip": "Skip",
       "remove": "Remove"

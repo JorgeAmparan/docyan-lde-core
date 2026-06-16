@@ -2,8 +2,8 @@
 
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type ComparativeViewPayload } from "../consult-data";
+import { CitaInline } from "./cita-inline";
+import { citaToSource, type ComparativeViewPayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
 /** Tipo 8 · Comparativa — diferencias campo a campo del payload real. Los cambios
@@ -21,7 +21,6 @@ export function ComparativaView({
 }) {
   const difs = payload.diferencias ?? [];
   const cita = (payload.citas ?? [])[0] ?? null;
-  const label = citaLabel(cita);
   const seguridad = difs.filter((d) => d.es_cambio_seguridad).length;
 
   return (
@@ -65,11 +64,7 @@ export function ComparativaView({
         </p>
       )}
       <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Comparativa de revisiones</span>
-        )}
+        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} emptyLabel="Comparativa de revisiones" />
         <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>

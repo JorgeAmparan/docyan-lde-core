@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@/components/icon";
 import { IngestBatch } from "@/components/ingesta/ingest-batch";
+import { QuoteCard } from "@/components/ingesta/quote-card";
 import { api, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
+import { getOrg, deleteDocumento } from "@/lib/onboarding";
 import { useIngestStore } from "@/lib/ingest-store";
 import type { DocProgress } from "@/lib/ingesta";
 import {
@@ -33,24 +35,49 @@ interface QuotedDoc {
   name: string;
   tokens: number;
   costUsd: number;
+  /** Precio de setup comercial (valor real de la ingesta, ancla de la tarjeta). */
+  setupUsd: number;
   timeSec: number;
   aprobado: boolean;
   decision: string;
   saldo: number;
+  tipo?: string | null;
+  dentroCupo: boolean;
+  cupoRestante?: number | null;
+  /** Sin schema de catálogo: el worker lo generará → aviso honesto. */
+  tipoNoCubierto: boolean;
   advertencia?: string | null;
+  /** Banda A: precio de setup en MXN (FX Banxico congelado al cotizar). */
+  setupLocal?: number | null;
+}
+
+interface CotizacionLocal {
+  moneda: string;
+  precio_setup: number;
+  fx_fix: number;
+  fx_fecha: string;
+  fx_fuente: string;
+  margen: number;
 }
 
 interface UploadResponse {
   job_id: string;
   status: string;
+  tipo_documento?: string | null;
+  tipo_resuelto_por?: string;
   cotizacion: {
     tokens_documento: number;
     costo_estimado_usd: number;
+    costo_total_usd?: number;
     tiempo_estimado_seg: number;
     decision: string;
     aprobado: boolean;
     saldo_disponible_usd: number;
+    precio_setup_usd?: number;
+    dentro_de_cupo?: boolean;
+    cupo_restante?: number | null;
   };
+  cotizacion_local?: CotizacionLocal | null;
   advertencia?: string | null;
 }
 
@@ -75,29 +102,57 @@ export default function IngestaPage() {
 
   const hasActiveBatch = jobIds.length > 0;
 
+  // Plan del tenant → presentación de la cotización (freemium tacha el valor real
+  // y muestra Total $0.00). La moneda la decide la banda del tenant: el backend
+  // devuelve `cotizacion_local` (MXN para Banda A, FX Banxico congelado) por doc.
+  const [isFreemium, setIsFreemium] = useState(false);
+  useEffect(() => {
+    if (!token) return;
+    let alive = true;
+    getOrg(token)
+      .then((o) => alive && setIsFreemium(o?.plan === "freemium"))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [token]);
+
   // ── Cotización de lote agregada (saldo + hard cap de sesión) ────────────────
   const saldo = quotes.length > 0 ? quotes[0].saldo : null;
   const budget = Math.min(saldo ?? Infinity, SESSION_HARD_CAP_USD);
 
-  const { fitIds, totalCost, totalTime, overflowIds } = useMemo(() => {
+  // Banda A: el backend convierte el setup a MXN (FX congelado). Si algún quote trae
+  // `setupLocal`, la tarjeta y el resumen se muestran en MXN; si no, en USD (B/C).
+  const localCurrency: "USD" | "MXN" = quotes.some((q) => q.setupLocal != null) ? "MXN" : "USD";
+
+  const { fitIds, totalCost, totalSetup, totalSetupLocal, totalTime, overflowIds } = useMemo(() => {
     let cum = 0;
     const fit: string[] = [];
     const overflow: string[] = [];
     let cost = 0;
+    let setup = 0;
+    let setupLocal = 0;
     let time = 0;
     for (const q of quotes) {
       const next = cum + q.costUsd;
       if (q.aprobado && next <= budget) {
         cum = next;
         cost += q.costUsd;
+        setup += q.setupUsd;
+        setupLocal += q.setupLocal ?? 0;
         time += q.timeSec;
         fit.push(q.jobId);
       } else {
         overflow.push(q.jobId);
       }
     }
-    return { fitIds: fit, totalCost: cost, totalTime: time, overflowIds: overflow };
+    return { fitIds: fit, totalCost: cost, totalSetup: setup, totalSetupLocal: setupLocal, totalTime: time, overflowIds: overflow };
   }, [quotes, budget]);
+
+  const fmtSetup = (usd: number, local: number) =>
+    localCurrency === "MXN"
+      ? `$${Math.round(local).toLocaleString("es-MX")} MXN`
+      : `$${usd.toFixed(2)} USD`;
 
   async function onFiles(fileList: FileList) {
     const files = Array.from(fileList).slice(0, INGEST_BATCH_MAX);
@@ -116,11 +171,19 @@ export default function IngestaPage() {
             name: f.name,
             tokens: c.tokens_documento,
             costUsd: c.costo_estimado_usd,
+            setupUsd: c.precio_setup_usd ?? c.costo_estimado_usd,
             timeSec: c.tiempo_estimado_seg,
             aprobado: c.aprobado,
             decision: c.decision,
             saldo: c.saldo_disponible_usd,
+            tipo: r.tipo_documento ?? null,
+            dentroCupo: c.dentro_de_cupo ?? false,
+            cupoRestante: c.cupo_restante ?? null,
+            // worker_generara → no hubo match de catálogo: schema aún no optimizado.
+            tipoNoCubierto: r.tipo_resuelto_por === "worker_generara" || !r.tipo_documento,
             advertencia: r.advertencia,
+            // Banda A: el backend ya convirtió el setup a MXN (FX congelado).
+            setupLocal: r.cotizacion_local?.moneda === "MXN" ? r.cotizacion_local.precio_setup : null,
           } as QuotedDoc;
         }),
       );
@@ -186,6 +249,27 @@ export default function IngestaPage() {
     if (doc.consultUrl) router.push(doc.consultUrl);
   }
 
+  /** Reemplazar (§1.1.4): subir una versión nueva (in-place, decisión #11). Cierra
+   *  el lote actual y reabre el selector de archivos para re-ingerir. */
+  function replaceDoc() {
+    clear();
+    fileRef.current?.click();
+  }
+
+  /** Eliminar (§1.1.4) el documento vivo. El `doc_id` (SHA) viaja en consultUrl
+   *  (`/consulta?doc={sha}`). Tras borrar, sale de la lista (estado terminal). */
+  async function deleteLive(doc: DocProgress) {
+    const sha = doc.consultUrl?.split("doc=")[1];
+    if (sha) {
+      try {
+        await deleteDocumento(decodeURIComponent(sha), token as string);
+      } catch {
+        // el siguiente recorrido del admin reflejará el estado real del grafo
+      }
+    }
+    skip(doc.docId);
+  }
+
   const insufficient = saldo != null && quotes.some((q) => !q.aprobado);
   const overCap = overflowIds.length > 0 && quotes.every((q) => q.aprobado);
 
@@ -197,6 +281,8 @@ export default function IngestaPage() {
         onRetry={retry}
         onSkip={skip}
         onConsult={consult}
+        onReplace={replaceDoc}
+        onDelete={deleteLive}
         onMinimize={() => setMinimized(true)}
         onNewIngest={() => {
           clear();
@@ -271,8 +357,10 @@ export default function IngestaPage() {
           </div>
 
           {quoting && (
-            <div className="manual-note" style={{ marginTop: 14 }}>
-              <Icon name="loader" size={15} />
+            <div className="manual-note quoting" style={{ marginTop: 14 }} data-testid="quoting-spinner">
+              <span className="qc-spin">
+                <Icon name="loader" size={15} />
+              </span>
               {t("ingesta.page.quoting")}
             </div>
           )}
@@ -289,46 +377,54 @@ export default function IngestaPage() {
               <div className="quote">
                 <div className="qr2">
                   <span>{t("ingesta.page.costTotal")}</span>
-                  <b className="mono">${totalCost.toFixed(2)} USD</b>
+                  {isFreemium ? (
+                    <span className="qr2-free">
+                      <b className="mono qc-was">{fmtSetup(totalSetup, totalSetupLocal)}</b>
+                      <b className="mono">{localCurrency === "MXN" ? "$0 MXN" : "$0.00 USD"}</b>
+                    </span>
+                  ) : (
+                    <b className="mono">
+                      {localCurrency === "MXN" ? fmtSetup(totalSetup, totalSetupLocal) : `$${totalCost.toFixed(2)} USD`}
+                    </b>
+                  )}
                 </div>
                 <div className="qr2">
                   <span>{t("ingesta.page.timeTotal")}</span>
                   <b className="mono">~{Math.round(totalTime / 60)} min</b>
                 </div>
-                <div className="qr2">
-                  <span>{t("ingesta.page.balance")}</span>
-                  <b className={"mono " + (insufficient ? "warn" : "ok")}>
-                    {saldo != null ? `$${saldo.toFixed(2)} USD` : "—"}
-                  </b>
-                </div>
+                {!isFreemium && (
+                  <div className="qr2">
+                    <span>{t("ingesta.page.balance")}</span>
+                    <b className={"mono " + (insufficient ? "warn" : "ok")}>
+                      {saldo != null ? `$${saldo.toFixed(2)} USD` : "—"}
+                    </b>
+                  </div>
+                )}
               </div>
 
-              {/* Desglose por documento (real, por tiktoken) */}
-              <div className="ing-breakdown" style={{ marginTop: 12 }}>
+              {/* §1.1.2 — tarjeta de cotización por documento: el usuario VE el valor
+                  real de cada ingesta y aprueba (ancla de valor, gate de gasto). */}
+              <div className="quote-cards" style={{ marginTop: 12 }}>
                 {quotes.map((q) => {
                   const fits = fitIds.includes(q.jobId);
                   return (
-                    <div className="pre-doc" key={q.jobId}>
-                      <span className="pd-ic">
-                        <Icon name="file-text" size={16} />
-                      </span>
-                      <div className="pd-main">
-                        <div className="pd-name">{q.name}</div>
-                        <div className="pd-sub mono">
-                          {q.tokens.toLocaleString()} tok · ${q.costUsd.toFixed(2)} · ~
-                          {Math.max(1, Math.round(q.timeSec / 60))} min
-                          {!q.aprobado && ` · ${t("ingesta.page.rejected")}`}
-                          {q.aprobado && !fits && ` · ${t("ingesta.page.overCapDoc")}`}
-                        </div>
-                      </div>
-                      <button
-                        className="link-btn"
-                        onClick={() => removeDoc(q.jobId)}
-                        aria-label={t("ingesta.page.removeDoc")}
-                      >
-                        {t("ingesta.actions.remove")}
-                      </button>
-                    </div>
+                    <QuoteCard
+                      key={q.jobId}
+                      name={q.name}
+                      tipo={q.tipo}
+                      isFreemium={isFreemium}
+                      valueUsd={localCurrency === "MXN" ? (q.setupLocal ?? q.setupUsd) : q.setupUsd}
+                      totalUsd={localCurrency === "MXN" ? (q.setupLocal ?? q.costUsd) : q.costUsd}
+                      currency={localCurrency}
+                      saldoUsd={localCurrency === "USD" ? q.saldo : null}
+                      dentroCupo={q.dentroCupo}
+                      cupoRestante={q.cupoRestante}
+                      tipoNoCubierto={q.tipoNoCubierto}
+                      rejected={!q.aprobado}
+                      overCap={q.aprobado && !fits}
+                      advertencia={q.advertencia}
+                      onRemove={() => removeDoc(q.jobId)}
+                    />
                   );
                 })}
               </div>

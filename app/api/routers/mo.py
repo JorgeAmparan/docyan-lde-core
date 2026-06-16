@@ -84,6 +84,10 @@ class ConsultaRequest(BaseModel):
     segmento_critico: bool = False
     # B8: contexto de la consulta para clasificación + navegación de pipeline.
     entidad_id: str | None = None
+    # Documento activo del CoDo (documento suelto). Acota el retrieval a ese
+    # :DocumentoSource y segrega el caché PCL — sin él, una consulta puede citar el
+    # contenido de otro documento del mismo tenant (cross-citation, aislamiento).
+    documento_id: str | None = None
     token_qr: str | None = None
     tipo_documento: str | None = None
     criticidad: str | None = None
@@ -230,6 +234,7 @@ async def consultar(
             "segmento_critico": body.segmento_critico,
             "criticidad": body.criticidad,
             "entidad_id": body.entidad_id,
+            "documento_id": body.documento_id,
             "token_qr": body.token_qr,
             "tipo_documento": body.tipo_documento,
             "params": body.params,

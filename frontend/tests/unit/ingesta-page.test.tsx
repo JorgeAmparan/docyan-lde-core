@@ -50,6 +50,9 @@ beforeEach(async () => {
   postForm.mockReset();
   post.mockReset();
   get.mockReset();
+  // La página resuelve el plan del tenant (getOrg → GET /onboarding/org) para
+  // presentar la cotización (freemium tacha; pago muestra real). Plan pago aquí.
+  get.mockResolvedValue({ plan: "profesional", banda_mercado: "B" });
   useIngestStore.getState().clear();
   await i18n.changeLanguage("es");
 });
@@ -68,7 +71,8 @@ describe("IngestaPage — cotización real del backend", () => {
     postForm.mockResolvedValueOnce(quoteResponse("J1", 0.12));
     render(<IngestaPage />);
     pickFile();
-    await waitFor(() => expect(screen.getByText(/\$0\.12 USD/)).toBeInTheDocument());
+    // El monto real aparece (en el resumen del lote y en la tarjeta de cotización).
+    await waitFor(() => expect(screen.getAllByText(/\$0\.12 USD/).length).toBeGreaterThan(0));
     // El costo total del lote refleja la cotización real, no $58.40.
     expect(screen.queryByText(/58\.40/)).toBeNull();
   });
@@ -78,7 +82,7 @@ describe("IngestaPage — cotización real del backend", () => {
     post.mockResolvedValue({ encolado: true });
     render(<IngestaPage />);
     pickFile();
-    await waitFor(() => expect(screen.getByText(/\$0\.12 USD/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/\$0\.12 USD/).length).toBeGreaterThan(0));
 
     fireEvent.click(screen.getByRole("button", { name: /Confirmar e ingerir lote/i }));
     await waitFor(() => expect(post).toHaveBeenCalledWith(

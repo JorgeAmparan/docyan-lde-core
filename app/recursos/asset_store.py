@@ -22,6 +22,35 @@ from typing import Any
 ASSET_BUCKET = os.getenv("DOCYAN_ASSET_BUCKET", "docyan-assets")
 
 
+def almacenamiento_disponible(*, client: Any = None) -> bool:
+    """
+    ¿Se puede GUARDAR un asset ahora? Corto-circuito de costo (decisión Jorge
+    15-jun-2026): si el almacén no está disponible (p. ej. el bucket `docyan-assets`
+    no existe), NO se debe llamar a la visión por figura — no se paga un resultado
+    que no se puede guardar. Local (`DOCYAN_ASSET_DIR`) siempre disponible; Supabase:
+    el bucket debe existir. Ante CUALQUIER duda → False (no gastar). Best-effort,
+    una sola llamada barata (lista de buckets).
+    """
+    if os.getenv("DOCYAN_ASSET_DIR"):
+        return True
+    try:
+        if client is None:
+            from supabase import create_client
+
+            from app.core.supabase_client import require_supabase_config
+
+            url, key = require_supabase_config("asset_store", service=True)
+            client = create_client(url, key)
+        buckets = client.storage.list_buckets() or []
+        nombres = {
+            (getattr(b, "name", None) or (b.get("name") if isinstance(b, dict) else None))
+            for b in buckets
+        }
+        return ASSET_BUCKET in nombres
+    except Exception:  # noqa: BLE001 — ante la duda, NO gastar visión
+        return False
+
+
 def put_asset(tenant_id: str, nombre: str, data: bytes, *, client: Any = None) -> str:
     """
     Sube un asset y devuelve una URL servible. Supabase (público) en prod; local en

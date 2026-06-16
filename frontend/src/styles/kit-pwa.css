@@ -66,7 +66,28 @@
 .cite .brk::before,.cite .brk::after{content:"";position:absolute;top:0;bottom:0;width:4px;border:1.5px solid var(--cinnabar-500);}
 .cite .brk::before{left:0;border-right:none;border-radius:2px 0 0 2px;}
 .cite .brk::after{right:0;border-left:none;border-radius:0 2px 2px 0;}
-.acard-foot{display:flex;align-items:center;gap:6px;margin-top:12px;}
+.acard-foot{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:12px;}
+
+/* Cita en línea (Sprint UI-2 §1.2.7) — 3 niveles: chip → fragmento → documento.
+   `display:contents` deja al chip y al panel como hijos directos del `.acard-foot`,
+   así el panel (flex-basis:100%) baja a una fila completa bajo el chip. Gemelo
+   fiel del `.dc2-src` del demo público, con clases del kit PWA. */
+.cite-inline{display:contents;}
+.cite-empty{font-size:12px;color:var(--fg-muted);}
+.cite.open{background:var(--cinnabar-100);border-color:var(--cinnabar-300);}
+.ci-src{flex-basis:100%;width:100%;margin-top:10px;background:var(--amate-50);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 13px;animation:ci-rise .22s var(--ease-out);}
+@keyframes ci-rise{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+.ci-src .ci-head{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:7px;}
+.ci-src .ci-head svg{width:12px;height:12px;flex:none;}
+.ci-src .ci-span{font-family:var(--font-serif);font-size:13.5px;line-height:1.6;color:var(--ink-800,var(--fg));}
+.ci-src .ci-span mark{background:var(--cinnabar-100);color:var(--ink-900,var(--fg));padding:1px 3px;border-radius:3px;}
+.ci-src .ci-span.na{font-style:italic;color:var(--fg-subtle);}
+.ci-src .ci-actions{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);flex-wrap:wrap;}
+.ci-src .ci-ped{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-subtle);}
+.ci-src .ci-ped svg{width:12px;height:12px;flex:none;color:var(--success-600);}
+.ci-src .ci-open{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--fg-muted);background:transparent;border:1px dashed var(--border-strong);padding:5px 11px;border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap;transition:all var(--dur-fast) var(--ease-out);}
+.ci-src .ci-open:hover{color:var(--accent-fg);border-color:var(--cinnabar-300);border-style:solid;background:var(--cinnabar-50);}
+.ci-src .ci-open svg{width:13px;height:13px;flex:none;}
 .save-btn{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12.5px;font-weight:500;color:var(--fg-muted);background:transparent;border:1px solid var(--border);border-radius:var(--radius-md);padding:6px 11px;cursor:pointer;transition:all var(--dur-fast) var(--ease-out);}
 .save-btn:hover{border-color:var(--border-strong);background:var(--amate-50);}
 .save-btn.saved{color:var(--success-600);border-color:var(--success-100);background:var(--success-100);}

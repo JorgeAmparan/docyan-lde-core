@@ -71,8 +71,13 @@ export function IngestProgressRow({
   const vivo = completado && d?.disponibleParaConsulta === true;
   const sinDoc = completado && !vivo; // procesado pero no quedó vivo
   const done = vivo;
+  // Estado honesto + no-cobro (Pieza 6): si no rindió contenido consultable y NO se
+  // cobró, decirlo claro. `noCobrado` lo confirma el backend (reserva liberada).
+  const noCobrado = d?.noCobrado === true || d?.completedSinOntologia === true;
   const label = sinDoc
-    ? "Procesado, pero no quedó vivo. Reintenta la carga."
+    ? noCobrado
+      ? "Sin contenido consultable — no se te cobró. Reintenta la carga."
+      : "Procesado, pero no quedó vivo. Reintenta la carga."
     : STATUS_LABEL[status];
 
   return (

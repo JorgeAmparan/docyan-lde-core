@@ -267,6 +267,11 @@ class IngestPipeline:
         last_exc: Exception | None = None
         timeout_primario = False
 
+        # Pieza 4b — mide el USO REAL de litellm de TODA la extracción (capas 1/2/3)
+        # para comparar el gasto REAL vs el estimado, no solo el tier del modelo.
+        uso_cm = llm_config.medir_uso()
+        uso = uso_cm.__enter__()
+
         # Capa 1 + Capa 3: primario; ante EXCEPCIÓN escala al fallback de proveedor.
         secuencia = [(primary, "primaria")] + [(m, "fallback_proveedor") for m in prov_fallbacks]
         for model, capa in secuencia:
@@ -319,6 +324,9 @@ class IngestPipeline:
                 last_exc = exc
                 logger.warning("job %s: retry de calidad %s falló: %s", job.job_id, quality, exc)
 
+        # Cierra la medición de uso real (Pieza 4b) antes de cualquier salida.
+        uso_cm.__exit__(None, None, None)
+
         if ingest_result is None:
             raise RuntimeError(
                 f"job {job.job_id}: la extracción falló en las 3 capas "
@@ -327,10 +335,26 @@ class IngestPipeline:
             ) from last_exc
 
         # Visibilidad de costo (decisión Jorge #4): el cotizador estima contra la
-        # PRIMARIA (Flash). Si operó la capa 2/3, el costo real difiere → se registra
-        # la discrepancia en el job; NO se traslada al cliente (protección vigente).
+        # PRIMARIA (Flash). Si operó la capa 2/3, el costo real difiere.
         sin_ontologia = (getattr(ingest_result, "nodes_created", 0) or 0) == 0
-        costo_discrepancia = modelo_usado != primary
+
+        # Pieza 4b — `costo_discrepancia` REAL: compara el gasto REAL (response.usage
+        # acumulado por litellm) contra el estimado del cotizador, no solo el tier del
+        # modelo. Si no se capturó uso (litellm sin callback / tests), cae al
+        # comparador por tier (modelo != primario). NO se traslada al cliente: solo
+        # se registra para monitoreo (el saldo liquida la reserva estimada).
+        costo_estimado_usd = (
+            job.cotizacion.costo_estimado_usd if job.cotizacion is not None else 0.0
+        )
+        costo_real_usd = round(uso["cost_usd"], 6) if uso.get("calls") else None
+        _TOLERANCIA_DISCREPANCIA = 0.20  # 20% sobre lo estimado = discrepancia
+        if costo_real_usd is not None and costo_estimado_usd > 0:
+            costo_discrepancia = (
+                costo_real_usd > costo_estimado_usd * (1 + _TOLERANCIA_DISCREPANCIA)
+                or modelo_usado != primary
+            )
+        else:
+            costo_discrepancia = modelo_usado != primary  # fallback por tier (sin uso real)
 
         # B9.5 §1.0 — Bridge de procedencia + normalización: crea el :DocumentoSource
         # y las aristas/propiedades que los pipelines de lectura (B8) esperan para
@@ -401,7 +425,15 @@ class IngestPipeline:
             # corrió, contra qué se cotizó, y si hubo discrepancia de costo o ontología.
             "capa_extraccion": capa_extraccion,           # primaria|retry_calidad|fallback_proveedor
             "cotizado_contra": primary,                   # el cotizador estima contra la primaria
-            "costo_discrepancia": costo_discrepancia,     # True ⇒ corrió capa 2/3 (no se cobra al cliente)
+            "costo_discrepancia": costo_discrepancia,     # True ⇒ real > estimado×1.2 o corrió capa 2/3
+            # Pieza 4b — gasto REAL medido (response.usage) vs estimado, para monitoreo.
+            "costo_estimado_usd": round(costo_estimado_usd, 6),
+            "costo_real_usd": costo_real_usd,             # None ⇒ no se capturó uso (fallback por tier)
+            "tokens_reales": {
+                "prompt": uso.get("prompt_tokens", 0),
+                "completion": uso.get("completion_tokens", 0),
+                "llamadas": uso.get("calls", 0),
+            },
             "completed_sin_ontologia": sin_ontologia,     # True ⇒ 0 entidades incluso tras retry de calidad
             "completed_sin_documento": completed_sin_documento,  # True ⇒ NO quedó :DocumentoSource (no vivo)
             "documento_vivo": doc_vivo,                   # ÚNICA fuente de verdad de "vivo"

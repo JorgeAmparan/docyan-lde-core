@@ -29,20 +29,20 @@ def test_client():
 class EmptyPipelineReader:
     """Reader sintético vacío: los pipelines producen payloads válidos sin DKG."""
 
-    def informativa(self, t, term, e):
+    def informativa(self, t, term, e, d=None):
         return {"especificaciones": [], "termino": None, "definicion": None}
 
-    def procedimiento(self, t, term, e):
+    def procedimiento(self, t, term, e, d=None):
         return {"procedimiento_id": None, "titulo": "", "pasos": []}
 
-    def recurso_visual(self, t, term, e):
+    def recurso_visual(self, t, term, e, d=None):
         return {"recurso_id": None, "titulo": "", "etiquetas": [], "leyenda": []}
 
-    def video(self, t, term, e):
+    def video(self, t, term, e, d=None):
         return {"recurso_id": None, "titulo": "", "capitulos": [],
                 "subtitulos": [], "transcripcion": None}
 
-    def arbol_diagnostico(self, t, term, e, n):
+    def arbol_diagnostico(self, t, term, e, n, d=None):
         return {"arbol_id": None, "titulo": "", "nodo_actual_id": None,
                 "pregunta": None, "opciones": []}
 

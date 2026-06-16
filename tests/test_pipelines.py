@@ -11,14 +11,14 @@ from app.pipelines.registry import resolver_para
 
 
 class FakeReader:
-    def informativa(self, t, term, e):
+    def informativa(self, t, term, e, d=None):
         return {"especificaciones": [
             {"nombre": "Presión", "valor": "40", "unidad": "Nm",
              "documento_id": "d1", "documento_nombre": "NOM-052", "seccion": "5", "pagina": 3},
             {"nombre": "Presión máx", "valor": "60", "unidad": "Nm"},
         ], "termino": "Presión", "definicion": "fuerza por unidad de área"}
 
-    def procedimiento(self, t, term, e):
+    def procedimiento(self, t, term, e, d=None):
         return {"procedimiento_id": "p1", "titulo": "Montaje", "pasos": [
             {"orden": 2, "descripcion": "apretar", "epp": ["guantes"], "herramientas": ["llave"],
              "advertencias": ["cuidado"], "precondiciones": [], "postcondiciones": []},
@@ -26,18 +26,18 @@ class FakeReader:
              "advertencias": [], "precondiciones": ["equipo apagado"], "postcondiciones": []},
         ]}
 
-    def recurso_visual(self, t, term, e):
+    def recurso_visual(self, t, term, e, d=None):
         return {"recurso_id": "r1", "titulo": "Tablero", "recurso_url": "http://x/img.png",
                 "etiquetas": [{"texto": "Q1", "x": 0.1, "y": 0.2}],
                 "leyenda": [{"simbolo": "⏚", "significado": "tierra"}]}
 
-    def video(self, t, term, e):
+    def video(self, t, term, e, d=None):
         return {"recurso_id": "v1", "titulo": "Montaje", "video_url": "http://x/v.mp4",
                 "capitulos": [{"titulo": "Intro", "inicio_seg": 0}],
                 "subtitulos": [{"idioma": "es", "texto": "hola", "inicio_seg": 0, "fin_seg": 2}],
                 "transcripcion": "transcripción completa", "par_activo": "es"}
 
-    def arbol_diagnostico(self, t, term, e, n):
+    def arbol_diagnostico(self, t, term, e, n, d=None):
         return {"arbol_id": "a1", "titulo": "No enciende", "nodo_actual_id": "n1",
                 "pregunta": "¿hay energía?", "opciones": [
                     {"etiqueta": "no", "siguiente_nodo_id": "n2"},

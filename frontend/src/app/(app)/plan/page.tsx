@@ -7,23 +7,19 @@ import { Icon } from "@/components/icon";
 import { activarPlan } from "@/lib/onboarding";
 import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
+import { BANDS, BAND_KEYS, bandCurrency, tierPriceLocal, type BandKey, type TierKey } from "@/lib/bands";
 
 /**
  * Pantalla 5 (B13) — Onboarding Fase 2. Selección de plan (3 tiers · banda por
  * geolocalización) + criticidad del segmento (decisión #15, fija el umbral de
  * confianza) → activa el plan (`POST /onboarding/plan`). Portado de
- * `ui_kits/onboarding/plan.jsx`. Modelo comercial canónico del brief B13:
- * Esencial $250 / Profesional $550 / Enterprise desde $1,200 — banda A base, B +40%, C +50%.
+ * `ui_kits/onboarding/plan.jsx`. FUENTE ÚNICA de precio: `bands.ts` v2.1 — Banda A
+ * muestra MXN (tabla fija), B/C en USD; nada se recalcula con multiplicadores aquí.
  */
-const BANDS: Array<[string, string, string, number]> = [
-  ["A", "Base", "Norteamérica · Europa occidental", 1.0],
-  ["B", "+40%", "UK · Australia · Golfo", 1.4],
-  ["C", "+50%", "LatAm · mercados emergentes", 1.5],
-];
-const F2_PLANS = [
-  { name: "Esencial", key: "esencial", base: 250, from: false, rec: false, blurb: "Para un equipo o un CoDo.", feat: ["50 documentos vivos", "1 par lingüístico", "1 admin · colaboradores ilimitados", "Memoria reactiva + Playbooks A·B·C"] },
-  { name: "Profesional", key: "profesional", base: 550, from: false, rec: true, blurb: "Para operación multi-CoDo.", feat: ["300 documentos vivos", "3 pares lingüísticos", "3 admins · colaboradores ilimitados", "Métricas PCL + reportes EDB"] },
-  { name: "Enterprise", key: "enterprise", base: 1200, from: true, rec: false, blurb: "Para organizaciones reguladas a escala.", feat: ["Documentos ilimitados", "Pares lingüísticos ilimitados", "SLA 99.5% · soporte 24/7", "On-premise opcional"] },
+const F2_PLANS: Array<{ name: string; key: TierKey; from: boolean; rec: boolean; blurb: string; feat: string[] }> = [
+  { name: "Esencial", key: "esencial", from: false, rec: false, blurb: "Para un equipo o un CoDo.", feat: ["50 documentos vivos", "1 par lingüístico", "1 admin · colaboradores ilimitados", "Memoria reactiva + Playbooks A·B·C"] },
+  { name: "Profesional", key: "profesional", from: false, rec: true, blurb: "Para operación multi-CoDo.", feat: ["300 documentos vivos", "3 pares lingüísticos", "3 admins · colaboradores ilimitados", "Métricas PCL + reportes EDB"] },
+  { name: "Enterprise", key: "enterprise", from: true, rec: false, blurb: "Para organizaciones reguladas a escala.", feat: ["Documentos ilimitados", "Pares lingüísticos ilimitados", "SLA 99.5% · soporte 24/7", "On-premise opcional"] },
 ];
 /** Niveles canónicos de criticidad del segmento (decisión #15) → umbral de confianza. */
 const CRIT: Array<[string, string, string, number, string]> = [
@@ -34,20 +30,19 @@ const CRIT: Array<[string, string, string, number, string]> = [
   ["informativa", "Informativa", "Referencia general y contexto documental.", 0.6, "var(--success-600)"],
 ];
 
-const fmtUSD = (n: number) => "$" + n.toLocaleString("en-US");
-
 export default function PlanFase2Page() {
   const router = useRouter();
   const token = useAuth((s) => s.token);
   const [step, setStep] = useState(0); // 0 plan · 1 criticidad · 2 confirmar
-  const [band, setBand] = useState(0);
+  const [band, setBand] = useState<BandKey>("A");
   const [plan, setPlan] = useState(1);
   const [crit, setCrit] = useState(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const mult = BANDS[band][3];
-  const price = (base: number) => Math.round((base * mult) / 5) * 5;
+  const cur = bandCurrency(band); // MXN (Banda A, fija) | USD (B/C)
+  const fmtPrice = (k: TierKey) =>
+    "$" + tierPriceLocal(band, k).toLocaleString(cur === "MXN" ? "es-MX" : "en-US");
   const STEPS = ["Plan", "Criticidad", "Confirmar"];
 
   const activar = async () => {
@@ -60,7 +55,7 @@ export default function PlanFase2Page() {
           plan: F2_PLANS[plan].key,
           criticidad_segmento: CRIT[crit][0],
           doc_limit: null,
-          banda_mercado: BANDS[band][0],
+          banda_mercado: band,
         },
         token,
       );
@@ -102,16 +97,16 @@ export default function PlanFase2Page() {
         {step === 0 && (
           <>
             <div className="band-bar">
-              {BANDS.map((b, i) => (
-                <button key={b[0]} className={"bb" + (i === band ? " on" : "")} onClick={() => setBand(i)}>
-                  Banda {b[0]}
-                  <small>{b[1]}</small>
+              {BAND_KEYS.map((k) => (
+                <button key={k} className={"bb" + (k === band ? " on" : "")} onClick={() => setBand(k)}>
+                  Banda {k}
+                  <small>{BANDS[k].currency}</small>
                 </button>
               ))}
             </div>
             <p className="band-note">
               <Icon name="map-pin" size={14} />
-              Banda heredada por tu ubicación ({BANDS[band][2]}) · ajustable
+              Banda heredada por tu ubicación ({BANDS[band].regions.es}) · ajustable
             </p>
 
             <div className="plan-cards">
@@ -127,8 +122,8 @@ export default function PlanFase2Page() {
                   <div className="pblurb">{p.blurb}</div>
                   <div className="pp">
                     {p.from && <span className="pre">desde</span>}
-                    <span className="amt">{fmtUSD(price(p.base))}</span>
-                    <span className="per"> USD/mes</span>
+                    <span className="amt">{fmtPrice(p.key)}</span>
+                    <span className="per"> {cur}/mes</span>
                   </div>
                   <div className="psetup">Facturación mensual · 30 días de garantía</div>
                   <ul className="pfeat">
@@ -202,7 +197,7 @@ export default function PlanFase2Page() {
                 <span className="fs-v">
                   {F2_PLANS[plan].name}
                   <small>
-                    Banda {BANDS[band][0]} · {BANDS[band][1]}
+                    Banda {band} · {BANDS[band].regions.es}
                   </small>
                 </span>
               </div>
@@ -219,8 +214,8 @@ export default function PlanFase2Page() {
                   {F2_PLANS[plan].from ? "Desde" : "Total"} mensual
                 </span>
                 <span className="fs-v">
-                  {fmtUSD(price(F2_PLANS[plan].base))}
-                  <small>USD/mes · IVA según jurisdicción</small>
+                  {fmtPrice(F2_PLANS[plan].key)}
+                  <small>{cur}/mes · IVA según jurisdicción</small>
                 </span>
               </div>
             </div>

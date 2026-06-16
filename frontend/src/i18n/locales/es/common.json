@@ -87,6 +87,7 @@
     "doc": {
       "completed": "Completado",
       "completedAvailable": "Completado · disponible para consulta",
+      "completedNoDoc": "Procesado, pero no quedó documento vivo",
       "error": "Error · {{reason}}",
       "eta": "queda {{clock}}"
     },
@@ -129,7 +130,9 @@
       "newIngest": "Nueva ingesta",
       "minimize": "Minimizar",
       "viewProgress": "Ver progreso",
-      "consult": "Consultar →",
+      "consult": "Consultar",
+      "replace": "Reemplazar",
+      "delete": "Eliminar",
       "retry": "Reintentar",
       "skip": "Omitir",
       "remove": "Quitar"

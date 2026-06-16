@@ -36,7 +36,7 @@ def _cita(row: dict) -> Cita | None:
 
 def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPipeline:
     termino = ctx.params.get("termino", ctx.pregunta)
-    data = reader.informativa(ctx.tenant_id, termino, ctx.entidad_id)
+    data = reader.informativa(ctx.tenant_id, termino, ctx.entidad_id, ctx.documento_id)
     especs_raw = data.get("especificaciones") or []
 
     especificaciones = [

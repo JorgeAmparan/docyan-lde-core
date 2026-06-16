@@ -54,6 +54,11 @@ export interface DocProgress {
   disponibleParaConsulta?: boolean;
   // B13.3: job completado PERO sin :DocumentoSource (no quedó vivo) — estado visible.
   completedSinDocumento?: boolean;
+  // Pieza 6 — estados honestos: completó pero 0 ontología extraída; y si NO se cobró
+  // (la reserva se liberó por no rendir contenido consultable). La UI muestra el
+  // estado honesto + Retry: "sin contenido consultable, no se te cobró, reintenta".
+  completedSinOntologia?: boolean;
+  noCobrado?: boolean;
 }
 
 /** Construido EN EL CLIENTE agregando N DocProgress. NO es un endpoint. */

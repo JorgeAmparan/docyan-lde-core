@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type DiagramViewerPayload } from "../consult-data";
+import { CitaInline } from "./cita-inline";
+import { citaToSource, type DiagramViewerPayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
 /** Tipo 3 · Gráficos / Diagramas — etiquetas (pins x,y) sobre la imagen real del
@@ -25,7 +25,6 @@ export function GraficosViewer({
   const etiquetas = payload.etiquetas ?? [];
   const leyenda = payload.leyenda_simbolica ?? [];
   const cita = (payload.citas ?? [])[0] ?? null;
-  const label = citaLabel(cita);
 
   return (
     <div className="acard">
@@ -105,11 +104,7 @@ export function GraficosViewer({
         </ul>
       )}
       <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Sin cita de fuente</span>
-        )}
+        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} />
         <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>

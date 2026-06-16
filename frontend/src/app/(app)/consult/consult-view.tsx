@@ -45,6 +45,11 @@ export interface ConsultContext {
   tokenQr?: string;
   /** Entity id for /mo/query (when known). */
   entityId?: string;
+  /** Active document id for a loose-document CoDo. Forwarded to /mo/query as
+   *  documento_id so retrieval scopes to THIS document (and the PCL cache keys
+   *  on it) — without it, a query can cite another document of the same tenant
+   *  (cross-citation) and two loose docs collide in the cache. */
+  documentoId?: string;
 }
 
 interface Message {
@@ -52,6 +57,13 @@ interface Message {
   role: "user" | "answer";
   text?: string;
   answer?: Answer;
+}
+
+/** Un id "tipo hash" (SHA-256 de un documento suelto, u otra cadena hex larga sin
+ *  separadores legibles) NO se muestra al usuario: la cabecera de consulta usa el
+ *  nombre del CoDo en su lugar (DEF-4). Heurística: ≥16 chars hex contiguos. */
+function isHashLike(id: string): boolean {
+  return /[0-9a-f]{16,}/i.test(id.replace(/[^0-9a-z]/gi, ""));
 }
 
 /** The mode line: jade pulse "instantáneo · caché" or amber blinking "buscando…". */
@@ -162,17 +174,51 @@ export function ConsultView({
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // Chat persistente (Pieza 6): una SESIÓN por CoDo. El backend acumula el historial
+  // por session_id (multi-turno nativo del SDK); sin enviarlo, cada consulta sería
+  // stateless y el seguimiento perdería el contexto. Se crea al montar / al cambiar
+  // de CoDo (conversación nueva) y se reenvía en cada /mo/query.
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    let cancelado = false;
+    setSessionId(null);
+    setMsgs([]); // CoDo nuevo ⇒ conversación nueva
+    firstAnswerRef.current = false;
+    api
+      .post<{ session_id: string }>(
+        "/mo/sessions",
+        { session_type: "consulta", canal: "pwa" },
+        { token },
+      )
+      .then((r) => {
+        if (!cancelado) setSessionId(r.session_id);
+      })
+      .catch(() => {
+        // Sin sesión, la consulta sigue funcionando (stateless): no se bloquea el CoDo.
+        if (!cancelado) setSessionId(null);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [token, ctx.codo]);
   const [savedIds, setSavedIds] = useState<number[]>([]);
   const [source, setSource] = useState<SourceSpan | null>(null);
   const convoRef = useRef<HTMLDivElement>(null);
+  const idRef = useRef(0);
+  const nextId = () => (idRef.current += 1);
 
-  const appendAnswer = useCallback((label: string, a: Answer) => {
-    setMsgs((m) => [
-      ...m,
-      { id: Date.now(), role: "user", text: label },
-      { id: Date.now() + 1, role: "answer", answer: a },
-    ]);
+  // Fix lag del input (Sprint UI-2 §1.2.8): la burbuja del usuario se pinta AL
+  // INSTANTE al enviar (y se limpia el campo) — la respuesta del motor llega después.
+  // Antes ambas se agregaban juntas tras `await query`, así que el texto tardaba
+  // ~lo que tardara el backend en aparecer. El demo público ya lo hace instantáneo.
+  const appendUser = useCallback((label: string) => {
+    setMsgs((m) => [...m, { id: nextId(), role: "user", text: label }]);
     setText("");
+  }, []);
+
+  const appendAnswer = useCallback((a: Answer) => {
+    setMsgs((m) => [...m, { id: nextId(), role: "answer", answer: a }]);
     if (!firstAnswerRef.current) {
       firstAnswerRef.current = true;
       onFirstAnswerRef.current?.();
@@ -187,7 +233,9 @@ export function ConsultView({
           texto: label,
           canal: "pwa",
           entidad_id: ("entityId" in ctx && ctx.entityId) || undefined,
+          documento_id: ("documentoId" in ctx && ctx.documentoId) || undefined,
           token_qr: ("tokenQr" in ctx && ctx.tokenQr) || undefined,
+          session_id: sessionId ?? undefined,
           params,
         },
         { token },
@@ -195,37 +243,39 @@ export function ConsultView({
       const resuelta = res.resultado ?? (res as unknown as ConsultaResuelta);
       return mapResueltaToAnswer(resuelta, label);
     },
-    [ctx, token],
+    [ctx, token, sessionId],
   );
 
   /** Both free-text and suggestions hit the real MO; failure → honest error. */
   const askFree = useCallback(
     async (label: string) => {
+      appendUser(label); // pinta la pregunta al instante; la respuesta llega después
       setBusy(true);
       try {
-        appendAnswer(label, await query(label));
+        appendAnswer(await query(label));
       } catch {
-        appendAnswer(label, errorAnswer(label, "El motor no respondió. Reintenta en unos segundos."));
+        appendAnswer(errorAnswer(label, "El motor no respondió. Reintenta en unos segundos."));
       } finally {
         setBusy(false);
       }
     },
-    [appendAnswer, query],
+    [appendUser, appendAnswer, query],
   );
 
   /** Tipo 5 navigation — re-query the next decision node and append it. */
   const navigateNode = useCallback(
     async (nodoId: string) => {
+      appendUser("Continuar diagnóstico");
       setBusy(true);
       try {
-        appendAnswer("Continuar diagnóstico", await query("Continuar diagnóstico", { nodo_id: nodoId }));
+        appendAnswer(await query("Continuar diagnóstico", { nodo_id: nodoId }));
       } catch {
-        appendAnswer("Continuar diagnóstico", errorAnswer("Continuar diagnóstico", "No se pudo avanzar en el diagnóstico."));
+        appendAnswer(errorAnswer("Continuar diagnóstico", "No se pudo avanzar en el diagnóstico."));
       } finally {
         setBusy(false);
       }
     },
-    [appendAnswer, query],
+    [appendUser, appendAnswer, query],
   );
 
   useEffect(() => {
@@ -274,7 +324,17 @@ export function ConsultView({
         <div className="ctx-t">
           <div className="ctx-lab">Estás consultando</div>
           <div className="ctx-name">
-            <span className="ctx-codo">{ctx.codo}</span> · {ctx.entityName}
+            {/* DEF-4 (Sprint UI-2 §1.2.6): la cabecera muestra el NOMBRE del
+                documento/CoDo, jamás el SHA crudo. Para documentos sueltos el `id`
+                del CoDo es el SHA-256; si parece hash, se omite y se muestra solo
+                el nombre. Para entidades con código legible, se conserva. */}
+            {ctx.codo && !isHashLike(ctx.codo) ? (
+              <>
+                <span className="ctx-codo">{ctx.codo}</span> · {ctx.entityName}
+              </>
+            ) : (
+              ctx.entityName
+            )}
           </div>
         </div>
         {!embedded && (

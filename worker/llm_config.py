@@ -17,7 +17,97 @@ Variables: GEMINI_API_KEY (NO GOOGLE_API_KEY), OPENAI_API_KEY.
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import logging
 import os
+
+_log = logging.getLogger("docyan.worker.llm")
+
+# ── Tope de reintentos de LiteLLM (Pieza 4a) ──────────────────────────────────
+# Sin esto, el reintento por-chunk del GraphRAG-SDK / litellm bajo rate-limit NO
+# tiene tope de NUESTRO lado (incidente PoC: 1,506 reintentos amplificarían el
+# gasto sin gate). Fijamos un tope EXPLÍCITO y global de litellm. Configurable.
+LLM_NUM_RETRIES = max(0, int(os.getenv("INGEST_LLM_NUM_RETRIES", "2")))
+
+# Acumulador de USO REAL por job (Pieza 4b): un contextvar guarda los tokens/costo
+# reales que litellm reporta (`response.usage`) durante una corrida, para comparar
+# el gasto REAL vs el estimado — no solo el tier del modelo. Scoped por corrida con
+# `medir_uso()`; el callback de litellm suma sobre el acumulador activo (o nada si
+# no hay corrida midiendo). Best-effort: si no se captura, el pipeline cae al
+# comparador por tier (comportamiento previo), nunca rompe la ingesta.
+_usage_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "docyan_litellm_usage", default=None
+)
+_litellm_configured = False
+
+
+class _UsageLogger:
+    """CustomLogger de litellm: suma `response.usage` + costo al acumulador activo."""
+
+    def log_success_event(self, kwargs, response_obj, start_time, end_time) -> None:  # noqa: D401
+        acc = _usage_var.get()
+        if acc is None:
+            return
+        try:
+            usage = getattr(response_obj, "usage", None)
+            if usage is None and isinstance(response_obj, dict):
+                usage = response_obj.get("usage")
+            pt = getattr(usage, "prompt_tokens", None)
+            ct = getattr(usage, "completion_tokens", None)
+            if pt is None and isinstance(usage, dict):
+                pt, ct = usage.get("prompt_tokens"), usage.get("completion_tokens")
+            acc["prompt_tokens"] += int(pt or 0)
+            acc["completion_tokens"] += int(ct or 0)
+            acc["calls"] += 1
+            try:
+                import litellm
+
+                acc["cost_usd"] += float(
+                    litellm.completion_cost(completion_response=response_obj) or 0.0
+                )
+            except Exception:  # noqa: BLE001 — costo por-call best-effort
+                pass
+        except Exception:  # noqa: BLE001 — la medición jamás rompe la ingesta
+            pass
+
+    # litellm puede invocar también el evento async; delega al mismo acumulador.
+    async def async_log_success_event(self, kwargs, response_obj, start_time, end_time) -> None:
+        self.log_success_event(kwargs, response_obj, start_time, end_time)
+
+
+def configure_litellm() -> None:
+    """Fija el tope de reintentos global de litellm + registra el medidor de uso.
+    Idempotente (se puede llamar en cada build/startup sin reinstalar callbacks)."""
+    global _litellm_configured
+    if _litellm_configured:
+        return
+    try:
+        import litellm
+
+        litellm.num_retries = LLM_NUM_RETRIES
+        cbs = list(getattr(litellm, "callbacks", None) or [])
+        if not any(isinstance(c, _UsageLogger) for c in cbs):
+            cbs.append(_UsageLogger())
+            litellm.callbacks = cbs
+        _litellm_configured = True
+        _log.info("litellm configurado: num_retries=%d, medidor de uso activo", LLM_NUM_RETRIES)
+    except Exception as exc:  # noqa: BLE001 — sin litellm (tests) no es fatal
+        _log.debug("no se pudo configurar litellm: %s", type(exc).__name__)
+
+
+@contextlib.contextmanager
+def medir_uso():
+    """Contexto que mide el USO REAL de litellm de su bloque (Pieza 4b). Devuelve un
+    dict {prompt_tokens, completion_tokens, cost_usd, calls} que se llena conforme
+    litellm completa llamadas dentro del bloque."""
+    configure_litellm()
+    acc = {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0, "calls": 0}
+    tok = _usage_var.set(acc)
+    try:
+        yield acc
+    finally:
+        _usage_var.reset(tok)
 
 # CADENA CANÓNICA DE TRES CAPAS (decisión de Jorge, jun 2026). Cada capa es
 # overrideable por env, pero el DEFAULT es la decisión canónica:
@@ -111,6 +201,7 @@ def build_extraction_llm():
 
     model = extraction_model()
     _require_key_for_model(model)
+    configure_litellm()  # tope de reintentos global que el SDK también respeta
     return LiteLLM(model=model, temperature=0.0)
 
 
@@ -119,6 +210,7 @@ def build_qa_llm():
     from graphrag_sdk import LiteLLM
 
     _require_env("OPENAI_API_KEY")
+    configure_litellm()  # tope de reintentos global que el SDK también respeta
     return LiteLLM(model=LLM_CONFIG["qa_model"], temperature=0.0)
 
 
@@ -145,10 +237,12 @@ def complete_text(prompt: str, *, model: str | None = None, temperature: float =
 
     model = model or extraction_model()
     _require_key_for_model(model)
+    configure_litellm()
     resp = litellm.completion(
         model=model,
         messages=[{"role": "user", "content": prompt}],
         temperature=temperature,
+        num_retries=LLM_NUM_RETRIES,
     )
     return resp["choices"][0]["message"]["content"] or ""
 
@@ -163,9 +257,11 @@ def complete_vision(prompt: str, image_b64: str, *, model: str | None = None) ->
 
     model = model or extraction_model()
     _require_key_for_model(model)
+    configure_litellm()
     resp = litellm.completion(
         model=model,
         temperature=0.0,
+        num_retries=LLM_NUM_RETRIES,
         messages=[
             {
                 "role": "user",

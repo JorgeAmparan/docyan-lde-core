@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type VideoPlayerPayload } from "../consult-data";
+import { CitaInline } from "./cita-inline";
+import { citaToSource, type VideoPlayerPayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
 /** Tipo 4 · Video — recurso de apoyo (decisión B: no se analiza ni transcribe).
@@ -31,7 +31,6 @@ export function VideoPlayer({
   const [tab, setTab] = useState<"cap" | "tr">("cap");
   const hasTranscript = !!payload.transcripcion || subtitulos.length > 0;
   const cita = (payload.citas ?? [])[0] ?? null;
-  const label = citaLabel(cita);
 
   return (
     <div className="acard">
@@ -87,11 +86,7 @@ export function VideoPlayer({
         </div>
       )}
       <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Recurso de apoyo</span>
-        )}
+        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} emptyLabel="Recurso de apoyo" />
         <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>

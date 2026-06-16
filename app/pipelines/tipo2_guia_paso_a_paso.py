@@ -39,7 +39,7 @@ def _cita(data: dict) -> Cita | None:
 
 def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPipeline:
     termino = ctx.params.get("termino", ctx.pregunta)
-    data = reader.procedimiento(ctx.tenant_id, termino, ctx.entidad_id)
+    data = reader.procedimiento(ctx.tenant_id, termino, ctx.entidad_id, ctx.documento_id)
 
     pasos_raw = [p for p in (data.get("pasos") or []) if p and p.get("descripcion")]
     pasos_raw.sort(key=lambda p: p.get("orden") or 0)

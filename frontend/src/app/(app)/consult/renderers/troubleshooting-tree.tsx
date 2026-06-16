@@ -1,8 +1,8 @@
 "use client";
 
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type DiagnosticTreePayload } from "../consult-data";
+import { CitaInline } from "./cita-inline";
+import { citaToSource, type DiagnosticTreePayload } from "../consult-data";
 import { SaveBtn } from "./save-btn";
 
 /**
@@ -25,7 +25,6 @@ export function TroubleshootingTree({
 }) {
   const opciones = payload.opciones ?? [];
   const cita = (payload.citas ?? [])[0] ?? null;
-  const label = citaLabel(cita);
 
   return (
     <div className="acard">
@@ -68,11 +67,7 @@ export function TroubleshootingTree({
       )}
 
       <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Árbol de diagnóstico</span>
-        )}
+        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} emptyLabel="Árbol de diagnóstico" />
         <SaveBtn saved={saved} onSave={onSave} />
       </div>
     </div>

@@ -251,6 +251,7 @@ class MasterOrchestrator:
             tenant_id=ctx.tenant_id,
             pregunta=req.texto or "",
             entidad_id=payload.get("entidad_id"),
+            documento_id=payload.get("documento_id"),
             token_qr=payload.get("token_qr"),
             tipo_documento=payload.get("tipo_documento"),
             user_id=ctx.user_id,
@@ -260,6 +261,8 @@ class MasterOrchestrator:
         contexto_cache = {
             "token_qr": payload.get("token_qr"),
             "entidad_id": payload.get("entidad_id"),
+            # Segrega el caché por documento consultado (aislamiento, Pieza 1c).
+            "documento_id": payload.get("documento_id"),
             "tipo_documento": payload.get("tipo_documento"),
             "par_linguistico": ctx.par_linguistico,
         }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/components/icon";
-import { BANDS, fmtUSD } from "@/lib/bands";
+import { BANDS, bandCurrency, tierPriceLocal, type TierKey } from "@/lib/bands";
 import { useBand, useT } from "@/lib/site-i18n";
 import { Doors, GeoCtl } from "@/components/commercial/site-chrome";
 
@@ -20,11 +20,14 @@ export default function PreciosPage() {
   const t = useT();
   const { band } = useBand();
   const b = BANDS[band];
+  const cur = bandCurrency(band); // "MXN" para Banda A (tabla fija), "USD" para B/C
+  const fmtAmt = (n: number) => "$" + n.toLocaleString(cur === "MXN" ? "es-MX" : "en-US");
+  const price = (k: TierKey) => tierPriceLocal(band, k);
 
   const TIERS: Tier[] = [
     {
       key: "esencial", name: "Esencial", docs: { es: "hasta 50 documentos vivos", en: "up to 50 live documents" },
-      price: b.tiers.esencial, from: false,
+      price: price("esencial"), from: false,
       ing: { es: "Incluye 10 documentos de arranque + 3 al mes", en: "Includes 10 starter documents + 3 per month" },
       feats: [
         { es: "Todas las capacidades del producto", en: "Every product capability" },
@@ -35,7 +38,7 @@ export default function PreciosPage() {
     },
     {
       key: "profesional", name: "Profesional", docs: { es: "hasta 300 documentos vivos", en: "up to 300 live documents" },
-      price: b.tiers.profesional, from: false,
+      price: price("profesional"), from: false,
       ing: { es: "Incluye 30 documentos de arranque + 10 al mes", en: "Includes 30 starter documents + 10 per month" },
       feats: [
         { es: "Todo lo de Esencial", en: "Everything in Esencial" },
@@ -46,7 +49,7 @@ export default function PreciosPage() {
     },
     {
       key: "enterprise", name: "Enterprise", docs: { es: "300+ · a la medida", en: "300+ · tailored" },
-      price: b.tiers.enterprise, from: true,
+      price: price("enterprise"), from: true,
       ing: { es: "Documentos de arranque y cupo mensual negociados", en: "Starter documents and monthly quota negotiated" },
       feats: [
         { es: "Todo lo de Profesional", en: "Everything in Profesional" },
@@ -89,7 +92,10 @@ export default function PreciosPage() {
 
           <div className="band-bar">
             <GeoCtl showLang={false} />
-            <span className="band-note">{t({ es: "Precios en USD por organización, al mes. Banda según tu región — ajústala si hace falta.", en: "USD pricing per organization, monthly. Band set by your region — adjust if needed." })}</span>
+            <span className="band-note">{t({
+              es: `Precios en ${cur} por organización, al mes. Banda según tu región — ajústala si hace falta.`,
+              en: `${cur} pricing per organization, monthly. Band set by your region — adjust if needed.`,
+            })}</span>
           </div>
 
           <div className="tiers">
@@ -100,8 +106,8 @@ export default function PreciosPage() {
                 <span className="tdocs">{t(tier.docs)}</span>
                 <div className="tp">
                   {tier.from && <span className="per">{t({ es: "desde", en: "from" })}</span>}
-                  <span className="amt">{fmtUSD(tier.price)}</span>
-                  <span className="per">USD / {t({ es: "mes", en: "mo" })}</span>
+                  <span className="amt">{fmtAmt(tier.price)}</span>
+                  <span className="per">{cur} / {t({ es: "mes", en: "mo" })}</span>
                 </div>
                 <span className="tband">{t({ es: "Banda", en: "Band" })} {b.key} · {t(b.regions)}</span>
                 <ul className="tfeat">

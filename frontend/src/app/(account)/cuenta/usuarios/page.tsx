@@ -5,8 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
-import { REGIONS, fmtMoney } from "@/lib/pricing";
-import { useRegion } from "@/lib/region-store";
+import { CONTACT_EMAIL } from "@/lib/config";
 
 interface AdminUser {
   id: string;
@@ -16,7 +15,7 @@ interface AdminUser {
 }
 
 interface UsersData {
-  /** plan index drives the additional-seat cost: Profesional=seats[0], Enterprise=seats[1]. */
+  /** plan index: Esencial=0 (sin admins extra) · Profesional=1 · Enterprise=2. */
   plan_index: 0 | 1 | 2;
   included_seats: number;
   admins: AdminUser[];
@@ -33,7 +32,6 @@ const FALLBACK: UsersData = {
 
 export default function UsuariosPage() {
   const token = useAuth((s) => s.token);
-  const region = useRegion((s) => s.region);
   const [newEmail, setNewEmail] = useState("");
 
   const { data } = useQuery({
@@ -44,9 +42,10 @@ export default function UsuariosPage() {
   });
   const d = data ?? FALLBACK;
 
-  const r = REGIONS[region];
-  // seats: [Profesional, Enterprise]; Esencial has no additional seats.
-  const seatCost = d.plan_index === 0 ? null : r.seats[d.plan_index === 1 ? 0 : 1];
+  // El plan permite admins adicionales a partir de Profesional. El PRECIO por seat
+  // adicional NO se publica en el modelo v2.1 (precio por documentos vivos, usuarios
+  // ilimitados) → se cotiza al contacto, no se inventa una cifra por región.
+  const allowsExtra = d.plan_index > 0;
   const overIncluded = Math.max(0, d.admins.length - d.included_seats);
 
   return (
@@ -57,11 +56,11 @@ export default function UsuariosPage() {
         <Icon name="users" size={20} color="var(--cinnabar-600)" />
         <div style={{ fontSize: 13.5, color: "var(--fg-muted)" }}>
           {d.included_seats} admins incluidos en tu plan.{" "}
-          {seatCost !== null
-            ? `Seat adicional: ${fmtMoney(seatCost, region)}/mes.`
+          {allowsExtra
+            ? "Admins adicionales se cotizan con tu ejecutivo de cuenta."
             : "Tu plan no permite admins adicionales (sube a Profesional)."}
-          {overIncluded > 0 && seatCost !== null && (
-            <strong> {overIncluded} seat(s) adicional(es) facturándose.</strong>
+          {overIncluded > 0 && allowsExtra && (
+            <strong> {overIncluded} seat(s) adicional(es) por confirmar.</strong>
           )}
         </div>
       </div>
@@ -135,10 +134,10 @@ export default function UsuariosPage() {
             Invitar
           </button>
         </div>
-        {seatCost !== null && (
+        {allowsExtra && (
           <p style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 10 }}>
-            Si superas los {d.included_seats} incluidos, cada admin adicional cuesta{" "}
-            {fmtMoney(seatCost, region)}/mes.
+            Si superas los {d.included_seats} incluidos, los admins adicionales se cotizan
+            con tu ejecutivo de cuenta (<a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>).
           </p>
         )}
       </div>

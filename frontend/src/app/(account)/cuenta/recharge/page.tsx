@@ -5,9 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
-import { STRIPE_ENABLED, CONTACT_EMAIL } from "@/lib/config";
-import { RECHARGE_PRESETS_USD, fmtMoney } from "@/lib/pricing";
-import { useRegion } from "@/lib/region-store";
+import { STRIPE_ENABLED, CONTACT_EMAIL, RECHARGE_PRESETS_USD } from "@/lib/config";
+
+/** El saldo de ingesta es en USD (gate de cómputo del cotizador, sin conversión). */
+const fmtMoneyUSD = (n: number) => "$" + n.toLocaleString("en-US") + " USD";
 
 interface RechargeData {
   balance_usd: number;
@@ -28,7 +29,6 @@ const FALLBACK: RechargeData = {
 
 export default function RechargePage() {
   const token = useAuth((s) => s.token);
-  const region = useRegion((s) => s.region);
   const [selected, setSelected] = useState<number>(RECHARGE_PRESETS_USD[1]);
 
   const { data } = useQuery({
@@ -39,7 +39,7 @@ export default function RechargePage() {
   });
   const d = data ?? FALLBACK;
   const mailto = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-    `Recarga de saldo de ingesta (${fmtMoney(selected, region)})`,
+    `Recarga de saldo de ingesta (${fmtMoneyUSD(selected)})`,
   )}`;
 
   return (
@@ -82,21 +82,21 @@ export default function RechargePage() {
               role="radio"
               aria-checked={selected === amt}
             >
-              {fmtMoney(amt, region)}
+              {fmtMoneyUSD(amt)}
             </button>
           ))}
         </div>
 
         {STRIPE_ENABLED ? (
           <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} type="button">
-            Recargar {fmtMoney(selected, region)}
+            Recargar {fmtMoneyUSD(selected)}
             <Icon name="arrow-right" size={16} />
           </button>
         ) : (
           <>
             <a className="btn primary" style={{ width: "100%", justifyContent: "center" }} href={mailto}>
               <Icon name="mail" size={16} />
-              Solicitar recarga de {fmtMoney(selected, region)}
+              Solicitar recarga de {fmtMoneyUSD(selected)}
             </a>
             <div
               style={{
