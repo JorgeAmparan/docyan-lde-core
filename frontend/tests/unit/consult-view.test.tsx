@@ -25,7 +25,15 @@ function ctx(over: Partial<ConsultContext> = {}): ConsultContext {
   };
 }
 
-beforeEach(() => post.mockReset());
+// La vista crea una sesión de chat (`POST /mo/sessions`) al montar; el mock por
+// defecto la resuelve para no romper el effect. Los tests que ejercitan la consulta
+// sobreescriben el comportamiento de las DEMÁS llamadas.
+beforeEach(() => {
+  post.mockReset();
+  post.mockImplementation((url: string) =>
+    url === "/mo/sessions" ? Promise.resolve({ session_id: "s1" }) : Promise.resolve({}),
+  );
+});
 
 describe("ConsultView — DEF-4 (§1.2.6): nunca el SHA crudo en la cabecera", () => {
   it("muestra el nombre del CoDo, no el hash", () => {
@@ -47,7 +55,10 @@ describe("ConsultView — lag del input (§1.2.8): la pregunta se pinta al insta
     // La respuesta del motor queda PENDIENTE (deferred): si la pregunta dependiera
     // de ella, no se vería. Debe verse igual al instante; la respuesta llega después.
     let resolveQuery: (v: unknown) => void = () => {};
-    post.mockReturnValue(new Promise((r) => { resolveQuery = r; }));
+    post.mockImplementation((url: string) =>
+      url === "/mo/sessions"
+        ? Promise.resolve({ session_id: "s1" })
+        : new Promise((r) => { resolveQuery = r; }));
     render(<ConsultView context={ctx()} />);
     const input = screen.getByPlaceholderText(/Pregunta sobre este equipo/i) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "¿Cuál es el torque?" } });
