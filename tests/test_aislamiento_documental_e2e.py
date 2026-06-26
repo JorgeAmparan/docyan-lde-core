@@ -87,6 +87,34 @@ def test_aislamiento_doc_a_cita_a_doc_b_cita_b():
     assert a != b
 
 
+def test_glosario_termino_tecnico_no_fuga_entre_documentos():
+    """El glosario (`:TerminoTecnico`) también se acota: consultar el doc A por un
+    término que SOLO existe en el doc B no debe devolver la definición de B
+    (fuga del campo secundario `definicion`, detectada en auditoría 25-jun)."""
+    c = _client_or_skip()
+    os.environ.pop("EMBEDDER_URL", None)
+    os.environ.pop("BGE_M3_URL", None)
+    c.query(TENANT, "MATCH (n) DETACH DELETE n")
+    c.query(
+        TENANT,
+        """
+        CREATE (dA:DocumentoSource {id:'docA', nombre_archivo:'A.pdf', tipo_documento:'ficha'})
+        CREATE (dB:DocumentoSource {id:'docB', nombre_archivo:'B.pdf', tipo_documento:'msds'})
+        CREATE (tB:TerminoTecnico {termino:'electronegatividad', definicion:'SOLO-EN-DOC-B'})
+        CREATE (dB)-[:CONTIENE]->(tB)
+        """,
+    )
+    from app.pipelines.dkg_reader import DKGReader
+
+    reader = DKGReader(client=c, embedder=None)
+    out = reader.informativa(TENANT, "electronegatividad", None, "docA")
+    assert out.get("definicion") != "SOLO-EN-DOC-B", "fuga: docA devolvió el glosario de docB"
+    assert out.get("definicion") is None and out.get("termino") is None
+    # Consultar el doc dueño SÍ lo encuentra (el scope no rompe el caso legítimo).
+    own = reader.informativa(TENANT, "electronegatividad", None, "docB")
+    assert own.get("definicion") == "SOLO-EN-DOC-B"
+
+
 def test_sin_scope_ve_ambos_demuestra_que_el_scope_aisla():
     """Sin documento_id (compat), el retrieval ve AMBOS docs: confirma que es el
     SCOPE —no otra cosa— lo que produce el aislamiento."""

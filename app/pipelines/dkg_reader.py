@@ -469,17 +469,22 @@ class DKGReader:
         # Integridad de cita: VERBATIM del documento anclado en el término real del dato.
         self._hidratar_fragmentos(tenant_id, especs)
 
+        # Aislamiento: el glosario (`:TerminoTecnico`) también se acota al documento/
+        # entidad consultados. Sin scope, consultar el doc A podía devolver la
+        # `definicion` de un término que solo existe en el doc B del mismo tenant
+        # (fuga cruzada en el campo secundario de definición — confirmada en auditoría).
+        scope_tt = self._scope_prefix("tt", "TerminoTecnico", documento_id, entidad_id)
         termino_def = self.client.query(
             tenant_id,
-            """
-            MATCH (tt:TerminoTecnico)
+            f"""
+            {scope_tt}
             WHERE size($toks) = 0
                OR ANY(w IN $toks WHERE toLower(coalesce(tt.termino,'')) CONTAINS w
                                       OR toLower(coalesce(tt.definicion,'')) CONTAINS w)
             RETURN tt.termino AS termino, tt.definicion AS definicion
             LIMIT 1
             """,
-            {"toks": toks},
+            {"toks": toks, "doc_id": documento_id, "eid": entidad_id},
         )
         td = termino_def[0] if termino_def else {}
         return {
