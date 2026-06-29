@@ -1,0 +1,100 @@
+/* ============================================================================
+   kit-plan.css — Vista "Plan" de la organización (PlanView)
+   Portado VERBATIM del prototipo (DOCYAN LDE — Design System):
+     · app.css        → .wrap · .btn / .btn-primary / .btn-ghost · .mini-btn
+     · views.css      → .panel · .sec-h2 · .field2 · .badge
+     · cotizador.css  → .banda-bar / .banda-lab / .banda-seg / .banda-chip
+                        .planes4 / .plan4 / .p4-* · .mp-* · .codigo-row / .codigo-input
+   Todo SCOPEADO bajo `.plan-view` para no colisionar con kit-admin.css ni globals.
+   El import lo agrega el padre (globals.css); NO editar globals.css aquí.
+   ========================================================================== */
+
+/* ---- layout base (app.css) ---- */
+.plan-view .wrap { max-width: 1020px; margin: 0 auto; }
+
+/* ---- botones (app.css) ---- */
+.plan-view .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13.5px; font-weight: 600; border-radius: 8px; padding: 11px 17px; cursor: pointer; border: 1px solid transparent; }
+.plan-view .btn .lic { width: 16px; height: 16px; }
+.plan-view .btn-primary { background: var(--cinnabar-500); color: #fff; }
+.plan-view .btn-primary:hover { background: var(--cinnabar-600); box-shadow: var(--shadow-cinnabar); }
+.plan-view .btn-primary:disabled { background: var(--amate-300); color: var(--amate-50); cursor: not-allowed; box-shadow: none; }
+.plan-view .btn-ghost { background: var(--surface); color: var(--fg-muted); border-color: var(--border-strong); }
+.plan-view .btn-ghost:hover { background: var(--amate-100); color: var(--fg); }
+.plan-view .btn-ghost:disabled { opacity: .6; cursor: not-allowed; }
+.plan-view .btn-primary.danger { background: var(--danger-600); color: #fff; }
+.plan-view .mini-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--fg-muted); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; padding: 7px 11px; cursor: pointer; }
+.plan-view .mini-btn:hover { background: var(--amate-100); color: var(--fg); }
+.plan-view .mini-btn .lic { width: 14px; height: 14px; }
+
+/* ---- contenedores y encabezados (views.css) ---- */
+.plan-view .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow-xs); }
+.plan-view .sec-h2 { display: flex; align-items: center; margin: 0 0 14px; }
+.plan-view .sec-h2 h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.plan-view .sec-h2 .cnt { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); margin-left: auto; }
+.plan-view .field2 { margin-bottom: 14px; }
+.plan-view .field2 label { display: block; font-size: 12.5px; font-weight: 500; margin-bottom: 6px; }
+
+/* ---- badge (views.css) ---- */
+.plan-view .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 999px; }
+.plan-view .badge.warn { background: var(--warning-100); color: var(--warning-600); }
+.plan-view .badge.ok { background: var(--success-100); color: var(--success-600); }
+
+/* ---- bandas de precio (cotizador.css) ---- */
+.plan-view .banda-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.plan-view .banda-lab { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--fg-muted); }
+.plan-view .banda-lab .lic { color: var(--fg-subtle); }
+.plan-view .banda-seg { display: flex; gap: 7px; flex-wrap: wrap; }
+.plan-view .banda-chip { font-size: 12px; font-weight: 500; color: var(--fg-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; transition: all .15s; }
+.plan-view .banda-chip:hover { border-color: var(--border-strong); }
+.plan-view .banda-chip.on { background: var(--cinnabar-50); border-color: var(--cinnabar-300); color: var(--accent-fg); }
+
+/* ---- planes (cotizador.css) ---- */
+.plan-view .planes4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.plan-view .plan4 { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 16px; display: flex; flex-direction: column; box-shadow: var(--shadow-xs); }
+.plan-view .plan4.rec { border-color: var(--cinnabar-300); }
+.plan-view .plan4.on { border-color: var(--cinnabar-400); box-shadow: 0 0 0 2px var(--cinnabar-100, color-mix(in oklab, var(--cinnabar-400) 22%, white)); }
+.plan-view .p4-tag { position: absolute; top: -9px; left: 16px; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: #fff; background: var(--cinnabar-600); border-radius: 999px; padding: 3px 10px; }
+.plan-view .p4-tag.rec { background: var(--ink-900, var(--fg)); }
+.plan-view .p4-name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.plan-view .p4-docs { font-size: 11.5px; color: var(--fg-muted); margin-top: 3px; }
+.plan-view .p4-price { font-size: 26px; font-weight: 700; margin: 8px 0 1px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 3px; flex-wrap: wrap; }
+.plan-view .p4-price small { font-size: 13px; font-weight: 500; color: var(--fg-muted); }
+.plan-view .p4-from { font-size: 11px; font-weight: 500; color: var(--fg-muted); margin-right: 2px; }
+.plan-view .p4-band { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .02em; color: var(--fg-subtle); margin-bottom: 8px; }
+.plan-view .p4-cupo { font-size: 11.5px; color: var(--accent-fg); background: var(--cinnabar-50); border-radius: 7px; padding: 6px 9px; margin: 0 0 10px; line-height: 1.35; }
+.plan-view .p4-cupo b { font-weight: 700; }
+.plan-view .p4-blurb { font-size: 12px; color: var(--fg-muted); margin-bottom: 12px; line-height: 1.4; }
+.plan-view .p4-feats { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; flex: 1; }
+.plan-view .p4-f { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--fg); line-height: 1.35; }
+.plan-view .p4-f .lic { color: var(--success-600); flex: none; margin-top: 1px; }
+@media (max-width: 1080px) { .plan-view .planes4 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .plan-view .planes4 { grid-template-columns: 1fr; } }
+
+/* ---- método de pago (cotizador.css) ---- */
+.plan-view .mp-form { background: var(--amate-50); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.plan-view .mp-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.plan-view .mp-row { display: flex; align-items: center; gap: 11px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.plan-view .mp-row:last-of-type { border-bottom: none; }
+.plan-view .mp-ic { width: 34px; height: 34px; border-radius: 8px; background: var(--amate-100); color: var(--fg-muted); display: flex; align-items: center; justify-content: center; flex: none; }
+.plan-view .mp-n { font-size: 13.5px; font-weight: 600; }
+.plan-view .mp-m { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-subtle); margin-top: 2px; }
+.plan-view .mp-link { font-size: 12px; color: var(--accent-fg); font-weight: 500; background: none; border: none; cursor: pointer; padding: 6px 8px; border-radius: 7px; }
+.plan-view .mp-link:hover { background: var(--cinnabar-50); }
+.plan-view .mp-del { width: 30px; height: 30px; border-radius: 7px; background: none; border: 1px solid transparent; color: var(--fg-subtle); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.plan-view .mp-del:hover { background: var(--danger-100, color-mix(in oklab, var(--danger-600) 12%, white)); color: var(--danger-600); }
+.plan-view .mp-info { display: flex; align-items: flex-start; gap: 9px; font-size: 11.5px; color: var(--fg-muted); line-height: 1.5; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.plan-view .mp-info .lic { flex: none; margin-top: 1px; color: var(--fg-subtle); }
+
+/* ---- código de acceso (cotizador.css) ---- */
+.plan-view .codigo-row { display: flex; gap: 10px; }
+.plan-view .codigo-input { flex: 1; height: 42px; border: 1px solid var(--border-strong); border-radius: 9px; padding: 0 14px; font-family: var(--font-mono); font-size: 13px; letter-spacing: .04em; color: var(--fg); background: var(--surface); text-transform: uppercase; }
+.plan-view .codigo-input:focus { outline: none; border-color: var(--cinnabar-400); }
+.plan-view .codigo-input::placeholder { color: var(--fg-subtle); letter-spacing: .04em; }
+
+/* ---- error inline (cambio de plan) ---- */
+.plan-view .warn { font-size: 13px; color: var(--danger-600); }
+
+/* ---- pie del modal de confirmación (Radix portaliza fuera de .plan-view) ---- */
+.plan-modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.primary-btn.plan-modal-danger { background: var(--danger-600); }
+.primary-btn.plan-modal-danger:hover { background: var(--danger-700, var(--danger-600)); }

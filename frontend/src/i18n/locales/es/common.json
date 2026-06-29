@@ -38,8 +38,8 @@
   "theme": { "light": "Claro", "dark": "Oscuro" },
   "ingesta": {
     "page": {
-      "quoteTitle": "Cotización pre-ingesta",
-      "aboutTitle": "Gate financiero",
+      "quoteTitle": "Análisis del lote",
+      "aboutTitle": "Resumen de la ingesta",
       "gateNote": "Cada documento se cotiza con tiktoken y se verifica contra tu saldo y los hard caps ANTES de procesar. Sin confirmación no hay ingesta.",
       "dropzone": "Arrastra hasta {{max}} documentos o selecciona",
       "formats": "PDF · DOCX · XLSX · imágenes con OCR",
@@ -52,10 +52,7 @@
       "rejected": "rechazado por saldo/cap",
       "overCapDoc": "fuera del cap de sesión",
       "removeDoc": "Quitar documento del lote",
-      "insufficient": "Saldo insuficiente para algunos documentos del lote.",
       "capExceeded": "Caben {{fit}} de {{total}} documentos dentro del límite de sesión (${{cap}} USD). Quita documentos o ajusta el cap antes de confirmar.",
-      "recharge": "Recargar saldo →",
-      "contactRecharge": "Contactar a DOCYAN para recargar saldo →",
       "confirmBatch": "Confirmar e ingerir lote ({{n}})",
       "confirming": "Encolando lote…"
     },

@@ -38,7 +38,8 @@ beforeEach(() => {
 describe("ConsultView — DEF-4 (§1.2.6): nunca el SHA crudo en la cabecera", () => {
   it("muestra el nombre del CoDo, no el hash", () => {
     render(<ConsultView context={ctx()} />);
-    expect(screen.getByText("Estás consultando")).toBeInTheDocument();
+    // Shell-A (prototipo): la cabecera usa el eyebrow "Consultando".
+    expect(screen.getByText(/Consultando/)).toBeInTheDocument();
     expect(screen.getAllByText(/Calibración Q1\.pdf/).length).toBeGreaterThan(0);
     // El SHA crudo no aparece por ningún lado de la cabecera.
     expect(screen.queryByText(new RegExp(SHA))).toBeNull();
@@ -46,7 +47,8 @@ describe("ConsultView — DEF-4 (§1.2.6): nunca el SHA crudo en la cabecera", (
 
   it("conserva un código legible cuando NO es un hash", () => {
     render(<ConsultView context={ctx({ codo: "CODO-A12" })} />);
-    expect(screen.getByText("CODO-A12")).toBeInTheDocument();
+    // El eyebrow combina "Consultando · CODO-A12" en un nodo; basta el substring.
+    expect(screen.getByText(/CODO-A12/)).toBeInTheDocument();
   });
 });
 
@@ -60,7 +62,7 @@ describe("ConsultView — lag del input (§1.2.8): la pregunta se pinta al insta
         ? Promise.resolve({ session_id: "s1" })
         : new Promise((r) => { resolveQuery = r; }));
     render(<ConsultView context={ctx()} />);
-    const input = screen.getByPlaceholderText(/Pregunta sobre este equipo/i) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/Pregunta sobre/i) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "¿Cuál es el torque?" } });
     fireEvent.submit(input.closest("form")!);
     // Instantáneo: la burbuja está en el DOM y el campo se limpió, con el motor aún pendiente.

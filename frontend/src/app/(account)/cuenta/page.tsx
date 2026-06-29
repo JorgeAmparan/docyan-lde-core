@@ -143,26 +143,28 @@ export default function ResumenPage() {
           </div>
         </div>
         <div className="ucard">
-          <div className="ul">Saldo de ingesta</div>
-          <div className="uv">
-            ${s.saldo_actual_usd.toFixed(2)} {s.moneda}
-          </div>
+          <div className="ul">Cupo de ingestas</div>
+          <div className="uv" style={{ fontSize: 15, fontWeight: 600 }}>Incluido en tu plan</div>
           <div className="ud" style={{ marginTop: 8 }}>
-            {isFreemium ? "Saldo de cortesía de tu cuenta gratuita" : "Saldo disponible para ingesta"}
+            {isFreemium
+              ? "Tu cuenta gratuita ingiere sin costo dentro del límite; sin saldo prepagado."
+              : "Tu plan incluye ingestas sin costo cada mes; los adicionales se cotizan desde $15 antes de cobrar. Sin saldo prepagado."}
           </div>
         </div>
       </div>
 
+      {/* Modelo comercial vigente (cotizador.md): cupo + excedente cotizado + método
+          de pago. NADA de saldo prepagado / "recargar" — eso se eliminó. */}
       <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <Icon name="wallet" size={20} color="var(--cinnabar-600)" />
+        <Icon name="credit-card" size={20} color="var(--cinnabar-600)" />
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Recargar saldo de ingesta</div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Plan y método de pago</div>
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-            Para procesar más documentos cuando lo necesites.
+            Gestiona tu plan, tu cupo de ingestas y tu método de pago (tarjeta / SPEI).
           </div>
         </div>
-        <Link href="/cuenta/recharge" className="btn primary" style={{ marginLeft: "auto" }}>
-          Recargar
+        <Link href="/plan" className="btn primary" style={{ marginLeft: "auto" }}>
+          Ir a Plan
         </Link>
       </div>
     </>

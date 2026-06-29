@@ -1,0 +1,7 @@
+{
+  "demo-maxi": [
+    { "path": "docs/demo/maxi10_ficha_tecnica.pdf", "tipo": "ficha_tecnica", "nombre": "Ficha técnica — MAXI-10ND" },
+    { "path": "docs/demo/maxi10_operacion.pdf", "tipo": "manual_tecnico", "nombre": "Manual de operación — MAXI-10ND" },
+    { "path": "docs/demo/maxi10_partes.pdf", "tipo": "especificacion", "nombre": "Lista de partes — MAXI-10ND" }
+  ]
+}

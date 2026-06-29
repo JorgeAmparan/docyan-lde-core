@@ -38,10 +38,13 @@ vi.mock("@/lib/auth", () => ({
   useAuth: (sel: (s: { token: string; user: unknown }) => unknown) =>
     sel({ token: "t", user: { name: "Admin", role: "admin" } }),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => "/documentos",
+}));
 // Aísla la página: shell y progreso a stubs (sus deps no son el objeto de la prueba).
-vi.mock("@/components/onboarding/product-shell", () => ({
-  ProductShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+vi.mock("@/components/org-shell", () => ({
+  OrgShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@/components/ingesta/ingest-progress-row", () => ({
   IngestProgressRow: () => <div data-testid="progress-row" />,

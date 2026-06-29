@@ -9,7 +9,6 @@ import { useAuth } from "@/lib/auth";
 const NAV: Array<[string, string, string]> = [
   ["layout-dashboard", "Resumen", "/cuenta"],
   ["receipt", "Facturación", "/cuenta/facturacion"],
-  ["wallet", "Recargar saldo", "/cuenta/recharge"],
   ["users", "Usuarios", "/cuenta/usuarios"],
   ["lock", "Seguridad", "/cuenta/seguridad"],
   ["bell", "Notificaciones", "/cuenta/notificaciones"],

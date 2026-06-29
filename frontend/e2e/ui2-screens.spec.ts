@@ -52,9 +52,9 @@ for (const [tag, vp] of [["desktop", DESKTOP], ["mobile", MOBILE]] as const) {
     await page.getByRole("button", { name: /Enviar/i }).click();
     await page.locator(".big").first().waitFor();
     await page.screenshot({ path: `${DIR}/consulta-respuesta-${tag}.png`, fullPage: true });
-    // Nivel 2: desplegar el fragmento verbatim EN LÍNEA.
-    await page.locator(".cite").first().click();
-    await page.getByTestId("cita-inline-fragment").waitFor();
+    // Nivel 2: el fragmento verbatim EN LÍNEA se auto-revela (~340ms, fiel al
+    // prototipo); basta esperarlo (un click lo alternaría a cerrado).
+    await page.getByTestId("cita-inline-fragment").first().waitFor();
     await page.screenshot({ path: `${DIR}/consulta-cita-inline-${tag}.png`, fullPage: true });
   });
 }

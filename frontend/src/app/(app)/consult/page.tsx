@@ -64,6 +64,7 @@ export default function ConsultPage() {
     entityName: data.nombre,
     entityTitle: data.titulo,
     entityMeta: data.meta,
+    documentos: data.documentos ?? [],
   };
   return <ConsultView context={context} />;
 }

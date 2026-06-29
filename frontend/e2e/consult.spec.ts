@@ -68,7 +68,7 @@ test("Tipo 1 · InfoCard renders value + citation", async ({ page }) => {
   });
   await preguntar(page, "¿Cuál es el torque del perno B?");
   await expect(page.locator(".big").first()).toContainText("85");
-  await expect(page.locator(".cite").first()).toContainText("Manual Rotina 380");
+  await expect(page.locator(".cite2").first()).toContainText("Manual Rotina 380");
 });
 
 test("Tipo 2 · ProcedureCard renders steps + citation", async ({ page }) => {
@@ -81,7 +81,7 @@ test("Tipo 2 · ProcedureCard renders steps + citation", async ({ page }) => {
   });
   await preguntar(page, "¿Cómo cambio el filtro?");
   await expect(page.getByText("Despresuriza el circuito.")).toBeVisible();
-  await expect(page.locator(".cite").first()).toContainText("Manual Rotina 380");
+  await expect(page.locator(".cite2").first()).toContainText("Manual Rotina 380");
 });
 
 test("Tipo 3 · DiagramViewer renders payload labels", async ({ page }) => {

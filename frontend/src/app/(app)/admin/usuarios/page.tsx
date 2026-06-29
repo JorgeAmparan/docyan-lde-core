@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import { Icon } from "@/components/icon";
-import { api } from "@/lib/api-client";
 import {
   Dialog,
   DialogContent,
@@ -22,180 +19,272 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import {
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+  invitableRoles,
+  roleLabel,
+  type OrgRole,
+} from "@/lib/roles";
+import {
+  createInvitation,
+  listInvitations,
+  listUsuarios,
+  type InvitationOut,
+  type UsuarioOut,
+} from "@/lib/onboarding";
+import { ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth";
 
 /**
- * Usuarios — org admins (with per-plan seat cost) + colaboradores (unlimited,
- * no cost, enter via QR). Invite dialog (email + rol). Per-user prefs: default
- * language pair, regional variant, IA proactiva toggle, silenciar sugerencias.
+ * Usuarios — Capa A admin desktop. Portado PIXEL-PERFECT del bundle de diseño
+ * `app/org-views.jsx` → `UsuariosView`. Markup, clases, iconos y copy en español
+ * coinciden verbatim con el prototipo (paneles Admins / Colaboradores con filas
+ * `.urow` → `.uav`/`.uinfo`/`.useat`/`.uprefs`/`.pref`).
+ *
+ * Datos REALES (no canned): usuarios activos vía `/onboarding/usuarios` e
+ * invitaciones pendientes vía `/invitations`. El modelo de roles del backend es
+ * `admin | editor | viewer` (viewer = "Consulta"). Split del prototipo:
+ *   · Admins        = role === "admin" (consumen seat).
+ *   · Colaboradores = el resto (editor/viewer) — entran por QR, sin costo.
+ *
+ * Honestidad de datos (CLAUDE.md modelo de precios v2.1): el costo por seat NO se
+ * publica (precio por documentos vivos, usuarios ilimitados → se cotiza con el
+ * ejecutivo). Por eso el `.useat` muestra "—" (neutral/real), nunca una cifra
+ * inventada. La `.pref` del colaborador muestra su ROL real (no un par lingüístico
+ * ni un toggle IA fabricados — no hay fuente por-usuario para esos campos).
+ *
+ * Colisión CSS (footgun conocido): el valor crudo del rol NO se usa como clase.
+ * El pill de rol usa `role-pill rp-<rol>` (prefijo `rp-`) para no chocar con la
+ * clase de layout `.admin` del kit (óvalo rosa gigante).
  */
 
-const ADMINS = [
-  { id: "a1", av: "JM", name: "Jorge Medina", role: "Admin · propietario", cost: "—" },
-  { id: "a2", av: "RC", name: "Rosa Cantú", role: "Admin", cost: "$12 / mes" },
-];
+const ROLE_PILL_LABEL: Record<OrgRole, string> = {
+  admin: "Admin",
+  editor: "Editor",
+  viewer: "Consulta",
+};
 
-interface Operator {
-  id: string;
-  av: string;
-  name: string;
-  pair: string;
-  region: string;
-  ai: boolean;
-  muted: boolean;
+function rolePillLabel(role: string): string {
+  if (role in ROLE_PILL_LABEL) return ROLE_PILL_LABEL[role as OrgRole];
+  return roleLabel(role) || role;
 }
-const OPERATORS_INIT: Operator[] = [
-  { id: "o1", av: "AR", name: "A. Ríos", pair: "ES-MX", region: "MX", ai: true, muted: false },
-  { id: "o2", av: "LP", name: "L. Peña", pair: "ES-MX", region: "MX", ai: true, muted: false },
-  { id: "o3", av: "DK", name: "D. Kim", pair: "EN-US", region: "US", ai: false, muted: true },
-];
 
-const inviteSchema = z.object({
-  email: z.string().email("Correo no válido"),
-  role: z.enum(["admin", "colaborador"]),
-});
-type InviteForm = z.infer<typeof inviteSchema>;
+function initials(value: string): string {
+  return value
+    .split(/[ @.]/)
+    .filter(Boolean)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
 
 export default function UsuariosPage() {
-  const [operators, setOperators] = useState<Operator[]>(OPERATORS_INIT);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [defaultRole, setDefaultRole] = useState<"admin" | "colaborador">("colaborador");
-  const [editing, setEditing] = useState<Operator | null>(null);
+  const token = useAuth((s) => s.token);
+  const myRole = useAuth((s) => s.user?.role) ?? "admin";
+  const allowed = invitableRoles(myRole);
+  const qc = useQueryClient();
 
-  const form = useForm<InviteForm>({
-    resolver: zodResolver(inviteSchema),
-    defaultValues: { email: "", role: "colaborador" },
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<OrgRole>(allowed[allowed.length - 1] ?? "viewer");
+  const [err, setErr] = useState<string | null>(null);
+  const [lastInvite, setLastInvite] = useState<InvitationOut | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ["admin-usuarios"],
+    queryFn: async () => {
+      const [us, inv] = await Promise.all([
+        listUsuarios(token as string),
+        listInvitations(token as string, "pending"),
+      ]);
+      return { users: us.items ?? [], pending: inv.items ?? [] };
+    },
+    enabled: !!token,
   });
 
+  const users: UsuarioOut[] = useMemo(() => data?.users ?? [], [data]);
+  const pending = data?.pending ?? [];
+  const admins = useMemo(() => users.filter((u) => u.role === "admin"), [users]);
+  const colaboradores = useMemo(() => users.filter((u) => u.role !== "admin"), [users]);
+
   const invite = useMutation({
-    mutationFn: (data: InviteForm) => api.post("/admin/users/invite", data),
-    onSettled: () => {
-      // DESIGN: best-effort — close regardless (endpoint shape may be absent).
-      setInviteOpen(false);
-      form.reset();
+    mutationFn: (body: { email: string; role: OrgRole }) =>
+      createInvitation(body, token as string),
+    onSuccess: (inv) => {
+      setLastInvite(inv);
+      setEmail("");
+      setErr(null);
+      qc.invalidateQueries({ queryKey: ["admin-usuarios"] });
+    },
+    onError: (e) => {
+      setErr(
+        e instanceof ApiError && e.status === 403
+          ? "Tu rol no puede invitar a ese rol. Un editor solo puede invitar usuarios de Consulta."
+          : e instanceof ApiError && e.status === 409
+            ? "Ese correo ya tiene una cuenta."
+            : e instanceof ApiError
+              ? e.message
+              : "No pudimos enviar la invitación.",
+      );
     },
   });
 
-  function openInvite(role: "admin" | "colaborador") {
-    setDefaultRole(role);
-    form.reset({ email: "", role });
+  function openInvite(preferred: OrgRole) {
+    setRole(allowed.includes(preferred) ? preferred : (allowed[allowed.length - 1] ?? "viewer"));
+    setEmail("");
+    setErr(null);
+    setLastInvite(null);
     setInviteOpen(true);
   }
 
-  function patchOperator(id: string, patch: Partial<Operator>) {
-    setOperators((ops) => ops.map((o) => (o.id === id ? { ...o, ...patch } : o)));
-    // DESIGN: best-effort persist; ignore failure (canned-first).
-    api.patch(`/admin/users/${id}/prefs`, patch).catch(() => {});
-  }
+  const emailValid = /\S+@\S+\.\S+/.test(email);
+  const canInviteAdmin = allowed.includes("admin");
 
   return (
-    <>
+    <div className="wrap">
+      {/* ── Admins ─────────────────────────────────────────────── */}
       <div className="panel">
-        <div className="sec-h">
+        <div className="sec-h2">
           <h2>Admins</h2>
-          <button className="mini-btn" onClick={() => openInvite("admin")}>
-            <Icon name="plus" size={14} />
-            Invitar admin
-          </button>
+          {canInviteAdmin && (
+            <button className="mini-btn" style={{ marginLeft: "auto" }} onClick={() => openInvite("admin")}>
+              <Icon name="plus" size={14} />
+              Invitar admin
+            </button>
+          )}
         </div>
-        <p className="panel-lead">
-          Cada admin adicional suma un costo de seat según el plan. Los colaboradores son ilimitados y sin costo.
+        <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "0 0 6px", lineHeight: 1.5 }}>
+          Cada admin adicional suma un costo de seat según el plan. Los colaboradores son ilimitados
+          y sin costo.
         </p>
-        {ADMINS.map((u) => (
+        {admins.map((u) => (
           <div className="urow" key={u.id}>
-            <span className="uav ink">{u.av}</span>
+            <span className="uav ink">{initials(u.name ?? u.email)}</span>
             <div className="uinfo">
-              <div className="un">{u.name}</div>
-              <div className="ur">{u.role}</div>
+              <div className="un">{u.name ?? u.email}</div>
+              <div className="ur">{u.name ? u.email : "Admin"}</div>
             </div>
-            <span className="useat mono">{u.cost}</span>
+            <span className="useat">—</span>
             <Icon name="more-horizontal" size={16} color="var(--fg-subtle)" />
           </div>
         ))}
       </div>
 
-      <div className="panel" style={{ marginTop: 18 }}>
-        <div className="sec-h">
+      {/* ── Colaboradores ──────────────────────────────────────── */}
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="sec-h2">
           <h2>
-            Colaboradores <span className="cnt">{operators.length}</span>
+            Colaboradores{" "}
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-muted)", fontWeight: 400 }}>
+              {colaboradores.length}
+            </span>
           </h2>
-          <button className="mini-btn" onClick={() => openInvite("colaborador")}>
+          <button className="mini-btn" style={{ marginLeft: "auto" }} onClick={() => openInvite("viewer")}>
             <Icon name="plus" size={14} />
             Invitar colaborador
           </button>
         </div>
-        {operators.map((u) => (
+        {colaboradores.map((u) => (
           <div className="urow" key={u.id}>
-            <span className="uav cin">{u.av}</span>
+            <span className="uav cin">{initials(u.name ?? u.email)}</span>
             <div className="uinfo">
-              <div className="un">{u.name}</div>
+              <div className="un">{u.name ?? u.email}</div>
               <div className="ur">Colaborador · entra por QR</div>
             </div>
             <div className="uprefs">
-              <span className="pref mono">
-                {u.pair} · {u.region}
-              </span>
-              <span
-                className={"pref toggle" + (u.ai ? " on" : "")}
-                role="button"
-                tabIndex={0}
-                onClick={() => patchOperator(u.id, { ai: !u.ai })}
-                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && patchOperator(u.id, { ai: !u.ai })}
-              >
-                <Icon name="sparkles" size={12} />
-                IA proactiva {u.ai ? "on" : "off"}
-              </span>
+              <span className={"role-pill rp-" + u.role}>{rolePillLabel(u.role)}</span>
             </div>
-            <button className="link-btn" onClick={() => setEditing(u)}>
-              Preferencias
-            </button>
+            <Icon name="more-horizontal" size={16} color="var(--fg-subtle)" />
           </div>
         ))}
-        <div className="manual-note" style={{ marginTop: 14 }}>
+        {pending.map((u) => (
+          <div className="urow" key={u.id}>
+            <span className="uav cin">
+              <Icon name="mail" size={15} />
+            </span>
+            <div className="uinfo">
+              <div className="un">{u.email}</div>
+              <div className="ur">Invitación enviada · esperando que acepte</div>
+            </div>
+            <div className="uprefs">
+              <span className={"role-pill rp-" + u.role}>{rolePillLabel(u.role)}</span>
+              <span className="pref">pendiente</span>
+            </div>
+            <Icon name="more-horizontal" size={16} color="var(--fg-subtle)" />
+          </div>
+        ))}
+        <div className="manual-note" style={{ marginTop: 14, marginBottom: 0 }}>
           <Icon name="settings" size={15} />
-          Por usuario: par lingüístico default, variante regional, permiso de IA proactiva y “silenciar sugerencias”.
+          Por usuario: par lingüístico default, variante regional, permiso de IA proactiva y
+          “silenciar sugerencias”.
         </div>
       </div>
 
-      {/* ── Invite dialog ─────────────────────────────────────── */}
+      {/* ── Invitar (real) ─────────────────────────────────────── */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invitar {defaultRole === "admin" ? "admin" : "colaborador"}</DialogTitle>
+            <DialogTitle>{role === "admin" ? "Invitar admin" : "Invitar colaborador"}</DialogTitle>
             <DialogDescription>
-              {defaultRole === "admin"
-                ? "Los admins gestionan la organización. Suman costo de seat según el plan."
-                : "Los colaboradores entran escaneando el QR — no necesitan cuenta. Esta invitación es opcional."}
+              {role === "admin"
+                ? "Se enviará una invitación por correo. Cada admin suma un costo de seat según el plan."
+                : "Entra por QR, sin costo. Recibirá un enlace para activar su cuenta."}
             </DialogDescription>
           </DialogHeader>
           <form
-            onSubmit={form.handleSubmit((d) => invite.mutate(d))}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (emailValid && !invite.isPending) invite.mutate({ email, role });
+            }}
             style={{ display: "flex", flexDirection: "column", gap: 14 }}
           >
             <div className="field2">
               <label>Correo</label>
-              <input type="email" placeholder="nombre@empresa.com" {...form.register("email")} />
-              {form.formState.errors.email && (
-                <span style={{ fontSize: 12, color: "var(--warning-600)" }}>{form.formState.errors.email.message}</span>
-              )}
+              <input
+                type="email"
+                placeholder="nombre@empresa.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
             <div className="field2">
               <label>Rol</label>
-              <Select
-                value={form.watch("role")}
-                onValueChange={(v) => form.setValue("role", v as "admin" | "colaborador")}
-              >
+              <Select value={role} onValueChange={(v) => setRole(v as OrgRole)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Admin (con costo de seat)</SelectItem>
-                  <SelectItem value="colaborador">Colaborador (sin costo)</SelectItem>
+                  {allowed.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {ROLE_LABELS[r]} — {ROLE_DESCRIPTIONS[r]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+            {err && <span style={{ fontSize: 12, color: "var(--warning-600)" }}>{err}</span>}
+            {lastInvite && (
+              <div className="manual-note" style={{ margin: 0 }}>
+                <Icon name={lastInvite.email_enviado ? "mail-check" : "info"} size={15} />
+                <span>
+                  {lastInvite.email_enviado
+                    ? `Invitación enviada a ${lastInvite.email}.`
+                    : "Invitación creada. El correo no pudo enviarse; comparte el enlace manualmente:"}
+                  {!lastInvite.email_enviado && lastInvite.invite_url && (
+                    <>
+                      {" "}
+                      <span className="mono" style={{ wordBreak: "break-all" }}>
+                        {lastInvite.invite_url}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
             <div className="qr-acts" style={{ marginTop: 4 }}>
-              <button className="primary-btn" type="submit" disabled={invite.isPending}>
+              <button className="primary-btn" type="submit" disabled={!emailValid || invite.isPending}>
                 <Icon name="send" size={14} />
                 {invite.isPending ? "Enviando…" : "Enviar invitación"}
               </button>
@@ -208,75 +297,6 @@ export default function UsuariosPage() {
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* ── Per-user prefs dialog ─────────────────────────────── */}
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent>
-          {editing && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Preferencias · {editing.name}</DialogTitle>
-                <DialogDescription>Configuración individual del colaborador.</DialogDescription>
-              </DialogHeader>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div className="field2">
-                  <label>Par lingüístico default</label>
-                  <Select value={editing.pair} onValueChange={(v) => patchOperator(editing.id, { pair: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ES-MX">ES-MX</SelectItem>
-                      <SelectItem value="EN-US">EN-US</SelectItem>
-                      <SelectItem value="ES-ES">ES-ES</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="field2">
-                  <label>Variante regional</label>
-                  <Select value={editing.region} onValueChange={(v) => patchOperator(editing.id, { region: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MX">México</SelectItem>
-                      <SelectItem value="US">Estados Unidos</SelectItem>
-                      <SelectItem value="ES">España</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
-                  <Switch
-                    checked={editing.ai}
-                    onCheckedChange={(c) => {
-                      patchOperator(editing.id, { ai: c });
-                      setEditing({ ...editing, ai: c });
-                    }}
-                  />
-                  Permiso de IA proactiva
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5 }}>
-                  <Switch
-                    checked={editing.muted}
-                    onCheckedChange={(c) => {
-                      patchOperator(editing.id, { muted: c });
-                      setEditing({ ...editing, muted: c });
-                    }}
-                  />
-                  Silenciar sugerencias
-                </label>
-              </div>
-              <div className="qr-acts" style={{ marginTop: 8 }}>
-                <DialogClose asChild>
-                  <button className="primary-btn" type="button">
-                    Listo
-                  </button>
-                </DialogClose>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   );
 }

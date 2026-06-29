@@ -1,5 +1,13 @@
 version: "3.9"
 
+# DOCYAN LDE — stack local (espejo de la topología Fly: api + graph + embedder +
+# redis + worker de ingesta). Reemplaza al compose anterior, que tenía clones
+# redundantes del monolito (docyan-dii/edb/grg/matrix) y NO incluía ni Redis (la
+# cola) ni el worker nuevo (GraphRAG-SDK) — por eso no podía ingerir local.
+# Credenciales en .env (Supabase/Gemini/etc.); los HOSTS de servicios se sobre-
+# escriben aquí para la red interna de Docker (el .env apunta a hosts distintos).
+# `app.api.main:app` es el backend real; el worker consume la cola Redis (BLPOP).
+
 services:
 
   docyan-api:
@@ -9,11 +17,21 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      # Red interna de Docker (override de .env): el backend habla con los servicios
+      # por nombre. Encola en Redis; el worker (docyan-ingest) consume.
+      - FALKOR_HOST=docyan-graph
+      - FALKOR_PORT=6379
+      - REDIS_URL=redis://docyan-redis:6379/0
+      - REDIS_QUEUE_URL=redis://docyan-redis:6379/0
+      - EMBEDDER_URL=http://docyan-embedder:8000
     volumes:
       - ./data:/app/data
     restart: unless-stopped
     depends_on:
       - docyan-graph
+      - docyan-redis
+      - docyan-embedder
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -37,6 +55,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Redis: cola de ingesta (B2) + Session Manager/APScheduler (B4). ──
+  # docyan-lde-redis en Fly. Doble propósito: cola (REDIS_QUEUE_URL) + sesiones MO.
+  docyan-redis:
+    image: redis:7-alpine
+    container_name: docyan-lde-redis
+    ports:
+      - "6380:6379"
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   # ── Embedder: BGE-M3 local (espejo de docyan-lde-embedder en Fly). B1 §4. ──
   docyan-embedder:
     build: ./embedder
@@ -52,49 +87,36 @@ services:
       timeout: 10s
       retries: 3
 
-  docyan-dii:
-    build: .
-    container_name: docyan-lde-dii
+  # ── Worker de ingesta nuevo (GraphRAG-SDK + Docling + LiteLLM + PyTorch CPU). ──
+  # docyan-lde-ingest en Fly. Build desde la RAÍZ (necesita app/ y worker/).
+  # Consume la cola Redis (BLPOP) y escribe el DKG. Stack pesado AISLADO del backend.
+  docyan-ingest:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: docyan-lde-ingest
     ports:
-      - "8001:8001"
+      - "8090:8000"
     env_file:
       - .env
+    environment:
+      - FALKOR_HOST=docyan-graph
+      - FALKOR_PORT=6379
+      - REDIS_URL=redis://docyan-redis:6379/0
+      - REDIS_QUEUE_URL=redis://docyan-redis:6379/0
+      - EMBEDDER_URL=http://docyan-embedder:8000
     volumes:
       - ./data:/app/data
-    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8001"]
     restart: unless-stopped
-
-  docyan-edb:
-    build: .
-    container_name: docyan-lde-edb
-    ports:
-      - "8002:8002"
-    env_file:
-      - .env
-    volumes:
-      - ./data:/app/data
-    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8002"]
-    restart: unless-stopped
-
-  docyan-grg:
-    build: .
-    container_name: docyan-lde-grg
-    ports:
-      - "8003:8003"
-    env_file:
-      - .env
-    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8003"]
-    restart: unless-stopped
-
-  docyan-matrix:
-    build: .
-    container_name: docyan-lde-matrix
-    ports:
-      - "8004:8004"
-    env_file:
-      - .env
-    command: ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8004"]
-    restart: unless-stopped
+    depends_on:
+      - docyan-graph
+      - docyan-redis
+      - docyan-embedder
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   default:
@@ -104,4 +126,6 @@ volumes:
   data:
     driver: local
   graph_data:
+    driver: local
+  redis_data:
     driver: local

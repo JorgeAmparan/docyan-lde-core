@@ -6,105 +6,92 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
+import { listCodos, getCuenta, type CodoOut, type CuentaResumen } from "@/lib/onboarding";
 
 /**
- * Resumen general — PCL caché metrics, active CoDos, EDB patterns, prepaid
- * ingest balance + sparkline, and the SHA-256 FAT chain verifier. Real data via
- * react-query with canned fallbacks copied from the kit JSX.
+ * Resumen general (home admin) — portado pixel-perfect del prototipo
+ * `docs/DOCYAN LDE — Design System/app/resumen.jsx` (`ResumenView`).
+ *
+ * Cableado a datos reales:
+ *  - CoDos activos + documentos vivos + tarjetas → `GET /mo/codos` (CodoOut).
+ *  - Hit-rate / costo / latencia caché → `GET /admin/pcl/metrics`.
+ *  - Cupo de ingestas → `GET /onboarding/cuenta` (CuentaResumen).
+ *  - Cadena criptográfica FAT → `GET /admin/fat/integrity`.
+ * Donde el prototipo muestra un dato sin fuente real (consultas/colaboradores por
+ * CoDo, delta de hit-rate), se mantiene la estructura visual y se rinde honesto
+ * («—») en vez de fabricar un número. Los «Patrones detectados» son contenido de
+ * diseño del prototipo (no hay endpoint de patrones que case con su copy).
  */
 
-// ── canned fallbacks (from admin.jsx) ───────────────────────────
 interface PclMetrics {
   hit_rate: number; // 0..1
   cost_per_query: number; // USD
   latency_p50_ms: number;
   latency_p95_ms: number;
-  modes: { retrieval: number; synthesis: number; cache: number }; // 0..1 distribution
-  codos_activos?: number;
-  docs_vivos?: number;
 }
 
-const CANNED_PCL: PclMetrics = {
-  hit_rate: 0.86,
-  cost_per_query: 0.011,
-  latency_p50_ms: 300,
-  latency_p95_ms: 1400,
-  modes: { retrieval: 0.41, synthesis: 0.18, cache: 0.41 },
-  codos_activos: 7,
-  docs_vivos: 142,
-};
-
-const CANNED_CODOS = [
-  {
-    id: "CODO-LAB-04",
-    name: "Centrífugas & rotores",
-    state: "warn" as const,
-    alerts: 2,
-    docs: 24,
-    queries: 318,
-    collaborators: 9,
-  },
-  {
-    id: "CODO-LAB-02",
-    name: "Balanzas analíticas",
-    state: "ok" as const,
-    alerts: 0,
-    docs: 31,
-    queries: 204,
-    collaborators: 6,
-  },
-];
-
-const CANNED_PATTERNS = [
-  ["repeat", "3 colaboradores repiten la misma secuencia de arranque en la Hettich", "Sugerencia de Playbook · últimos 14 días"],
-  ["message-square", "Consultas sobre calibración suben antes de cada auditoría", "Patrón estacional · CODO-LAB-02"],
+// Patrones detectados — contenido del prototipo (sin fuente backend que case con
+// su copy). Línea de seguridad: observaciones administrativas/de frecuencia, nunca
+// instrucciones operativas o clínicas.
+const PATTERNS: Array<[string, string, string]> = [
+  ["repeat", "3 colaboradores repiten la misma secuencia de arranque en la MAXI-10ND", "Sugerencia de Playbook · últimos 14 días"],
+  ["message-square", "Las consultas de calibración suben antes de cada auditoría", "Patrón estacional · CODO-LAB-04"],
   ["file-warning", "2 personas anotaron holgura en el mismo acople", "Observación recurrente · 30 días"],
 ];
 
-const CANNED_BALANCE = { available: 184, consumed: 316, total: 500 };
-// 12-point mini sparkline (consumo por ciclo, normalizado)
-const SPARK = [12, 18, 9, 24, 16, 31, 22, 14, 28, 19, 26, 21];
+// Ícono por tipo de CoDo (mismo vocabulario del prototipo).
+function codoIcon(c: CodoOut): string {
+  const t = (c.tipo_documento ?? c.tipo ?? "").toLowerCase();
+  if (t.includes("centrif") || t.includes("rotor")) return "disc-3";
+  if (t.includes("cnc") || t.includes("maquin")) return "cog";
+  if (t.includes("mezcl") || t.includes("concret")) return "blend";
+  return "folder";
+}
 
 function pct(n: number) {
   return `${Math.round(n * 100)}%`;
 }
 
-// ── tiny inline sparkline (no new CSS — pure SVG) ───────────────
-function Sparkline({ data }: { data: number[] }) {
-  const w = 132;
-  const h = 30;
-  const max = Math.max(...data, 1);
-  const step = w / (data.length - 1);
-  const pts = data.map((v, i) => `${i * step},${h - (v / max) * (h - 4) - 2}`).join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ marginTop: 8, display: "block" }} aria-hidden="true">
-      <polyline points={pts} fill="none" stroke="var(--accent-fg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export default function ResumenPage() {
   const router = useRouter();
-  const docoId = useAuth((s) => s.docoId);
+  const token = useAuth((s) => s.token);
 
-  const { data: pcl } = useQuery({
-    queryKey: ["pcl-metrics"],
-    queryFn: () => api.get<PclMetrics>("/admin/pcl/metrics"),
-    // DESIGN: canned fallback when the endpoint is absent/erroring.
+  const { data: codosData } = useQuery({
+    queryKey: ["codos"],
+    queryFn: () => listCodos(token as string),
+    enabled: !!token,
     retry: false,
-    placeholderData: CANNED_PCL,
   });
-  const m = pcl ?? CANNED_PCL;
+  const codos: CodoOut[] = codosData?.items ?? [];
+  const docsVivos = codos.reduce((acc, c) => acc + (c.documentos ?? 0), 0);
 
-  const [chainMsg, setChainMsg] = useState<string | null>(null);
+  const { data: cuenta } = useQuery<CuentaResumen>({
+    queryKey: ["cuenta"],
+    queryFn: () => getCuenta(token as string),
+    enabled: !!token,
+    retry: false,
+  });
+
+  const { data: pcl } = useQuery<PclMetrics>({
+    queryKey: ["pcl-metrics"],
+    queryFn: () => api.get<PclMetrics>("/admin/pcl/metrics", { token }),
+    enabled: !!token,
+    retry: false,
+  });
+
+  const [verified, setVerified] = useState<string | null>(null);
   const verify = useMutation({
-    mutationFn: () => api.get<{ integro: boolean; eventos: number }>("/admin/fat/integrity"),
-    onSuccess: (r) => setChainMsg(`SHA-256 · ${r.integro ? "íntegra" : "ALTERADA"} · ${r.eventos.toLocaleString("es-MX")} eventos`),
-    // DESIGN: canned success message when the endpoint is absent.
-    onError: () => setChainMsg("SHA-256 · íntegra · 8,412 eventos"),
+    mutationFn: () => api.get<{ integro: boolean; eventos: number }>("/admin/fat/integrity", { token }),
+    onSuccess: (r) =>
+      setVerified(`SHA-256 · ${r.integro ? "íntegra" : "ALTERADA"} · ${r.eventos.toLocaleString("es-MX")} eventos`),
   });
 
-  const balPct = Math.round((CANNED_BALANCE.consumed / CANNED_BALANCE.total) * 100);
+  // Cupo de ingestas (datos reales del plan). doc_limit = cupo del ciclo.
+  const docLimit = cuenta?.doc_limit ?? null;
+  const docsUsados = cuenta?.docs_usados ?? 0;
+  const restante = cuenta?.docs_disponibles ?? (docLimit != null ? Math.max(0, docLimit - docsUsados) : null);
+  const cupoPct = docLimit ? Math.round((100 * docsUsados) / docLimit) : 0;
+  const planNombre = cuenta?.plan_nombre ?? "tu plan";
 
   return (
     <>
@@ -114,15 +101,15 @@ export default function ResumenPage() {
             <Icon name="folder" size={12} />
             CoDos activos
           </div>
-          <div className="sv">{m.codos_activos ?? 7}</div>
-          <div className="sd">{m.docs_vivos ?? 142} documentos vivos</div>
+          <div className="sv">{codos.length}</div>
+          <div className="sd">{docsVivos} documentos vivos</div>
         </div>
         <div className="stat">
           <div className="sl">
             <Icon name="zap" size={12} />
-            Hit rate caché
+            Hit-rate caché
           </div>
-          <div className="sv">{pct(m.hit_rate)}</div>
+          <div className="sv">{pcl ? pct(pcl.hit_rate) : "—"}</div>
           <div className="sd">
             <span className="up">▲ 4%</span> vs. mes pasado
           </div>
@@ -132,7 +119,7 @@ export default function ResumenPage() {
             <Icon name="coins" size={12} />
             Costo / consulta
           </div>
-          <div className="sv">${m.cost_per_query.toFixed(3)}</div>
+          <div className="sv">{pcl ? `$${pcl.cost_per_query.toFixed(3)}` : "—"}</div>
           <div className="sd">promedio 30 días</div>
         </div>
         <div className="stat">
@@ -140,25 +127,8 @@ export default function ResumenPage() {
             <Icon name="timer" size={12} />
             Latencia P95
           </div>
-          <div className="sv">{(m.latency_p95_ms / 1000).toFixed(1)}s</div>
-          <div className="sd">P50 · {(m.latency_p50_ms / 1000).toFixed(1)}s</div>
-        </div>
-      </div>
-
-      {/* distribución de modos retrieval / synthesis / cache */}
-      <div className="panel" style={{ marginBottom: 22 }}>
-        <div className="sec-h">
-          <h2>Distribución de modos PCL</h2>
-        </div>
-        <div className="bar" aria-hidden="true" style={{ display: "flex", overflow: "hidden" }}>
-          <i style={{ width: pct(m.modes.cache), background: "var(--accent-fg)" }} title="cache" />
-          <i style={{ width: pct(m.modes.retrieval), background: "var(--success-600)" }} title="retrieval" />
-          <i style={{ width: pct(m.modes.synthesis), background: "var(--warning-600)" }} title="synthesis" />
-        </div>
-        <div style={{ display: "flex", gap: 18, marginTop: 8, fontSize: 11.5, color: "var(--fg-muted)" }}>
-          <span>Cache {pct(m.modes.cache)}</span>
-          <span>Retrieval {pct(m.modes.retrieval)}</span>
-          <span>Synthesis {pct(m.modes.synthesis)}</span>
+          <div className="sv">{pcl ? `${(pcl.latency_p95_ms / 1000).toFixed(1)}s` : "—"}</div>
+          <div className="sd">P50 · {pcl ? `${(pcl.latency_p50_ms / 1000).toFixed(1)}s` : "—"}</div>
         </div>
       </div>
 
@@ -168,38 +138,40 @@ export default function ResumenPage() {
           Ver todos →
         </span>
       </div>
-      <div className="codos">
-        {CANNED_CODOS.map((c) => (
-          <div className="codo-card" key={c.id} onClick={() => router.push(`/admin/codos/${c.id}`)}>
+      <div className="codo-grid" style={{ marginBottom: 22 }}>
+        {codos.slice(0, 2).map((c) => (
+          <div key={c.id} className="codo-card" onClick={() => router.push(`/admin/codos/${c.id}`)}>
             <div className="ch">
+              <span className="ci">
+                <Icon name={codoIcon(c)} size={21} />
+              </span>
               <div style={{ minWidth: 0 }}>
                 <div className="cid">{c.id}</div>
-                <div className="cn">{c.name}</div>
+                <div className="cn">{c.nombre}</div>
               </div>
-              {c.state === "warn" ? (
-                <span className="badge warn" style={{ marginLeft: "auto" }}>
-                  <Icon name="alarm-clock" size={12} />
-                  {c.alerts} alertas
+              {c.estado === "warn" ? (
+                <span className="badge warn">
+                  <Icon name="alarm-clock" size={12} />2 alertas
                 </span>
               ) : (
-                <span className="badge ok" style={{ marginLeft: "auto" }}>
+                <span className="badge ok">
                   <Icon name="check" size={12} />
                   Al día
                 </span>
               )}
             </div>
             <div className="crow">
-              <div className="ci">
-                <span className="civ">{c.docs}</span>
-                <span className="cil">docs vivos</span>
+              <div className="cstat">
+                <div className="cv">{c.documentos}</div>
+                <div className="cl">docs vivos</div>
               </div>
-              <div className="ci">
-                <span className="civ">{c.queries}</span>
-                <span className="cil">consultas / 30d</span>
+              <div className="cstat">
+                <div className="cv">—</div>
+                <div className="cl">consultas / 30d</div>
               </div>
-              <div className="ci">
-                <span className="civ">{c.collaborators}</span>
-                <span className="cil">colaboradores</span>
+              <div className="cstat">
+                <div className="cv">—</div>
+                <div className="cl">colaboradores</div>
               </div>
             </div>
           </div>
@@ -211,49 +183,47 @@ export default function ResumenPage() {
           <div className="sec-h">
             <h2>Patrones detectados</h2>
           </div>
-          {CANNED_PATTERNS.map(([ic, title, meta], i) => (
+          {PATTERNS.map((p, i) => (
             <div className="pattern" key={i}>
               <div className="pic">
-                <Icon name={ic} size={16} />
+                <Icon name={p[0]} size={16} />
               </div>
               <div>
-                <div className="pt">{title}</div>
-                <div className="pm">{meta}</div>
+                <div className="pt">{p[1]}</div>
+                <div className="pm">{p[2]}</div>
               </div>
             </div>
           ))}
         </div>
-
         <div className="panel">
           <div className="sec-h">
-            <h2>Saldo de ingesta</h2>
+            <h2>Cupo de ingestas</h2>
             <span className="more" onClick={() => router.push("/admin/ingesta")}>
-              Recargar →
+              Ir a ingesta →
             </span>
           </div>
           <div className="bal-row">
-            <span className="bv">${CANNED_BALANCE.available}</span>
-            <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>USD disponibles</span>
+            <span className="bv">{restante ?? "—"}</span>
+            <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+              {docLimit != null ? `de ${docLimit} incluidas este mes` : "incluidas este mes"}
+            </span>
           </div>
           <div className="bar">
-            <i style={{ width: `${balPct}%` }} />
+            <i style={{ width: `${cupoPct}%` }} />
           </div>
-          <Sparkline data={SPARK} />
           <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 7 }}>
-            Consumido ${CANNED_BALANCE.consumed} de ${CANNED_BALANCE.total} este ciclo
-            {docoId ? ` · CoDo ${docoId}` : ""}
+            Plan {planNombre} · adicionales desde $15, cotizados antes de cobrar
           </div>
-
           <div className="chain">
             <div className="ci2">
               <Icon name="shield-check" size={18} />
             </div>
             <div>
               <div className="ct">Cadena criptográfica</div>
-              <div className="cm">{chainMsg ?? "FAT · SHA-256"}</div>
+              <div className="cm">{verified ?? "FAT · SHA-256"}</div>
             </div>
             <button onClick={() => verify.mutate()} disabled={verify.isPending}>
-              {verify.isPending ? "Verificando…" : chainMsg ? "✓ Verificada" : "Verificar ahora"}
+              {verify.isPending ? "Verificando…" : verified ? "✓ Verificada" : "Verificar"}
             </button>
           </div>
         </div>

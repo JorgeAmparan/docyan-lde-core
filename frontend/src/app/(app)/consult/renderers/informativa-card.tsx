@@ -1,11 +1,10 @@
 "use client";
 
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitaInline } from "./cita-inline";
+import { CitedFragment } from "./cited-fragment";
 import { citaToSource, type InfoCardPayload } from "../consult-data";
-import { SaveBtn } from "./save-btn";
 
-/** Tipo 1 · Informativa — big value + unit + cita en línea, from the real payload. */
+/** Tipo 1 · Informativa — big value + unit + nota, from the real payload. */
 export function InformativaCard({
   payload,
   saved,
@@ -22,19 +21,27 @@ export function InformativaCard({
   const cita = primary?.cita ?? (payload.citas ?? [])[0] ?? null;
   const extras = especs.slice(1);
 
+  const hasBig = !!primary && (!!primary.valor || !!primary.unidad);
+
   return (
     <div className="acard">
       <div className="q">{payload.titulo}</div>
-      {primary && (primary.valor || primary.unidad) ? (
-        <div className="big">
-          {primary.valor ?? "—"}
-          {primary.unidad ? <span className="u">{primary.unidad}</span> : null}
-        </div>
+      {hasBig ? (
+        <>
+          <div className="big">
+            {primary.valor ?? "—"}
+            {primary.unidad ? <span className="u">{primary.unidad}</span> : null}
+          </div>
+          {payload.definicion ? <p className="note">{payload.definicion}</p> : null}
+        </>
+      ) : payload.definicion ? (
+        <p className="note" style={{ fontSize: 14.5, color: "var(--fg)" }}>
+          {payload.definicion}
+        </p>
       ) : null}
-      {payload.definicion ? <p>{payload.definicion}</p> : null}
 
       {payload.match_multiple && (payload.desambiguacion ?? []).length > 0 && (
-        <div className="ppe" style={{ marginTop: 8 }}>
+        <div className="ppe">
           {(payload.desambiguacion ?? []).map((d, i) => (
             <span className="chip" key={i}>
               {d}
@@ -44,7 +51,7 @@ export function InformativaCard({
       )}
 
       {extras.length > 0 && (
-        <ol className="steps" style={{ marginTop: 8 }}>
+        <ol className="steps">
           {extras.map((e, i) => (
             <li key={i}>
               <span className="st">
@@ -56,10 +63,12 @@ export function InformativaCard({
         </ol>
       )}
 
-      <div className="acard-foot">
-        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} />
-        <SaveBtn saved={saved} onSave={onSave} />
-      </div>
+      <CitedFragment
+        cita={cita}
+        saved={saved}
+        onSave={onSave}
+        onOpenDoc={() => onCite(citaToSource(cita))}
+      />
     </div>
   );
 }

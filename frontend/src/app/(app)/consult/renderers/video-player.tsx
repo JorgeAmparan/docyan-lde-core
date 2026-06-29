@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitaInline } from "./cita-inline";
+import { CitedFragment } from "./cited-fragment";
 import { citaToSource, type VideoPlayerPayload } from "../consult-data";
-import { SaveBtn } from "./save-btn";
 
-/** Tipo 4 · Video — recurso de apoyo (decisión B: no se analiza ni transcribe).
+/** Tipo 5 · Video — recurso de apoyo (decisión B: no se analiza ni transcribe).
  *  Reproductor + capítulos del payload. Subtítulos solo si vienen en el par activo. */
 function fmt(seg: number | null | undefined): string {
   const s = Math.max(0, Math.round(seg ?? 0));
@@ -37,9 +36,17 @@ export function VideoPlayer({
       <div className="q">{payload.titulo}</div>
       <div className="vid-player">
         {payload.video_url ? (
-          <video src={payload.video_url} controls style={{ width: "100%", borderRadius: 8 }} />
+          <video src={payload.video_url} controls />
         ) : (
-          <span className="ph-tag">VIDEO · recurso no disponible</span>
+          <>
+            <span className="ph-tag">VIDEO · DROP CLIP</span>
+            <button type="button" className="vid-play" aria-label="Reproducir">
+              <Icon name="play" size={20} />
+            </button>
+            <div className="vid-scrub">
+              <span style={{ width: "0%" }} />
+            </div>
+          </>
         )}
         {payload.subtitulos_disponibles_en_par_activo && (
           <span className="vid-cc">
@@ -85,10 +92,12 @@ export function VideoPlayer({
           )}
         </div>
       )}
-      <div className="acard-foot">
-        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} emptyLabel="Recurso de apoyo" />
-        <SaveBtn saved={saved} onSave={onSave} />
-      </div>
+      <CitedFragment
+        cita={cita}
+        saved={saved}
+        onSave={onSave}
+        onOpenDoc={() => onCite(citaToSource(cita))}
+      />
     </div>
   );
 }

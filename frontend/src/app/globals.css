@@ -2,13 +2,26 @@
    Tokens mirror `colors_and_type.css` (design bundle source of truth) 1:1.
    The three kit stylesheets are ported verbatim and imported here. */
 @import "../styles/kit-pwa.css";
+@import "../styles/kit-answer-types.css";
+@import "../styles/kit-consult.css";
+@import "../styles/kit-ingesta.css";
 @import "../styles/kit-admin.css";
+@import "../styles/kit-codos.css";
+@import "../styles/kit-gobernanza.css";
+@import "../styles/kit-qrs.css";
+@import "../styles/kit-documentos.css";
+@import "../styles/kit-plan.css";
+@import "../styles/kit-inteligencia.css";
 @import "../styles/kit-commercial.css";
+@import "../styles/kit-schemas.css";
+@import "../styles/kit-glosario.css";
 @import "../styles/kit-landing-v2.css";
 @import "../styles/kit-ingesta-progress.css";
 @import "../styles/kit-platform.css";
 @import "../styles/kit-onboarding.css";
+@import "../styles/kit-entry.css";
 @import "../styles/kit-sitio-v2.css";
+@import "../styles/kit-demo.css";
 @import "../styles/mobile-refinements.css";
 
 @tailwind base;

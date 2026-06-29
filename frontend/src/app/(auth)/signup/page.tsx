@@ -60,7 +60,7 @@ export default function SignupFreemiumPage() {
   };
 
   return (
-    <div className="onb-kit">
+    <div className="entry-view">
     <div className="auth-stage">
       <div className="auth-split">
         <ValueAside

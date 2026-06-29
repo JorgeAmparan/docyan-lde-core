@@ -2,9 +2,8 @@
 
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitaInline } from "./cita-inline";
+import { CitedFragment } from "./cited-fragment";
 import { citaToSource, type ProcedureCardPayload } from "../consult-data";
-import { SaveBtn } from "./save-btn";
 
 /**
  * Tipo 2 · Guía paso a paso — numbered `.steps` + `.ppe` chips + ANSI-Z535 `.warn`,
@@ -43,10 +42,12 @@ export function GuiaPasoAPaso({
       <ol className="steps">
         {pasos.map((p, i) => (
           <li key={i}>
-            <span className="st">{p.descripcion}</span>
-            {(p.herramientas ?? []).length > 0 && (
-              <span className="lnote">Herramientas: {(p.herramientas ?? []).join(", ")}</span>
-            )}
+            <span className="st">
+              {p.descripcion}
+              {(p.herramientas ?? []).length > 0 && (
+                <span className="lnote">Herramientas: {(p.herramientas ?? []).join(", ")}</span>
+              )}
+            </span>
           </li>
         ))}
       </ol>
@@ -59,10 +60,12 @@ export function GuiaPasoAPaso({
           </div>
         </div>
       )}
-      <div className="acard-foot">
-        <CitaInline cita={cita} onOpenDoc={() => onCite(citaToSource(cita))} />
-        <SaveBtn saved={saved} onSave={onSave} />
-      </div>
+      <CitedFragment
+        cita={cita}
+        saved={saved}
+        onSave={onSave}
+        onOpenDoc={() => onCite(citaToSource(cita))}
+      />
     </div>
   );
 }

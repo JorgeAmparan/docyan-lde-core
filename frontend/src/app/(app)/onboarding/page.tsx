@@ -167,7 +167,7 @@ export default function OnboardingFase1Page() {
   };
 
   return (
-    <div className="onb-kit">
+    <div className="entry-view">
     <div className="onb">
       <aside className="onb-rail">
         <BrandRow tone="light" size={26} />
@@ -401,8 +401,8 @@ export default function OnboardingFase1Page() {
             <>
               <h1>Listo. Tu primer CoDo está vivo.</h1>
               <p className="onb-lead">
-                Ya viste el valor. Desde aquí puedes gestionar tus documentos, invitar a tu equipo o
-                elegir un plan cuando lo necesites.
+                Ya viste el valor: una consulta citada en minutos. Desde aquí puedes gestionar tus
+                documentos, invitar a tu equipo o elegir un plan cuando lo necesites.
               </p>
               <div className="onb-body">
                 <div className="onb-hl">

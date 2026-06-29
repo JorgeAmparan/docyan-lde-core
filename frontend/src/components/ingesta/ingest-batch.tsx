@@ -113,13 +113,14 @@ export function IngestBatch({
           </div>
         </div>
       ) : (
-        <div className="batch-done">
-          <div className="bd-ic">
-            <Icon name="check-check" size={22} />
+        // Bloque de éxito del prototipo (.chain): cadena SHA-256 sellada.
+        <div className="chain" style={{ marginBottom: 16 }}>
+          <div className="ci2">
+            <Icon name="check" size={18} />
           </div>
-          <div className="bd-main">
-            <div className="bd-h">{t("ingesta.batch.doneTitle")}</div>
-            <div className="bd-sub">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ct">{t("ingesta.batch.doneTitle")}</div>
+            <div className="cm">
               {t("ingesta.batch.doneSub", { n: completado })}
               {error > 0 && (
                 <>

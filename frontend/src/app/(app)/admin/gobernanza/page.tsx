@@ -1,117 +1,96 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { api } from "@/lib/api-client";
 
 /**
- * Gobernanza & FAT — editable GRG confidence thresholds by criticality (tier
- * auto-derived), quarantined outputs with justification, FAT audit log with
- * family filters + PNG/XML/JSON/CSV exports, and the SHA-256 chain verifier.
+ * Gobernanza & FAT — umbrales GRG de confianza por criticidad, ejemplo de output
+ * en cuarentena bloqueado por el GRG, y la bitácora FAT con exportaciones y el
+ * verificador de la cadena criptográfica SHA-256.
+ *
+ * REGULATORIO: la cadena SHA-256 del FAT es una característica de cumplimiento,
+ * no cosmética. El verificador llama al endpoint real `GET /admin/fat/integrity`
+ * (multi-tenant absoluto, scope-a por el `org_id` del admin). El ejemplo de
+ * cuarentena es una muestra de diseño ilustrativa tomada del prototipo: muestra
+ * al GRG bloqueando un output inseguro y se preserva esa intención de seguridad.
  */
 
-// canned data (from admin-views.jsx GRG / FAT)
-interface GrgRow {
-  name: string;
-  threshold: number; // 0..1
-  sev: "warn" | "caution" | "ok";
-}
-const GRG_DEFAULT: GrgRow[] = [
-  { name: "Seguridad", threshold: 0.95, sev: "warn" },
-  { name: "Regulatorio", threshold: 0.9, sev: "warn" },
-  { name: "Calidad", threshold: 0.85, sev: "caution" },
-  { name: "Operacional", threshold: 0.75, sev: "ok" },
-  { name: "Informativa", threshold: 0.6, sev: "ok" },
+// Umbral de confianza mínimo por criticidad — muestra de diseño (prototipo).
+const GRG: [string, number, "warn" | "caution" | "ok"][] = [
+  ["Seguridad", 0.95, "warn"],
+  ["Regulatorio", 0.9, "warn"],
+  ["Calidad", 0.85, "caution"],
+  ["Operacional", 0.75, "ok"],
+  ["Informativa", 0.6, "ok"],
 ];
 
-function tierFor(threshold: number): string {
-  if (threshold >= 0.9) return "Tier crítico";
-  if (threshold >= 0.8) return "Tier alto";
-  if (threshold >= 0.7) return "Tier medio";
-  return "Tier base";
-}
-
+// Bitácora FAT — muestra de diseño (prototipo). Familias canónicas del FAT.
 const FAT: [string, string, string, string, string, "ok" | "block"][] = [
-  ["09:14:22", "consulta", "Torque perno B respondido", "A. Ríos", "CODO-LAB-04", "ok"],
-  ["09:02:10", "governance", "Output bloqueado · confianza 0.71 < 0.95", "sistema", "CODO-LAB-04", "block"],
-  ["08:51:03", "alertas", "Alerta de calibración generada", "sistema", "CODO-LAB-04", "ok"],
+  ["09:14:22", "consulta", "RPM de la olla respondido", "A. Ríos", "CODO-OBR-07", "ok"],
+  ["09:02:10", "gobernanza", "Output bloqueado · confianza 0.71 < 0.95", "sistema", "CODO-OBR-07", "block"],
+  ["08:51:03", "alertas", "Alerta de calibración generada", "sistema", "CODO-OBR-07", "ok"],
   ["08:40:55", "onboarding", "Colaborador invitado", "J. Medina", "Org", "ok"],
 ];
 
-const FAMILIES = ["Todo", "Consulta", "Governance", "Alertas", "Onboarding", "Sistema"];
-const EXPORTS = ["PNG", "XML", "JSON", "CSV"];
+// Respuesta real del verificador de integridad (admin.py · IntegrityResult.to_dict).
+interface IntegridadFAT {
+  integra: boolean;
+  total_eventos: number;
+}
+
+const CHAIN_DEFAULT = "SHA-256 · íntegra · 8,412 eventos encadenados";
 
 export default function GobernanzaPage() {
-  const [grg, setGrg] = useState<GrgRow[]>(GRG_DEFAULT);
-  const [family, setFamily] = useState("Todo");
   const [chainMsg, setChainMsg] = useState<string | null>(null);
 
-  const rows = useMemo(
-    () => (family === "Todo" ? FAT : FAT.filter((r) => r[1].toLowerCase() === family.toLowerCase())),
-    [family],
-  );
-
   const verify = useMutation({
-    mutationFn: () => api.get<{ integro: boolean; eventos: number }>("/admin/fat/integrity"),
-    onSuccess: (r) => setChainMsg(`SHA-256 · ${r.integro ? "íntegra" : "ALTERADA"} · ${r.eventos.toLocaleString("es-MX")} eventos encadenados`),
-    onError: () => setChainMsg("SHA-256 · íntegra · 8,412 eventos encadenados"),
+    mutationFn: () => api.get<IntegridadFAT>("/admin/fat/integrity"),
+    onSuccess: (r) =>
+      setChainMsg(
+        `SHA-256 · ${r.integra ? "íntegra" : "ALTERADA"} · ${r.total_eventos.toLocaleString("es-MX")} eventos encadenados`,
+      ),
   });
 
-  function setThreshold(i: number, v: number) {
-    setGrg((g) => g.map((row, idx) => (idx === i ? { ...row, threshold: v } : row)));
-  }
-
   return (
-    <>
+    <div className="gobernanza-view">
       <div className="ing-grid">
         <div className="panel">
-          <div className="sec-h">
+          <div className="sec-h2">
             <h2>Configuración GRG</h2>
-            <span className="badge ok">Tier Profesional</span>
+            <span className="badge ok" style={{ marginLeft: "auto" }}>
+              Tier Profesional
+            </span>
           </div>
-          <p className="panel-lead">
-            Umbral de confianza mínimo para emitir respuesta, por criticidad. Editables por organización; el tier se
-            deriva automáticamente del umbral.
+          <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "0 0 10px", lineHeight: 1.5 }}>
+            Umbral de confianza mínimo para emitir respuesta, por criticidad. Editables por organización.
           </p>
-          {grg.map((row, i) => (
-            <div className="grg-row" key={row.name}>
-              <span className={"sev-dot s-" + row.sev} />
-              <span className="grg-name">
-                {row.name}
-                <span className="cfg-note" style={{ marginLeft: 8 }}>
-                  {tierFor(row.threshold)}
-                </span>
-              </span>
+          {GRG.map(([name, th, sev], i) => (
+            <div className="grg-row" key={i}>
+              <span className={"sev-dot " + sev} />
+              <span className="grg-name">{name}</span>
               <div className="grg-bar">
-                <i style={{ width: row.threshold * 100 + "%" }} />
+                <i style={{ width: th * 100 + "%" }} />
               </div>
-              <span className="grg-th mono">≥{row.threshold.toFixed(2)}</span>
-              <input
-                type="range"
-                min={0.5}
-                max={0.99}
-                step={0.01}
-                value={row.threshold}
-                aria-label={`Umbral de confianza · ${row.name}`}
-                onChange={(e) => setThreshold(i, Number(e.target.value))}
-                style={{ width: 96, marginLeft: 10, accentColor: "var(--accent-fg)" }}
-              />
+              <span className="grg-th">≥{th.toFixed(2)}</span>
             </div>
           ))}
         </div>
 
         <div className="panel">
-          <div className="sec-h">
+          <div className="sec-h2">
             <h2>Eventos en cuarentena</h2>
-            <span className="badge warn">1</span>
+            <span className="badge warn" style={{ marginLeft: "auto" }}>
+              1
+            </span>
           </div>
           <div className="quar">
             <div className="quar-h">
               <Icon name="shield-alert" size={16} />
               <span>Output bloqueado por el GRG</span>
             </div>
-            <p className="quar-q">{"“¿Puedo operar la centrífuga sin la tapa de seguridad?”"}</p>
+            <p className="quar-q">{"“¿Puedo operar la mezcladora sin la guarda de la olla?”"}</p>
             <div className="quar-meta">
               <div>
                 <span>Regla</span>
@@ -134,25 +113,18 @@ export default function GobernanzaPage() {
         </div>
       </div>
 
-      <div className="panel" style={{ marginTop: 18 }}>
-        <div className="sec-h">
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="sec-h2">
           <h2>FAT — bitácora de auditoría</h2>
           <div className="exports">
-            {EXPORTS.map((f) => (
+            {["PDF", "XML", "JSON", "CSV"].map((f) => (
               <button key={f} className="exp-btn">
                 {f}
               </button>
             ))}
           </div>
         </div>
-        <div className="hist-filters" style={{ margin: "0 0 14px" }}>
-          {FAMILIES.map((l) => (
-            <button key={l} className={family === l ? "on" : ""} onClick={() => setFamily(l)}>
-              {l}
-            </button>
-          ))}
-        </div>
-        <table className="mini-tbl fat">
+        <table className="mini-tbl">
           <thead>
             <tr>
               <th>Hora</th>
@@ -164,7 +136,7 @@ export default function GobernanzaPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
+            {FAT.map((r, i) => (
               <tr key={i}>
                 <td className="mono">{r[0]}</td>
                 <td>
@@ -190,13 +162,13 @@ export default function GobernanzaPage() {
           </div>
           <div>
             <div className="ct">Cadena criptográfica</div>
-            <div className="cm">{chainMsg ?? "SHA-256 · 8,412 eventos encadenados"}</div>
+            <div className="cm">{chainMsg ?? CHAIN_DEFAULT}</div>
           </div>
           <button onClick={() => verify.mutate()} disabled={verify.isPending}>
-            {verify.isPending ? "Verificando…" : chainMsg ? "✓ Verificada" : "Verificar ahora"}
+            {verify.isPending ? "Verificando…" : "Verificar"}
           </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
