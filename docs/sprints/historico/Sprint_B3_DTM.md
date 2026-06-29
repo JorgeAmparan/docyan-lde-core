@@ -1,5 +1,13 @@
 # Sprint Contract B2 — DTM + segregación estricta + TM dual + lock terminológico
 
+> **NOTA DE AUDITORÍA (29-jun-2026 — archivado).** Contrato DTM **completo** de la
+> numeración pre-postPoC (motor de traducción de 6 fases, scoring, lock activo,
+> fuzzy operativo). **NUNCA se ejecutó así.** La Adenda de Alcance MVP lo reordenó:
+> lo ejecutado fueron los **cimientos** (`Sprint_B3_DTM_Cimientos_Adenda_MVP.md`,
+> en esta misma carpeta) y el **motor** se difirió a
+> `../Sprint_B5_Motor_Traduccion_PistaA.md`. Se conserva solo como referencia de la
+> visión completa de traducción. Verdad viva: `docs/DOCYAN_Resumen_Ejecutivo_Plan_Dev_v2.md`.
+
 **Producto:** DOCYAN LDE — Live Document Environment by XCID
 **Bloque:** B2 | **Ejecutor:** Opus 4.8 vía Claude Code CLI
 **Modo:** Una aprobación + ejecución completa + un reporte final.

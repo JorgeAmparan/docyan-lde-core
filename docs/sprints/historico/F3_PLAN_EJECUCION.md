@@ -1,5 +1,10 @@
 # Plan de ejecución — Sprint F3 (Sitio Público v2)
 
+> **NOTA DE AUDITORÍA (29-jun-2026 — archivado).** Plan **pre-ejecución**; el sitio
+> público real se entregó en las fases F + Sprint Núcleo Consultable + B13.3, no como
+> "bloque F3" formal. Se conserva como referencia histórica de la planeación. Verdad
+> viva: `docs/DOCYAN_Resumen_Ejecutivo_Plan_Dev_v2.md`.
+
 > Documento de PREPARACIÓN, no de ejecución. Escrito antes de la aprobación de Jorge.
 > Cuando Jorge diga "ejecuta F3", arrancar desde aquí. Estado al escribirlo: **nada ejecutado, 0 archivos tocados.** Branch aún en `main`.
 > Fuentes leídas: Sprint Contract F3 (`~/Downloads/Sprint_F3_Sitio_Publico_v2.md`), 4 docs rectores (Narrativa, Modelo Comercial, Precios, HANDOFF-sitio-publico-v2), mapa de repo (backend + frontend).

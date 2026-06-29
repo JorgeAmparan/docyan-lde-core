@@ -4,7 +4,7 @@
 
 Plataforma de localización documental con IA para industria regulada y agencias de traducción profesional. DOCYAN convierte documentación técnica en un entorno documental vivo, consultable por QR, multilingüe y auditable.
 
-> Antes conocido internamente como *DOCYAN LDE*. Renombrado a **DOCYAN LDE** (28 mayo 2026).
+> Antes **Panohayan DLE™**. Renombrado a **DOCYAN LDE** (28 mayo 2026).
 
 ---
 
@@ -69,9 +69,11 @@ docyan-lde-core/
 
 ## Documentación
 
-- `docs/Plan_Desarrollo_MVP_DOCYAN_v2_postPoC.md` — plan maestro de desarrollo.
-- `docs/sprints/` — los 14 Sprint Contracts (B0–B13).
-- `docs/adenda_postPoC_28mayo2026.md` — hallazgos y decisiones del PoC.
+- `docs/DOCYAN_Resumen_Ejecutivo_Plan_Dev_v2.md` — **estado vivo y decisiones vigentes** (punto de entrada).
+- `docs/Catalogo_Normativo_Schemas_v2.md` — catálogo cerrado de 14 tipos documentales.
+- `docs/DOCYAN LDE — Design System/` — **ley visual** (prototipo `DOCYAN-Prototipo.html` = única verdad del frontend interno).
+- `docs/Plan_Desarrollo_MVP_DOCYAN_v2_postPoC.md` + `docs/adenda_postPoC_28mayo2026.md` — referencia estructural histórica (cómo se llegó aquí).
+- `docs/sprints/` — contratos de la numeración original (B5–B14, planes diferidos); lo ejecutado vive en `docs/sprints/historico/`.
 - `CLAUDE.md` — guía operativa para asistencia de IA en este repo.
 
 ## Setup
@@ -94,7 +96,7 @@ Ver `DEPLOYMENT.md` para despliegue a Fly.io + Vercel.
 
 ## Estado
 
-En desarrollo activo. Construcción por bloques secuenciales (B0→B13) según los Sprint Contracts. MVP demo-able de Pista A = B0+B1+B2+B3+B4+B6+B7+B8+B12.
+En desarrollo activo, desplegado en Fly.io (5 apps, región `dfw`) + Vercel. El desarrollo real siguió fases (F1.5/F2/F3) + Sprint Núcleo Consultable + B13.3 Retrieval, no la numeración secuencial original B0–B13. Estado vivo en `docs/DOCYAN_Resumen_Ejecutivo_Plan_Dev_v2.md`.
 
 ---
 
