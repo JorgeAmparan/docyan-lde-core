@@ -1,0 +1,12 @@
+/* DOCYAN LDE™ — Design System · single CSS entrypoint.
+   Consumers link this one file; it pulls in tokens first, then the
+   per-surface stylesheets. Tokens + @font-face live in colors_and_type.css. */
+
+/* Foundations — design tokens (color, type, spacing, radii, elevation, motion) */
+@import "colors_and_type.css";
+
+/* Design-System tab preview-card scaffold */
+@import "preview/_card.css";
+
+/* UI kit — Capa B · public commercial layer (v2 · única verdad del sitio público) */
+@import "ui_kits/commercial-v2/site2.css";

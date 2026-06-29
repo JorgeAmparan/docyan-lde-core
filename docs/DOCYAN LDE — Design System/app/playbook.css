@@ -1,0 +1,36 @@
+/* DOCYAN — Momento Playbook (clases .pb-*). Standalone: se ven bien tanto en
+   escritorio (Guardadas) como en móvil (.dy-mobile las hereda igual). Aditivo. */
+
+.pb-nudge{background:linear-gradient(180deg,var(--surface),var(--amate-50));border:1px solid var(--cinnabar-200);border-radius:14px;padding:15px;box-shadow:var(--shadow-sm);margin-top:14px;}
+.pb-nudge .pb-nh{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14.5px;}
+.pb-nudge .pb-nh .lic{color:var(--cinnabar-500);}
+.pb-nudge p{font-size:13px;color:var(--fg-muted);line-height:1.5;margin:8px 0 13px;}
+.pb-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--cinnabar-500);color:#fff;border:none;border-radius:12px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-cinnabar);}
+.pb-cta:active{transform:translateY(1px);}
+.pb-cta .lic{width:15px;height:15px;}
+
+/* run */
+.pb-run-head{display:flex;align-items:center;gap:11px;margin-bottom:4px;}
+.pb-back{width:40px;height:40px;border-radius:12px;border:1px solid var(--border-strong);background:var(--surface);color:var(--fg-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+.pb-back:hover{background:var(--amate-100);}
+.pb-back .lic{width:18px;height:18px;}
+.pb-eyebrow{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;color:var(--accent-fg);}
+.pb-eyebrow .lic{color:var(--cinnabar-500);}
+.pb-run-name{font-size:17px;font-weight:700;letter-spacing:-.01em;margin-top:2px;}
+.pb-run-sub{font-size:13px;color:var(--fg-muted);line-height:1.5;margin:6px 2px 16px;}
+.pb-step{position:relative;margin-bottom:16px;animation:pb-rise .32s var(--ease-out);}
+@keyframes pb-rise{from{transform:translateY(10px);}to{transform:none;}}
+.pb-step-h{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+.pb-num{flex:none;width:26px;height:26px;border-radius:50%;background:var(--cinnabar-500);color:#fff;font-family:var(--font-mono);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;}
+.pb-q{font-size:14.5px;font-weight:600;letter-spacing:-.01em;}
+.pb-step-body{padding-left:36px;}
+.pb-step::before{content:"";position:absolute;left:12.5px;top:30px;bottom:-16px;width:1.5px;background:var(--cinnabar-100);}
+.pb-step:last-of-type::before{display:none;}
+.pb-composing{display:flex;align-items:center;gap:9px;font-family:var(--font-mono);font-size:12px;color:var(--fg-muted);padding:10px 2px;}
+.pb-composing .lic{width:15px;height:15px;color:var(--cinnabar-500);animation:pb-spin 1s linear infinite;}
+@keyframes pb-spin{to{transform:rotate(360deg);}}
+.pb-done{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:var(--success-600);background:var(--success-100);border-radius:12px;padding:13px 14px;margin-top:4px;}
+.pb-done .lic{width:16px;height:16px;flex:none;}
+
+/* badges numerados en la lista cuando ya es Playbook */
+.pb-listnum{flex:none;width:24px;height:24px;border-radius:50%;background:var(--cinnabar-50);color:var(--cinnabar-600);font-family:var(--font-mono);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;}

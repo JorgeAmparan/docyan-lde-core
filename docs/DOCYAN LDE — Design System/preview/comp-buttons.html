@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Buttons" subtitle="Primary / secondary / ghost / danger + sizes & states" viewport="700x160" --><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="../colors_and_type.css" rel="stylesheet"><link href="_card.css" rel="stylesheet">
+<style>
+  .btn{font-family:var(--font-sans);font-size:14px;font-weight:600;height:40px;padding:0 16px;border-radius:var(--radius-md);
+    border:1px solid transparent;display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap;transition:all var(--dur-fast) var(--ease-out);line-height:1;}
+  .btn svg{width:16px;height:16px;}
+  .primary{background:var(--cinnabar-500);color:#fff;}
+  .primary:hover{background:var(--cinnabar-600);box-shadow:var(--shadow-cinnabar);}
+  .secondary{background:var(--surface);color:var(--fg);border-color:var(--border-strong);}
+  .secondary:hover{background:var(--amate-100);}
+  .ghost{background:transparent;color:var(--fg);}
+  .ghost:hover{background:var(--amate-100);}
+  .danger{background:var(--danger-600);color:#fff;}
+  .disabled{background:var(--amate-200);color:var(--stone-400);cursor:not-allowed;}
+  .row2{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+  .sm{height:32px;padding:0 12px;font-size:13px;}
+  .lg{height:48px;padding:0 22px;font-size:15px;}
+</style></head>
+<body>
+  <div class="row2">
+    <button class="btn primary"><i data-lucide="scan-line"></i>Escanear QR</button>
+    <button class="btn secondary">Ver fuente</button>
+    <button class="btn ghost">Cancelar</button>
+    <button class="btn danger"><i data-lucide="trash-2"></i>Eliminar CoDo</button>
+    <button class="btn disabled" disabled>Sin saldo</button>
+  </div>
+  <div class="row2" style="margin-bottom:0">
+    <button class="btn primary sm">Small</button>
+    <button class="btn primary">Default · 40px</button>
+    <button class="btn primary lg">Large · touch 48px</button>
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-subtle);margin-left:6px;">hover primary → cinnabar glow</span>
+  </div>
+<script src="https://unpkg.com/lucide@latest"></script><script>lucide.createIcons();</script>
+</body></html>

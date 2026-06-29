@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Cards" subtitle="Answer card with citation + administrative alert card" viewport="700x200" --><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="../colors_and_type.css" rel="stylesheet"><link href="_card.css" rel="stylesheet">
+<style>
+  body{display:flex;gap:18px;align-items:flex-start;background:var(--bg);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:16px 18px;width:300px;}
+  .ans-q{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--fg-subtle);text-transform:uppercase;margin-bottom:8px;}
+  .val{font-family:var(--font-sans);font-weight:700;font-size:38px;letter-spacing:-.02em;color:var(--fg);line-height:1;}
+  .unit{font-size:18px;font-weight:500;color:var(--fg-muted);margin-left:4px;}
+  .cite{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11.5px;font-weight:500;color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);padding:4px 9px 4px 7px;border-radius:var(--radius-sm);margin-top:14px;cursor:pointer;white-space:nowrap;}
+  .brk{position:relative;width:12px;height:12px;flex:none;}
+  .brk::before,.brk::after{content:"";position:absolute;top:0;bottom:0;width:4px;border:1.5px solid var(--cinnabar-500);}
+  .brk::before{left:0;border-right:none;border-radius:2px 0 0 2px;}.brk::after{right:0;border-left:none;border-radius:0 2px 2px 0;}
+  /* alert card — administrative only, ANSI-warning tone */
+  .alert{border-left:3px solid var(--warning-600);}
+  .ahead{display:flex;align-items:center;gap:8px;font-family:var(--font-sans);font-weight:600;font-size:14px;color:var(--fg);}
+  .ahead svg{width:17px;height:17px;color:var(--warning-600);}
+  .atag{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--warning-600);background:var(--warning-100);padding:2px 6px;border-radius:var(--radius-xs);margin-left:auto;}
+  .abody{font-family:var(--font-sans);font-size:13px;color:var(--fg-muted);line-height:1.5;margin:10px 0 0;}
+</style></head>
+<body>
+  <div class="card">
+    <div class="ans-q">Torque del perno B</div>
+    <div><span class="val">85</span><span class="unit">N·m</span></div>
+    <p style="font-family:var(--font-sans);font-size:13px;color:var(--fg-muted);margin:8px 0 0;line-height:1.5">Aplicado en cruz, en tres etapas progresivas.</p>
+    <span class="cite"><span class="brk"></span>Manual VF-2 · §4.2.1 ↗</span>
+  </div>
+  <div class="card alert">
+    <div class="ahead"><i data-lucide="alarm-clock"></i>Calibración por vencer<span class="atag">Administrativa</span></div>
+    <p class="abody">La centrífuga Hettich vence calibración en 9 días (12 jun). Recordatorio administrativo — no es una instrucción operativa.</p>
+  </div>
+<script src="https://unpkg.com/lucide@latest"></script><script>lucide.createIcons();</script>
+</body></html>
