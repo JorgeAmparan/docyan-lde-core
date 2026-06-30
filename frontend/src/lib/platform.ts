@@ -28,6 +28,7 @@ export function usePlatformApi() {
     get: <T = unknown>(path: string, query?: Record<string, string | number | boolean | undefined>) =>
       api.get<T>(path, { token, query }),
     post: <T = unknown>(path: string, json?: unknown) => api.post<T>(path, json, { token }),
+    postForm: <T = unknown>(path: string, form: FormData) => api.postForm<T>(path, form, { token }),
   };
 }
 

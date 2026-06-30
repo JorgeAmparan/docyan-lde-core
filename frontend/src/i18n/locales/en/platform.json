@@ -13,6 +13,7 @@
     "resumen": "Overview",
     "orgs": "Organizations",
     "jobs": "Ingest jobs",
+    "ingesta": "Test ingest",
     "codigos": "Access codes",
     "ingresos": "Revenue",
     "soporte": "Support"
@@ -21,6 +22,7 @@
     "resumen": "Platform overview",
     "orgs": "Organizations",
     "jobs": "Ingest jobs",
+    "ingesta": "Test document ingest",
     "codigos": "Access codes",
     "ingresos": "Revenue",
     "soporte": "Support"

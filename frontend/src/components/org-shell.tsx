@@ -1,37 +1,41 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/icon";
 import { DocyanMark } from "@/components/brand/docyan-mark";
 import { useAuth } from "@/lib/auth";
 
 /**
- * OrgShell — shell de NAV-RAIL único de la organización (rol admin/org).
+ * OrgShell — chrome de la organización, PORTADO 1:1 del prototipo
+ * (`DOCYAN-Prototipo.html → OrgShell` + `app/app.css`):
+ *   `.app` → `.header` (marca + búsqueda + cuenta) + `.body` (`.rail` hover-expand
+ *   + `.main` → `.content`).
  *
- * Es la ley visual del prototipo (`NAV_ORG.pro` en `app/data.jsx`): TODAS las
- * vistas de gestión de la org (Resumen, Inteligencia, CoDos, Documentos,
- * Alertas, Ingesta, Catálogo de schemas, Glosario, Gobernanza & FAT, Generar
- * QRs, Usuarios, Plan) se renderizan DENTRO de este mismo shell.
+ * El rail es de **hover-expand** (66px → 224px): labels, grupos y org ocultos hasta
+ * el hover (clases `.rail`/`.rail-in`/`.label`/`.rail-org`, reglas verbatim en
+ * kit-admin.css). La marca vive en el header (no en el rail) y NO hay `<h1>` de
+ * título: cada vista trae su propio encabezado, igual que el prototipo.
  *
- * El kit's `.admin` class es un frame fijo 1120×760; aquí se construye un flex
- * full-height fluido (`.side` + `.main`) conservando cada className del kit
- * verbatim (`.side`, `.side-logo`, `.nav`, `.grp`, `.org`, `.main`, `.topbar`,
- * `.search`, `.av-user`). Los hijos van en `.main > .content`.
+ * El cableado real se conserva: rutas Next (`Link`), `useAuth` (sesión/plan),
+ * logout (`clear` + `/login`). Búsqueda global = input readOnly (el modal es ítem
+ * aparte del punch list, aún no portado — no se finge).
  */
 
 type NavGroup = { group: string };
 type NavLink = { icon: string; label: string; href: string };
 type NavEntry = NavGroup | NavLink;
 
-const NAV: NavEntry[] = [
+// Paridad con `app/data.jsx → NAV_ORG`. Ambos juegos INCLUYEN "Consultar" (scan-line).
+const NAV_PRO: NavEntry[] = [
   { group: "Operación" },
   { icon: "layout-dashboard", label: "Resumen", href: "/admin" },
   { icon: "sparkles", label: "Inteligencia", href: "/saved" },
   { icon: "folder-tree", label: "CoDos", href: "/admin/codos" },
-  { icon: "files", label: "Documentos", href: "/documentos" },
+  { icon: "scan-line", label: "Consultar", href: "/consult" },
   { icon: "bell", label: "Alertas", href: "/admin/alertas" },
   { group: "Administración" },
+  { icon: "files", label: "Documentos", href: "/documentos" },
   { icon: "upload", label: "Ingesta", href: "/admin/ingesta" },
   { icon: "library", label: "Catálogo de schemas", href: "/admin/schemas" },
   { icon: "book-marked", label: "Glosario", href: "/admin/glosario" },
@@ -41,32 +45,21 @@ const NAV: NavEntry[] = [
   { icon: "gem", label: "Plan", href: "/plan" },
 ];
 
-const TITLES: Record<string, string> = {
-  "/admin": "Resumen general",
-  "/saved": "Inteligencia",
-  "/admin/codos": "CoDos",
-  "/documentos": "Documentos vivos",
-  "/admin/alertas": "Alertas administrativas",
-  "/admin/ingesta": "Ingesta de documentos",
-  "/admin/schemas": "Catálogo de schemas",
-  "/admin/glosario": "Glosario + lock terminológico",
-  "/admin/gobernanza": "Gobernanza & FAT",
-  "/admin/qrs": "Generar QRs",
-  "/admin/usuarios": "Usuarios",
-  "/plan": "Plan",
-};
+// Freemium: "Documentos" apunta a la lista de CoDos (vista "codos" del prototipo).
+const NAV_FREE: NavEntry[] = [
+  { icon: "files", label: "Documentos", href: "/admin/codos" },
+  { icon: "scan-line", label: "Consultar", href: "/consult" },
+  { icon: "users", label: "Usuarios", href: "/admin/usuarios" },
+  { icon: "gem", label: "Plan", href: "/plan" },
+];
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-function titleFor(pathname: string): string {
-  // longest matching prefix wins (so /admin/codos/[id] keeps the CoDos title)
-  const match = Object.keys(TITLES)
-    .filter((h) => (h === "/admin" ? pathname === "/admin" : pathname === h || pathname.startsWith(h + "/")))
-    .sort((a, b) => b.length - a.length)[0];
-  return match ? TITLES[match] : "DOCYAN LDE";
+function isConsultRoute(pathname: string): boolean {
+  return pathname === "/consult" || pathname === "/select-codo";
 }
 
 function initials(value?: string): string {
@@ -78,58 +71,86 @@ function initials(value?: string): string {
 
 export function OrgShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAuth((s) => s.user);
+  const clear = useAuth((s) => s.clear);
 
   // DESIGN: org identity defaults to canned kit values until /auth/me populates.
   const orgName = user?.org_name ?? "Laboratorio Estándar";
-  const orgPlan = "Plan Profesional";
+  // El plan sale de la sesión. Fallback "pro" para NO ocultar opciones (nunca rail
+  // vacío); falta exponer `plan` en /auth/me (PENDIENTE backend).
+  const plan = user?.plan === "free" ? "free" : "pro";
+  const NAV = plan === "free" ? NAV_FREE : NAV_PRO;
+  const orgPlan = plan === "free" ? "Plan gratuito" : "Plan Profesional";
   const userInitials = initials(user?.name ?? user?.email);
 
+  function logout() {
+    clear();
+    router.push("/login");
+  }
+
   return (
-    <div style={{ display: "flex", height: "100dvh", width: "100%", background: "var(--bg)" }}>
-      <aside className="side">
-        <Link href="/admin" className="side-logo" style={{ textDecoration: "none", color: "inherit" }}>
+    <div className="app">
+      <header className="header">
+        <div className="hbrand">
           <DocyanMark size={24} />
           <span className="w">DOCYAN</span>
           <span className="lde">LDE</span>
-        </Link>
-        <nav className="nav">
-          {NAV.map((n, i) =>
-            "group" in n ? (
-              <div className="grp" key={`g-${i}`}>
-                {n.group}
-              </div>
-            ) : (
-              <Link className={isActive(pathname, n.href) ? "on" : ""} key={n.href} href={n.href}>
-                <Icon name={n.icon} size={17} className="lic" />
-                {n.label}
-              </Link>
-            ),
-          )}
-        </nav>
-        <div className="org">
-          <div className="av">{initials(orgName)}</div>
-          <div style={{ minWidth: 0 }}>
-            <div className="ot">{orgName}</div>
-            <div className="om">{orgPlan}</div>
-          </div>
-          <Icon name="chevrons-up-down" size={15} color="var(--fg-subtle)" />
+          <span className="role-tag">Org</span>
         </div>
-      </aside>
-
-      <div className="main">
-        <header className="topbar">
-          <h1>{titleFor(pathname)}</h1>
-          <div className="search">
-            <Icon name="search" size={15} />
-            <input placeholder="Buscar en todos los CoDos…" aria-label="Buscar en todos los CoDos" />
-          </div>
-          <div className="av-user" aria-label="Cuenta">
+        <div className="hsep" />
+        <div className="search">
+          <Icon name="search" size={16} className="lic" />
+          <input readOnly placeholder="Busca un documento o pregunta directo…" aria-label="Buscar" />
+        </div>
+        <div className="haccount">
+          <Link href="/cuenta" className="av-user" title="Mi cuenta">
             {userInitials}
-          </div>
-        </header>
+          </Link>
+        </div>
+      </header>
 
-        <div className="content">{children}</div>
+      <div className="body">
+        <aside className="rail">
+          <div className="rail-in">
+            <nav className="nav">
+              {NAV.map((n, i) =>
+                "group" in n ? (
+                  <div className="grp" key={`g-${i}`}>
+                    {n.group}
+                  </div>
+                ) : (
+                  <Link
+                    key={n.href}
+                    href={n.href}
+                    className={isActive(pathname, n.href) ? "on" : ""}
+                    aria-current={isActive(pathname, n.href) ? "page" : undefined}
+                  >
+                    <Icon name={n.icon} size={19} className="lic" />
+                    <span className="label">{n.label}</span>
+                  </Link>
+                ),
+              )}
+            </nav>
+            <div className="rail-foot">
+              <button className="rail-logout" onClick={logout}>
+                <Icon name="log-out" size={19} className="lic" />
+                <span className="label">Cerrar sesión</span>
+              </button>
+              <div className="rail-org">
+                <div className="av">{initials(orgName)}</div>
+                <div className="ot">
+                  <div className="otn">{orgName}</div>
+                  <div className="otm">{orgPlan}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div className="main">
+          <div className={"content" + (isConsultRoute(pathname) ? " consult" : "")}>{children}</div>
+        </div>
       </div>
     </div>
   );
