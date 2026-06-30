@@ -110,9 +110,7 @@ export default function ResumenPage() {
             Hit-rate caché
           </div>
           <div className="sv">{pcl ? pct(pcl.hit_rate) : "—"}</div>
-          <div className="sd">
-            <span className="up">▲ 4%</span> vs. mes pasado
-          </div>
+          <div className="sd">consultas resueltas de caché</div>
         </div>
         <div className="stat">
           <div className="sl">
@@ -151,7 +149,8 @@ export default function ResumenPage() {
               </div>
               {c.estado === "warn" ? (
                 <span className="badge warn">
-                  <Icon name="alarm-clock" size={12} />2 alertas
+                  <Icon name="alarm-clock" size={12} />
+                  {c.alertas} {c.alertas === 1 ? "alerta" : "alertas"}
                 </span>
               ) : (
                 <span className="badge ok">
