@@ -81,7 +81,6 @@ export function QuoteCard({
   valueUsd,
   totalUsd,
   currency,
-  saldoUsd,
   dentroCupo,
   cupoRestante,
   tipoNoCubierto,
@@ -168,12 +167,7 @@ export function QuoteCard({
               <span className="price-chip cobro" data-testid="quote-total">
                 {money(totalUsd, currency)}
               </span>
-              <div className="ct-price-sub">{rejected ? "no entra en el lote" : "excede el cupo"}</div>
-              {saldoUsd != null && (
-                <div className={"ct-price-sub" + (rejected ? " warn" : "")}>
-                  Saldo: {money(saldoUsd, currency)}
-                </div>
-              )}
+              <div className="ct-price-sub">excede el cupo · se cotiza el excedente</div>
             </>
           )}
         </div>

@@ -40,7 +40,7 @@
     "page": {
       "quoteTitle": "Batch analysis",
       "aboutTitle": "Ingest summary",
-      "gateNote": "Every document is measured with tiktoken and checked against your balance and hard caps BEFORE processing. No confirmation, no ingestion.",
+      "gateNote": "Every document is measured with tiktoken and resolved against your plan quota BEFORE processing. No confirmation, no ingestion.",
       "dropzone": "Drag up to {{max}} documents or select",
       "formats": "PDF · DOCX · XLSX · images with OCR",
       "quoting": "Measuring with tiktoken…",
@@ -49,7 +49,7 @@
       "costTotal": "Estimated total cost",
       "timeTotal": "Estimated total time",
       "balance": "Available balance",
-      "rejected": "rejected by balance/cap",
+      "rejected": "doesn't fit this batch",
       "overCapDoc": "over session cap",
       "removeDoc": "Remove document from batch",
       "capExceeded": "{{fit}} of {{total}} documents fit within the session limit (${{cap}} USD). Remove documents or adjust the cap before confirming.",

@@ -40,7 +40,7 @@
     "page": {
       "quoteTitle": "Análisis del lote",
       "aboutTitle": "Resumen de la ingesta",
-      "gateNote": "Cada documento se cotiza con tiktoken y se verifica contra tu saldo y los hard caps ANTES de procesar. Sin confirmación no hay ingesta.",
+      "gateNote": "Cada documento se cotiza con tiktoken y se resuelve contra el cupo de tu plan ANTES de procesar. Sin confirmación no hay ingesta.",
       "dropzone": "Arrastra hasta {{max}} documentos o selecciona",
       "formats": "PDF · DOCX · XLSX · imágenes con OCR",
       "quoting": "Cotizando con tiktoken…",
@@ -49,7 +49,7 @@
       "costTotal": "Costo total estimado",
       "timeTotal": "Tiempo estimado total",
       "balance": "Saldo disponible",
-      "rejected": "rechazado por saldo/cap",
+      "rejected": "no entra en este lote",
       "overCapDoc": "fuera del cap de sesión",
       "removeDoc": "Quitar documento del lote",
       "capExceeded": "Caben {{fit}} de {{total}} documentos dentro del límite de sesión (${{cap}} USD). Quita documentos o ajusta el cap antes de confirmar.",
