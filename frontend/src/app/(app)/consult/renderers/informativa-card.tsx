@@ -20,34 +20,34 @@ export function InformativaCard({
   const primary = especs[0];
   const cita = primary?.cita ?? (payload.citas ?? [])[0] ?? null;
 
-  const hasBig = !!primary && (!!primary.valor || !!primary.unidad);
+  // El slot `.big` (display gigante) es SOLO para un valor corto tipo "85 N·m" o "SAE-30".
+  // Una frase NUNCA va en `.big`: se lee como nota. Heurística: hay unidad, o el valor es un
+  // token corto sin espacios (no una oración).
+  const valor = (primary?.valor ?? "").trim();
+  const unidad = (primary?.unidad ?? "").trim();
+  const isShortValue = !!unidad || /^[\w.,:/+\-]{1,16}$/.test(valor);
+  const hasBig = !!valor && isShortValue;
+
+  // Texto de respuesta: la definición; o el valor cuando trae la prosa (no es número corto).
+  const answerText = (payload.definicion ?? "").trim() || (!hasBig ? valor : "");
 
   return (
     <div className="acard">
       <div className="q">{payload.titulo}</div>
+
       {hasBig ? (
         <>
           <div className="big">
-            {primary.valor ?? "—"}
-            {primary.unidad ? <span className="u">{primary.unidad}</span> : null}
+            {valor}
+            {unidad ? <span className="u">{unidad}</span> : null}
           </div>
           {payload.definicion ? <p className="note">{payload.definicion}</p> : null}
         </>
-      ) : payload.definicion ? (
+      ) : answerText ? (
         <p className="note" style={{ fontSize: 14.5, color: "var(--fg)" }}>
-          {payload.definicion}
+          {answerText}
         </p>
       ) : null}
-
-      {payload.match_multiple && (payload.desambiguacion ?? []).length > 0 && (
-        <div className="ppe">
-          {(payload.desambiguacion ?? []).map((d, i) => (
-            <span className="chip" key={i}>
-              {d}
-            </span>
-          ))}
-        </div>
-      )}
 
       <CitedFragment
         cita={cita}

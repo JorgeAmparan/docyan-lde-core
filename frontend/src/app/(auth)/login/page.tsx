@@ -93,7 +93,7 @@ function LoginForm() {
       };
       setSession(token, user, res.refresh_token ?? null);
       const next = params.get("next");
-      router.push(next && next.startsWith("/") ? next : "/select-codo");
+      router.push(next && next.startsWith("/") ? next : "/admin/codos");
     } catch (err) {
       // Surface the REAL error — no canned success here (this is the admin gate).
       if (err instanceof ApiError) {

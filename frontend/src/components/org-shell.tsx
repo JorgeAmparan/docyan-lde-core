@@ -24,20 +24,29 @@ type NavGroup = { group: string };
 type NavLink = { icon: string; label: string; href: string };
 type NavEntry = NavGroup | NavLink;
 
-const NAV: NavEntry[] = [
+// Paridad con `app/data.jsx → NAV_ORG`. Ambos juegos INCLUYEN "Consultar" (scan-line).
+const NAV_PRO: NavEntry[] = [
   { group: "Operación" },
   { icon: "layout-dashboard", label: "Resumen", href: "/admin" },
   { icon: "sparkles", label: "Inteligencia", href: "/saved" },
   { icon: "folder-tree", label: "CoDos", href: "/admin/codos" },
   { icon: "scan-line", label: "Consultar", href: "/consult" },
-  { icon: "files", label: "Documentos", href: "/documentos" },
   { icon: "bell", label: "Alertas", href: "/admin/alertas" },
   { group: "Administración" },
+  { icon: "files", label: "Documentos", href: "/documentos" },
   { icon: "upload", label: "Ingesta", href: "/admin/ingesta" },
   { icon: "library", label: "Catálogo de schemas", href: "/admin/schemas" },
   { icon: "book-marked", label: "Glosario", href: "/admin/glosario" },
   { icon: "shield-check", label: "Gobernanza & FAT", href: "/admin/gobernanza" },
   { icon: "qr-code", label: "Generar QRs", href: "/admin/qrs" },
+  { icon: "users", label: "Usuarios", href: "/admin/usuarios" },
+  { icon: "gem", label: "Plan", href: "/plan" },
+];
+
+// Freemium: "Documentos" apunta a la lista de CoDos (vista "codos" del prototipo).
+const NAV_FREE: NavEntry[] = [
+  { icon: "files", label: "Documentos", href: "/admin/codos" },
+  { icon: "scan-line", label: "Consultar", href: "/consult" },
   { icon: "users", label: "Usuarios", href: "/admin/usuarios" },
   { icon: "gem", label: "Plan", href: "/plan" },
 ];
@@ -89,7 +98,12 @@ export function OrgShell({ children }: { children: React.ReactNode }) {
 
   // DESIGN: org identity defaults to canned kit values until /auth/me populates.
   const orgName = user?.org_name ?? "Laboratorio Estándar";
-  const orgPlan = "Plan Profesional";
+  // ⚠️ El plan sale de la sesión/`/auth/me` (mismo origen que org_name). Si el campo NO existe
+  // aún, fallback a "pro" para NO ocultar opciones — y reporta a Jorge que falta exponer `plan`.
+  // NUNCA dejes el rail vacío ni oculto.
+  const plan = user?.plan === "free" ? "free" : "pro";
+  const NAV = plan === "free" ? NAV_FREE : NAV_PRO;
+  const orgPlan = plan === "free" ? "Plan gratuito" : "Plan Profesional";
   const userInitials = initials(user?.name ?? user?.email);
 
   return (

@@ -11,6 +11,7 @@ export interface AuthUser {
   role?: "admin" | "colaborador" | string;
   org_id?: string;
   org_name?: string;
+  plan?: "free" | "pro";
 }
 
 interface AuthState {
