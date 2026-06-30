@@ -90,6 +90,7 @@ def ctx(monkeypatch):
     from app.onboarding import providers as onb
     monkeypatch.setattr(onb, "get_dkg", lambda: dkg)
     from fastapi.testclient import TestClient
+
     from app.api.main import app
     return {"client": TestClient(app), "dkg": dkg}
 
