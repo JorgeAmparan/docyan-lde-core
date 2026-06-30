@@ -42,6 +42,31 @@ import { BilingualAlignment } from "./renderers/bilingual-alignment";
  *  prototipo (consult.jsx). Espejo de `SCHEMA_BY_ID` del design system. */
 const SCHEMA_BY_ID = new Map(SCHEMAS.map((s) => [s.id, s] as const));
 
+/** Etiqueta de display para los `tipo_documento` REALES del backend cuyo vocabulario
+ *  (extracción) aún NO está reconciliado 1:1 con el catálogo canónico de 14 schemas.
+ *  Reconciliar el modelado (p.ej. `manual_tecnico` → ¿operación o mantenimiento?) es
+ *  PENDIENTE DE JORGE; esto es SOLO display, no afirma identidad de schema. */
+const BACKEND_TIPO_LABEL: Record<string, string> = {
+  manual_tecnico: "Manual técnico",
+  msds: "Hoja de seguridad",
+  calibracion: "Certificado de calibración",
+  troubleshooting: "Guía de fallas",
+};
+
+/** Resuelve el chip `.doc-tipo` para CUALQUIER tipo real: catálogo canónico cuando
+ *  existe (con su severidad), mapa de display del backend, o humaniza el id crudo.
+ *  Garantiza que el elemento del prototipo aparezca siempre con dato real. */
+function resolveDocTipo(tipo?: string | null): { label: string; sev: string } | null {
+  if (!tipo) return null;
+  const s = SCHEMA_BY_ID.get(tipo);
+  if (s) return { label: s.label, sev: SCHEMA_ESTADO_META[s.estado].sev };
+  const humano =
+    BACKEND_TIPO_LABEL[tipo] ??
+    tipo.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  // Documento real ya ingerido ⇒ tipo "activo" ⇒ severidad ok (verde), no gris.
+  return { label: humano, sev: "ok" };
+}
+
 export interface ConsultContext {
   codo: string;
   entityName: string;
@@ -312,8 +337,8 @@ export function ConsultView({
   const activeDoc = documentos[activeDocIdx];
   const activeDocumentoId =
     activeDoc?.id ?? ("documentoId" in ctx ? ctx.documentoId : undefined);
-  // Schema del documento activo (tipo REAL → catálogo) para el chip `.doc-tipo`.
-  const activeSchema = activeDoc?.tipo ? SCHEMA_BY_ID.get(activeDoc.tipo) : undefined;
+  // Chip de tipo del documento activo (tipo REAL → catálogo / display) para `.doc-tipo`.
+  const activeTipo = resolveDocTipo(activeDoc?.tipo);
 
   // "Tus consultas" — etiquetas de las respuestas guardadas en esta sesión (real).
   const [savedQ, setSavedQ] = useState<string[]>([]);
@@ -612,12 +637,10 @@ export function ConsultView({
                   {/* Chip de tipo documental del prototipo (.doc-tipo + .sev-dot),
                       alimentado del tipo REAL del documento activo. Solo aparece si
                       el tipo existe en el catálogo de schemas (sin fabricar dato). */}
-                  {activeSchema && (
+                  {activeTipo && (
                     <span className="doc-tipo">
-                      <span
-                        className={"sev-dot " + SCHEMA_ESTADO_META[activeSchema.estado].sev}
-                      />
-                      {activeSchema.label}
+                      <span className={"sev-dot " + activeTipo.sev} />
+                      {activeTipo.label}
                     </span>
                   )}
                 </div>
