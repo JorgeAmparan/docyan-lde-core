@@ -5,6 +5,13 @@ import { Icon } from "@/components/icon";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 
+/**
+ * Facturación — datos REALES del tenant (`GET /admin/account/billing`). Sin datos
+ * enlatados (decisión rectora #11) ni el modelo muerto de saldo prepagado (P6,
+ * Matriz de Cierre): si el backend no devuelve algo, se rinde un estado vacío
+ * honesto, nunca un cargo/método de pago fabricado.
+ */
+
 interface BillingData {
   payment_method: { brand: string; last4: string; exp: string } | null;
   pending: Array<{ date: string; concept: string; amount: string }>;
@@ -12,32 +19,18 @@ interface BillingData {
   fiscal: { rfc?: string; razon_social?: string; uso_cfdi?: string; address?: string };
 }
 
-const FALLBACK: BillingData = {
-  payment_method: { brand: "Visa", last4: "4242", exp: "08 / 27" },
-  pending: [],
-  history: [
-    { date: "12 jun 2026", concept: "Suscripción Profesional", amount: "MXN 10,191" },
-    { date: "12 may 2026", concept: "Suscripción Profesional", amount: "MXN 10,191" },
-    { date: "28 abr 2026", concept: "Recarga de saldo", amount: "MXN 5,000" },
-    { date: "12 abr 2026", concept: "Suscripción Profesional", amount: "MXN 10,191" },
-  ],
-  fiscal: {
-    rfc: "XAXX010101000",
-    razon_social: "Laboratorio Estándar SA de CV",
-    uso_cfdi: "G03 — Gastos en general",
-    address: "Av. Tecnológico 123, Col. Industrial, CP 32000",
-  },
-};
-
 export default function FacturacionPage() {
   const token = useAuth((s) => s.token);
   const { data } = useQuery({
     queryKey: ["account-billing"],
     queryFn: () => api.get<BillingData>("/admin/account/billing", { token }),
-    placeholderData: FALLBACK,
+    enabled: !!token,
     retry: false,
   });
-  const d = data ?? FALLBACK;
+  const pm = data?.payment_method ?? null;
+  const pending = data?.pending ?? [];
+  const history = data?.history ?? [];
+  const fiscal = data?.fiscal ?? {};
 
   return (
     <>
@@ -45,12 +38,12 @@ export default function FacturacionPage() {
 
       <div className="card" style={{ marginBottom: 22 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 12px" }}>Método de pago</h2>
-        {d.payment_method ? (
+        {pm ? (
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="pr-ic">{d.payment_method.brand.toUpperCase()}</span>
+            <span className="pr-ic">{pm.brand.toUpperCase()}</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>•••• {d.payment_method.last4}</div>
-              <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>Vence {d.payment_method.exp}</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>•••• {pm.last4}</div>
+              <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>Vence {pm.exp}</div>
             </div>
             <button className="btn sec" style={{ marginLeft: "auto" }} type="button">
               Cambiar
@@ -58,15 +51,15 @@ export default function FacturacionPage() {
           </div>
         ) : (
           <div style={{ fontSize: 13.5, color: "var(--fg-muted)" }}>
-            Sin método de pago — se configura en B9.1.
+            Aún no hay un método de pago registrado.
           </div>
         )}
       </div>
 
-      {d.pending.length > 0 && (
+      {pending.length > 0 && (
         <div className="card" style={{ marginBottom: 22 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 6px" }}>Facturas pendientes</h2>
-          {d.pending.map((b, i) => (
+          {pending.map((b, i) => (
             <div className="billrow" key={i}>
               <span className="bd">{b.date}</span>
               <span>{b.concept}</span>
@@ -81,17 +74,21 @@ export default function FacturacionPage() {
 
       <div className="card" style={{ marginBottom: 22 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 6px" }}>Historial de cargos</h2>
-        {d.history.map((b, i) => (
-          <div className="billrow" key={i}>
-            <span className="bd">{b.date}</span>
-            <span>{b.concept}</span>
-            <span className="amt">{b.amount}</span>
-            <a href={b.invoice_url ?? "#"} aria-label={`Descargar factura ${b.date}`}>
-              <Icon name="download" size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
-              PDF
-            </a>
-          </div>
-        ))}
+        {history.length > 0 ? (
+          history.map((b, i) => (
+            <div className="billrow" key={i}>
+              <span className="bd">{b.date}</span>
+              <span>{b.concept}</span>
+              <span className="amt">{b.amount}</span>
+              <a href={b.invoice_url ?? "#"} aria-label={`Descargar factura ${b.date}`}>
+                <Icon name="download" size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} />
+                PDF
+              </a>
+            </div>
+          ))
+        ) : (
+          <div style={{ fontSize: 13.5, color: "var(--fg-muted)" }}>Sin cargos registrados todavía.</div>
+        )}
       </div>
 
       <div className="card">
@@ -103,20 +100,20 @@ export default function FacturacionPage() {
         </div>
         <div className="field">
           <label>RFC</label>
-          <input defaultValue={d.fiscal.rfc} />
+          <input defaultValue={fiscal.rfc ?? ""} placeholder="—" />
         </div>
         <div className="field">
           <label>Razón social</label>
-          <input defaultValue={d.fiscal.razon_social} />
+          <input defaultValue={fiscal.razon_social ?? ""} placeholder="—" />
         </div>
         <div className="row2c">
           <div className="field">
             <label>Uso de CFDI</label>
-            <input defaultValue={d.fiscal.uso_cfdi} />
+            <input defaultValue={fiscal.uso_cfdi ?? ""} placeholder="—" />
           </div>
           <div className="field">
             <label>Dirección fiscal</label>
-            <input defaultValue={d.fiscal.address} />
+            <input defaultValue={fiscal.address ?? ""} placeholder="—" />
           </div>
         </div>
       </div>

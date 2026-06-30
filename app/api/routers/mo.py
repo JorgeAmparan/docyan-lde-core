@@ -124,6 +124,7 @@ class CodoOut(BaseModel):
     nombre: str
     tipo_documento: str | None = None
     documentos: int = 0
+    alertas: int = 0  # nº de alertas administrativas pendientes (conteo real del grafo)
     estado: str = "ok"  # "ok" | "warn" (warn = alertas administrativas pendientes)
 
 

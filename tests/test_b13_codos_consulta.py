@@ -144,6 +144,9 @@ def test_estado_warn_si_entidad_tiene_alertas(ctx):
     items = {c["id"]: c for c in client.get("/mo/codos", headers=_jwt("org-1")).json()["items"]}
     assert items["ent-A"]["estado"] == "warn"
     assert items["ent-B"]["estado"] == "ok"
+    # P5: el conteo REAL de alertas se expone (no un "2" hardcodeado en el front).
+    assert items["ent-A"]["alertas"] == 2
+    assert items["ent-B"]["alertas"] == 0
 
 
 # ── Contexto ───────────────────────────────────────────────────────────────────

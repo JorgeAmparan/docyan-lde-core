@@ -933,6 +933,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mo/codos/{codo_id}/relaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Relaciones Codo
+         * @description Relaciones inmediatas de un CoDo (del grafo real) + consultas sugeridas por
+         *     documento + recursos de apoyo. 404 si el CoDo no existe en el grafo del tenant.
+         *     Alimenta el Expediente (P1): rama "Relaciones inmediatas", RelDetail, sugerencias.
+         */
+        get: operations["relaciones_codo_mo_codos__codo_id__relaciones_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mo/ingesta": {
         parameters: {
             query?: never;
@@ -1377,6 +1399,89 @@ export interface paths {
         put?: never;
         /** Support Reply */
         post: operations["support_reply_platform_support_threads__thread_id__reply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/test-ingesta/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Tenants Prueba
+         * @description Tenants de prueba sugeridos (alias → graph_name). Metadata, no contenido.
+         */
+        get: operations["listar_tenants_prueba_platform_test_ingesta_tenants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/test-ingesta/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cotizar Documento Prueba
+         * @description Cotiza un documento contra un tenant de PRUEBA y crea el job (no ingiere aún).
+         *
+         *     Provisiona saldo de cómputo de prueba ANTES de cotizar, para que el gate
+         *     financiero (vigente) apruebe la ingesta de demo. Devuelve cotización + job_id.
+         */
+        post: operations["cotizar_documento_prueba_platform_test_ingesta_documents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/test-ingesta/documents/{job_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirmar Ingesta Prueba
+         * @description Confirma e encola el job hacia el worker. Sin esto, no hay ingesta.
+         */
+        post: operations["confirmar_ingesta_prueba_platform_test_ingesta_documents__job_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/test-ingesta/documents/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado Job Prueba
+         * @description Estado/progreso del job (metadata). Nunca devuelve contenido del grafo.
+         */
+        get: operations["estado_job_prueba_platform_test_ingesta_documents__job_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1845,6 +1950,7 @@ export interface components {
              * @default true
              */
             administrativa: boolean;
+            cita?: components["schemas"]["Cita"] | null;
         };
         /** AlertsDashboardPayload */
         AlertsDashboardPayload: {
@@ -1901,6 +2007,15 @@ export interface components {
         Body_cotizar_documento_ingesta_documents_post: {
             /** File */
             file: string;
+            /** Tipo Forzado */
+            tipo_forzado?: string | null;
+        };
+        /** Body_cotizar_documento_prueba_platform_test_ingesta_documents_post */
+        Body_cotizar_documento_prueba_platform_test_ingesta_documents_post: {
+            /** File */
+            file: string;
+            /** Tenant */
+            tenant: string;
             /** Tipo Forzado */
             tipo_forzado?: string | null;
         };
@@ -1996,6 +2111,8 @@ export interface components {
             documento_id?: string | null;
             /** Documento Nombre */
             documento_nombre?: string | null;
+            /** Documento Tipo */
+            documento_tipo?: string | null;
             /** Seccion */
             seccion?: string | null;
             /** Pagina */
@@ -2006,6 +2123,8 @@ export interface components {
             span_fin?: number | null;
             /** Fragmento */
             fragmento?: string | null;
+            /** Documento Url */
+            documento_url?: string | null;
         };
         /**
          * CodoContextoOut
@@ -2051,10 +2170,40 @@ export interface components {
              */
             documentos: number;
             /**
+             * Alertas
+             * @default 0
+             */
+            alertas: number;
+            /**
              * Estado
              * @default ok
              */
             estado: string;
+        };
+        /**
+         * CodoRelacionesOut
+         * @description Relaciones inmediatas + sugerencias por doc + recursos de un CoDo (P1).
+         */
+        CodoRelacionesOut: {
+            /** Codo Id */
+            codo_id: string;
+            /** Tipo Codo */
+            tipo_codo: string;
+            /**
+             * Relaciones
+             * @default []
+             */
+            relaciones: components["schemas"]["RelacionInmediata"][];
+            /**
+             * Consultas Sugeridas
+             * @default []
+             */
+            consultas_sugeridas: components["schemas"]["ConsultaSugerida"][];
+            /**
+             * Recursos
+             * @default []
+             */
+            recursos: components["schemas"]["RecursoApoyo"][];
         };
         /** CodosResponse */
         CodosResponse: {
@@ -2139,6 +2288,8 @@ export interface components {
             segmento_critico: boolean;
             /** Entidad Id */
             entidad_id?: string | null;
+            /** Documento Id */
+            documento_id?: string | null;
             /** Token Qr */
             token_qr?: string | null;
             /** Tipo Documento */
@@ -2181,6 +2332,18 @@ export interface components {
             /** Nota */
             nota?: string | null;
             contexto_ccp?: components["schemas"]["ContextoRespuestaCCP"] | null;
+        };
+        /**
+         * ConsultaSugerida
+         * @description Consulta sugerida sobre un documento, derivada de su contenido en el grafo.
+         */
+        ConsultaSugerida: {
+            /** Icono */
+            icono: string;
+            /** Texto */
+            texto: string;
+            /** Tipo Intencion */
+            tipo_intencion: string;
         };
         /** ConsultasGuardadasList */
         ConsultasGuardadasList: {
@@ -2549,6 +2712,21 @@ export interface components {
              * @default false
              */
             disponibleParaConsulta: boolean;
+            /**
+             * Completedsindocumento
+             * @default false
+             */
+            completedSinDocumento: boolean;
+            /**
+             * Completedsinontologia
+             * @default false
+             */
+            completedSinOntologia: boolean;
+            /**
+             * Nocobrado
+             * @default false
+             */
+            noCobrado: boolean;
         };
         /** DocumentRef */
         DocumentRef: {
@@ -3372,6 +3550,20 @@ export interface components {
             resultado: components["schemas"]["ConsultaResuelta"];
         };
         /**
+         * RecursoApoyo
+         * @description Recurso de apoyo adjunto a un documento (video, etc.).
+         */
+        RecursoApoyo: {
+            /** Id */
+            id: string;
+            /** Tipo */
+            tipo: string;
+            /** Titulo */
+            titulo: string;
+            /** Meta */
+            meta?: string | null;
+        };
+        /**
          * RedeemAccessCodeRequest
          * @description Canje (lado tenant): provisiona una org nueva. Alta controlada, NO cross-tenant.
          */
@@ -3439,6 +3631,31 @@ export interface components {
             condition: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * RelacionInmediata
+         * @description Una relación inmediata de un CoDo en el grafo (alimenta `RelDetail`).
+         */
+        RelacionInmediata: {
+            /** Id */
+            id: string;
+            /** Tipo */
+            tipo: string;
+            /** Icono */
+            icono: string;
+            /** Titulo */
+            titulo: string;
+            /** Tag */
+            tag: string;
+            /**
+             * Severidad
+             * @default muted
+             */
+            severidad: string;
+            /** Nota */
+            nota?: string | null;
+            /** Meta */
+            meta?: string | null;
         };
         /** RenombrarRequest */
         RenombrarRequest: {
@@ -5218,6 +5435,37 @@ export interface operations {
             };
         };
     };
+    relaciones_codo_mo_codos__codo_id__relaciones_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                codo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodoRelacionesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ingesta_mo_ingesta_post: {
         parameters: {
             query?: never;
@@ -6122,6 +6370,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_tenants_prueba_platform_test_ingesta_tenants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    cotizar_documento_prueba_platform_test_ingesta_documents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_cotizar_documento_prueba_platform_test_ingesta_documents_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmar_ingesta_prueba_platform_test_ingesta_documents__job_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    estado_job_prueba_platform_test_ingesta_documents__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

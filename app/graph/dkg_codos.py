@@ -62,6 +62,7 @@ def listar_codos(client: Any, tenant_id: str) -> list[dict]:
             "nombre": r.get("nombre") or r.get("id"),
             "tipo_documento": r.get("tipo_entidad"),
             "documentos": int(r.get("documentos") or 0),
+            "alertas": int(r.get("alertas") or 0),
             "estado": "warn" if int(r.get("alertas") or 0) > 0 else "ok",
         }
         for r in entidades
@@ -90,6 +91,7 @@ def listar_codos(client: Any, tenant_id: str) -> list[dict]:
             "nombre": r.get("nombre") or r.get("id"),
             "tipo_documento": r.get("tipo_documento"),
             "documentos": 1,
+            "alertas": 0,
             "estado": "ok",
         }
         for r in sueltos
