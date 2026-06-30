@@ -109,7 +109,7 @@ export default function ResumenPage() {
             <Icon name="zap" size={12} />
             Hit-rate caché
           </div>
-          <div className="sv">{pcl ? pct(pcl.hit_rate) : "—"}</div>
+          <div className="sv">{pcl?.hit_rate != null ? pct(pcl.hit_rate) : "—"}</div>
           <div className="sd">consultas resueltas de caché</div>
         </div>
         <div className="stat">
@@ -117,7 +117,9 @@ export default function ResumenPage() {
             <Icon name="coins" size={12} />
             Costo / consulta
           </div>
-          <div className="sv">{pcl ? `$${pcl.cost_per_query.toFixed(3)}` : "—"}</div>
+          <div className="sv">
+            {pcl?.cost_per_query != null ? `$${pcl.cost_per_query.toFixed(3)}` : "—"}
+          </div>
           <div className="sd">promedio 30 días</div>
         </div>
         <div className="stat">
@@ -125,8 +127,12 @@ export default function ResumenPage() {
             <Icon name="timer" size={12} />
             Latencia P95
           </div>
-          <div className="sv">{pcl ? `${(pcl.latency_p95_ms / 1000).toFixed(1)}s` : "—"}</div>
-          <div className="sd">P50 · {pcl ? `${(pcl.latency_p50_ms / 1000).toFixed(1)}s` : "—"}</div>
+          <div className="sv">
+            {pcl?.latency_p95_ms != null ? `${(pcl.latency_p95_ms / 1000).toFixed(1)}s` : "—"}
+          </div>
+          <div className="sd">
+            P50 · {pcl?.latency_p50_ms != null ? `${(pcl.latency_p50_ms / 1000).toFixed(1)}s` : "—"}
+          </div>
         </div>
       </div>
 
