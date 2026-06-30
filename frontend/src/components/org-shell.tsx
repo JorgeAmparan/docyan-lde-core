@@ -2,9 +2,11 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { DocyanMark } from "@/components/brand/docyan-mark";
 import { useAuth } from "@/lib/auth";
+import { getCuenta } from "@/lib/onboarding";
 
 /**
  * OrgShell — chrome de la organización, PORTADO 1:1 del prototipo
@@ -73,15 +75,22 @@ export function OrgShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuth((s) => s.user);
+  const token = useAuth((s) => s.token);
   const clear = useAuth((s) => s.clear);
 
-  // DESIGN: org identity defaults to canned kit values until /auth/me populates.
-  const orgName = user?.org_name ?? "Laboratorio Estándar";
-  // El plan sale de la sesión. Fallback "pro" para NO ocultar opciones (nunca rail
-  // vacío); falta exponer `plan` en /auth/me (PENDIENTE backend).
-  const plan = user?.plan === "free" ? "free" : "pro";
-  const NAV = plan === "free" ? NAV_FREE : NAV_PRO;
-  const orgPlan = plan === "free" ? "Plan gratuito" : "Plan Profesional";
+  // Plan free/pro del rail: sale de `GET /onboarding/cuenta` (CuentaResumen.plan),
+  // el MISMO origen que `admin/codos/page.tsx` (Mapa de Paridad §8.1). NO se deriva
+  // de `auth`/AuthUser. `isFree` = el plan contiene "free" (freemium incluido).
+  const { data: cuenta } = useQuery({
+    queryKey: ["cuenta-shell"],
+    queryFn: () => getCuenta(token as string),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+  const isFree = (cuenta?.plan ?? "").toLowerCase().includes("free");
+  const orgName = cuenta?.nombre ?? user?.org_name ?? "Mi organización";
+  const NAV = isFree ? NAV_FREE : NAV_PRO;
+  const orgPlan = cuenta?.plan_nombre ?? (isFree ? "Plan gratuito" : "Plan Profesional");
   const userInitials = initials(user?.name ?? user?.email);
 
   function logout() {
