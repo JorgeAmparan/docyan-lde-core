@@ -1,0 +1,31 @@
+/* ============================================================================
+   kit-search.css — Búsqueda command-palette (P2, Matriz de Cierre).
+   Portado 1:1 del prototipo (app/ui-kit.css .dcs*). El palette global del shell.
+   ========================================================================== */
+
+.dcs-scrim{position:fixed;inset:0;z-index:205;background:rgba(33,28,22,.42);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:88px 20px 20px;animation:dc-sv-fade .14s ease-out;}
+.dcs{width:100%;max-width:620px;max-height:70vh;background:var(--surface);border-radius:16px;box-shadow:0 28px 80px -16px rgba(33,28,22,.5);display:flex;flex-direction:column;overflow:hidden;animation:dc-sv-rise .2s cubic-bezier(0.16,1,0.3,1);}
+.dcs-bar{flex:none;display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--border);}
+.dcs-bar>.lic{color:var(--fg-subtle);flex:none;}
+.dcs-bar input{flex:1;border:none;outline:none;background:transparent;font-family:var(--font-sans);font-size:16px;color:var(--fg);min-width:0;}
+.dcs-esc{font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);border:1px solid var(--border-strong);border-radius:5px;padding:2px 6px;flex:none;}
+.dcs-body{flex:1;overflow-y:auto;padding:8px;}
+.dcs-grp{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);padding:10px 10px 6px;}
+.dcs-ask{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);border-radius:10px;padding:11px 12px;cursor:pointer;margin-bottom:4px;}
+.dcs-ask:hover{border-color:var(--cinnabar-300);}
+.dcs-asktxt{flex:1;min-width:0;font-size:14px;color:var(--fg);}
+.dcs-ask>.lic{color:var(--fg-subtle);flex:none;}
+.dcs-row{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:none;border-radius:10px;padding:10px 12px;cursor:pointer;}
+.dcs-row:hover{background:var(--amate-100);}
+.dcs-ic{width:34px;height:34px;border-radius:9px;background:var(--amate-100);color:var(--fg-muted);display:flex;align-items:center;justify-content:center;flex:none;}
+.dcs-ic.cin{background:var(--cinnabar-500);color:#fff;}
+.dcs-rtxt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.dcs-rn{font-size:14px;font-weight:500;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dcs-rm{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-muted);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dcs-codo{color:var(--accent-fg);background:var(--cinnabar-50);border-radius:4px;padding:1px 5px;flex:none;}
+.dcs-row>.lic:last-child{color:var(--fg-subtle);flex:none;}
+.dcs-empty{text-align:center;color:var(--fg-subtle);font-size:13.5px;padding:30px 16px;}
+
+/* Animaciones del overlay (mismas que el source-viewer del prototipo). */
+@keyframes dc-sv-fade{from{opacity:0;}to{opacity:1;}}
+@keyframes dc-sv-rise{from{opacity:0;transform:translateY(8px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
