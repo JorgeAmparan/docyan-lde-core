@@ -90,3 +90,56 @@ def _contar_paginas_pdf(data: bytes) -> int | None:
         return sum(1 for _ in PDFPage.get_pages(io.BytesIO(data)))
     except Exception:
         return None
+
+
+def contar_figuras(data: bytes, nombre_archivo: str) -> int:
+    """
+    Estima cuántas FIGURAS (imágenes) trae el documento, para que el cotizador sume el
+    costo de VISIÓN al gate ANTES de ingerir (Pieza 3).
+
+    Como con el texto, es una cota previa LIGERA (sin Docling, que vive en el worker):
+    PDF → cuenta los XObjects de subtipo /Image en los recursos de cada página
+    (pdfminer, sin torch); otros formatos → 0 (el worker mide las figuras reales con
+    Docling y aplica el MISMO tope al extraer). Nunca lanza: ante cualquier duda → 0
+    (no se cotiza visión que no se pudo contar; el tope del worker acota el gasto real).
+    """
+    ext = pathlib.Path(nombre_archivo).suffix.lower()
+    if ext != ".pdf":
+        return 0
+    return _contar_figuras_pdf(data)
+
+
+def _contar_figuras_pdf(data: bytes) -> int:
+    import io
+
+    try:
+        from pdfminer.pdfpage import PDFPage
+        from pdfminer.pdftypes import resolve1
+        from pdfminer.psparser import PSLiteral
+    except Exception:
+        return 0
+
+    def _name(v: object) -> str:
+        if isinstance(v, PSLiteral):
+            n = v.name
+            return n.decode("latin-1") if isinstance(n, bytes) else str(n)
+        return str(v).lstrip("/")
+
+    total = 0
+    try:
+        for page in PDFPage.get_pages(io.BytesIO(data)):
+            res = resolve1(page.resources) or {}
+            xobjects = resolve1(res.get("XObject")) or {}
+            if not hasattr(xobjects, "items"):
+                continue
+            for _k, ref in xobjects.items():
+                try:
+                    obj = resolve1(ref)
+                    subtype = _name((obj or {}).get("Subtype"))
+                    if subtype == "Image":
+                        total += 1
+                except Exception:  # noqa: BLE001 — un XObject ilegible no rompe el conteo
+                    continue
+    except Exception:  # noqa: BLE001 — PDF mal formado → estimación 0 (worker re-mide)
+        return 0
+    return total

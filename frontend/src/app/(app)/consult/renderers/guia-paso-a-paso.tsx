@@ -2,9 +2,8 @@
 
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type ProcedureCardPayload } from "../consult-data";
-import { SaveBtn } from "./save-btn";
+import { CitedFragment } from "./cited-fragment";
+import { citaToSource, type ProcedureCardPayload } from "../consult-data";
 
 /**
  * Tipo 2 · Guía paso a paso — numbered `.steps` + `.ppe` chips + ANSI-Z535 `.warn`,
@@ -26,7 +25,6 @@ export function GuiaPasoAPaso({
   const eppAll = Array.from(new Set(pasos.flatMap((p) => p.epp ?? [])));
   const advertencias = pasos.flatMap((p) => p.advertencias ?? []);
   const cita = (payload.citas ?? [])[0] ?? pasos.find((p) => p.cita)?.cita ?? null;
-  const label = citaLabel(cita);
 
   return (
     <div className="acard">
@@ -44,10 +42,12 @@ export function GuiaPasoAPaso({
       <ol className="steps">
         {pasos.map((p, i) => (
           <li key={i}>
-            <span className="st">{p.descripcion}</span>
-            {(p.herramientas ?? []).length > 0 && (
-              <span className="lnote">Herramientas: {(p.herramientas ?? []).join(", ")}</span>
-            )}
+            <span className="st">
+              {p.descripcion}
+              {(p.herramientas ?? []).length > 0 && (
+                <span className="lnote">Herramientas: {(p.herramientas ?? []).join(", ")}</span>
+              )}
+            </span>
           </li>
         ))}
       </ol>
@@ -60,14 +60,12 @@ export function GuiaPasoAPaso({
           </div>
         </div>
       )}
-      <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Sin cita de fuente</span>
-        )}
-        <SaveBtn saved={saved} onSave={onSave} />
-      </div>
+      <CitedFragment
+        cita={cita}
+        saved={saved}
+        onSave={onSave}
+        onOpenDoc={() => onCite(citaToSource(cita))}
+      />
     </div>
   );
 }

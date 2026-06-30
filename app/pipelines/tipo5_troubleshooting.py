@@ -19,7 +19,7 @@ from app.schemas.pipeline_payloads import DiagnosticTreePayload, OpcionDecision
 def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPipeline:
     termino = ctx.params.get("termino", ctx.pregunta)
     nodo_id = ctx.params.get("nodo_id")
-    data = reader.arbol_diagnostico(ctx.tenant_id, termino, ctx.entidad_id, nodo_id)
+    data = reader.arbol_diagnostico(ctx.tenant_id, termino, ctx.entidad_id, nodo_id, ctx.documento_id)
 
     opciones = [
         OpcionDecision(

@@ -108,6 +108,38 @@ QA_OUTPUT_RATIO = 0.1
 # F1.5: configurable por env var (BGE-M3 es cómputo propio, parametrizable).
 BGE_M3_COMPUTE_USD_PER_1M = _env_float("PRICE_BGE_M3_USD_PER_1M", 0.01)
 
+# ── Modelo de costo de VISIÓN por figura (gate de figuras, Pieza 3) ───────────
+# La extracción de diagramas envía CADA figura a Gemini 2.5 Flash multimodal: la
+# imagen (Gemini la factura como un bloque ~fijo de tokens) + el prompt de etiquetas
+# (input) y recibe el JSON de rótulos/leyenda (output). Estos tokens facturables por
+# figura, multiplicados por el precio de Flash, dan el costo de visión que entra al
+# GATE del cotizador ANTES de ingerir — igual que el texto. Conservador (sobreestima
+# antes que subestimar). Configurable por env var.
+VISION_INPUT_TOKENS_POR_FIGURA = _env_float("VISION_INPUT_TOKENS_POR_FIGURA", 1300.0)
+VISION_OUTPUT_TOKENS_POR_FIGURA = _env_float("VISION_OUTPUT_TOKENS_POR_FIGURA", 320.0)
+
+# Tope de figuras por documento (top-N por tamaño). El cotizador solo cotiza hasta
+# este tope y el worker solo extrae hasta este tope (aviso honesto cuando se excede):
+# acota el gasto de visión de un documento con cientos de imágenes. Configurable.
+MAX_FIGURAS_POR_DOCUMENTO = int(_env_float("MAX_FIGURAS_POR_DOCUMENTO", 30.0))
+
+
+def costo_vision_figuras(num_figuras: int) -> float:
+    """Costo USD estimado de la extracción de visión de `num_figuras` figuras, contra
+    Gemini 2.5 Flash (la primaria). El tope `MAX_FIGURAS_POR_DOCUMENTO` lo aplica el
+    cotizador antes de llamar aquí; esta función no recapa (cuantifica lo que reciba)."""
+    if num_figuras <= 0:
+        return 0.0
+    flash = model_pricing("gemini/gemini-2.5-flash")
+    return round(
+        flash.cost(
+            num_figuras * VISION_INPUT_TOKENS_POR_FIGURA,
+            num_figuras * VISION_OUTPUT_TOKENS_POR_FIGURA,
+        ),
+        6,
+    )
+
+
 # ── Modelo de tiempo (Adenda §8 — PoC: Gemini Flash 642s para una NOM 32pp) ───
 # Throughput efectivo observado incluyendo latencia de red y rate limiting.
 SECONDS_PER_1K_DOC_TOKENS = 642.0 / 22.4  # ≈ 28.7 s por 1k tokens (NOM 32pp≈22.4k)

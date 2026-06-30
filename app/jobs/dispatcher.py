@@ -357,17 +357,33 @@ class JobDispatcher:
         if job.bytes_resultado is None and resultado.get("markdown_bytes") is not None:
             job.bytes_resultado = int(resultado["markdown_bytes"])
 
+        # Pieza 6 — POLÍTICA DE NO-COBRO: una ingesta que rinde 0 ontología (o que no
+        # dejó `:DocumentoSource` vivo) NO entregó contenido consultable → NO se cobra.
+        # Se LIBERA la reserva completa (en vez de liquidarla). El usuario ve el estado
+        # honesto (`completed_sin_ontologia`) + Retry, y su saldo queda intacto.
+        sin_contenido = bool(
+            resultado.get("completed_sin_ontologia")
+            or resultado.get("completed_sin_documento")
+        )
         # Liquidación del débito (idempotente: solo si hay reserva viva).
         if self.budget is not None and job.reserva_estado == "retenido":
-            real = job.reserva_usd if costo_real_usd is None else round(costo_real_usd, 4)
-            self.budget.liquidar(job.tenant_id, job.reserva_usd, real)
-            job.costo_real_usd = real
-            job.reserva_estado = "liquidado"
+            if sin_contenido:
+                self.budget.liberar(job.tenant_id, job.reserva_usd)
+                job.costo_real_usd = 0.0
+                job.reserva_estado = "liberado_sin_contenido"
+            else:
+                real = job.reserva_usd if costo_real_usd is None else round(costo_real_usd, 4)
+                self.budget.liquidar(job.tenant_id, job.reserva_usd, real)
+                job.costo_real_usd = real
+                job.reserva_estado = "liquidado"
 
         self.backend.save_job(job)
         # Idempotencia: registra el contenido como ya ingerido (clave SHA-256 por
         # tenant). Un futuro job con el mismo contenido se resuelve sin reprocesar.
-        if job.content_sha256:
+        # NO se registra si quedó SIN CONTENIDO (0 ontología / sin DocumentoSource):
+        # el usuario debe poder reintentar/re-subir y que SÍ se re-extraiga (no un
+        # idempotency-skip que reuse un resultado vacío). Coherente con no-cobro.
+        if job.content_sha256 and not sin_contenido:
             self.backend.record_ingested(
                 job.tenant_id, job.content_sha256, {"resultado": resultado}
             )
@@ -425,6 +441,33 @@ class JobDispatcher:
         (worker lo cierra "completed" reusando el resultado viejo, sin re-extraer ni
         recrear el `:DocumentoSource`) — el bug del 'quedó vivo' que no quedó vivo."""
         self.backend.borrar_ingested(tenant_id, content_sha256)
+
+    # ── Gate de costo del reintento AUTOMÁTICO del worker (Pieza 4c) ──────────
+    def gate_costo_reintento(self, job_id: str) -> tuple[bool, str]:
+        """
+        ¿Puede el worker REINTENTAR automáticamente este job sin saltarse el gate de
+        costo? Cada reintento re-corre la extracción COMPLETA = gasto real adicional;
+        sin gate, `MAX_RETRIES` multiplica el costo ≤3× sin control (lo que el contrato
+        prohíbe). Verifica que el tenant pueda absorber OTRA corrida estimada (la
+        reserva original solo cubre una). Devuelve (permitido, motivo).
+
+        Conservador con el COSTO: si no se puede verificar el presupuesto (sin budget
+        manager / store inalcanzable) NO se asume saldo — pero para no estrangular
+        entornos de test sin saldo configurado, la ausencia TOTAL de budget manager
+        (inyección None) sí permite. La falta de saldo real (verificar→rechazado)
+        bloquea el reintento.
+        """
+        if self.budget is None:
+            return True, ""  # sin contabilidad de saldo (tests) — no aplica gate
+        job = self.backend.load_job(job_id)
+        if job is None or job.cotizacion is None:
+            return True, ""
+        verdict = self.budget.verificar(
+            job.tenant_id, job.cotizacion.costo_estimado_usd
+        )
+        if verdict.aprobado:
+            return True, ""
+        return False, verdict.motivo
 
     # ── Reintento manual (F1 §2.5) ────────────────────────────────────────────
     def reintentar(self, job_id: str) -> IngestJob:

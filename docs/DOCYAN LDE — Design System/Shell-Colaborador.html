@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOCYAN — Colaborador · consulta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link href="colors_and_type.css" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;font-family:var(--font-sans);color:var(--fg);background:var(--amate-100);
+    display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+  .lic{display:inline-flex;align-items:center;justify-content:center;}
+  .lic svg{width:100%;height:100%;}
+  /* ---- phone frame ---- */
+  .phone{width:404px;max-width:100%;height:818px;max-height:calc(100vh - 48px);border-radius:40px;border:11px solid var(--ink-950);
+    background:var(--bg);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 30px 80px -24px rgba(33,28,22,.5);}
+  .ph-status{display:flex;justify-content:space-between;align-items:center;padding:13px 24px 6px;font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--fg);flex:none;}
+  .ph-status .rt{display:flex;align-items:center;gap:6px;}
+  .ph-top{display:flex;align-items:center;gap:10px;padding:6px 18px 14px;border-bottom:1px solid var(--border);flex:none;}
+  .ph-top .w{font-weight:700;font-size:17px;letter-spacing:.02em;}
+  .ph-top .lde{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;color:var(--accent-fg);border:1px solid var(--cinnabar-200);border-radius:4px;padding:1px 4px;}
+  .ph-top .av{margin-left:auto;width:38px;height:38px;border-radius:11px;background:var(--cinnabar-500);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:none;}
+  .ph-body{flex:1;overflow:auto;padding:18px 16px 20px;-webkit-overflow-scrolling:touch;}
+  /* ---- bottom tab bar ---- */
+  .tabbar{display:flex;border-top:1px solid var(--border);background:var(--surface);padding:9px 6px calc(env(safe-area-inset-bottom) + 12px);flex:none;}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;color:var(--fg-subtle);cursor:pointer;font-weight:500;background:none;border:none;padding:6px 0;min-height:52px;justify-content:center;}
+  .tab .lic{width:24px;height:24px;}
+  .tab.on{color:var(--accent-fg);}
+  .tab.on .lic{color:var(--cinnabar-500);}
+  .tab.scan .lic{width:30px;height:30px;}
+  /* ---- home ---- */
+  .greet{margin-bottom:16px;}
+  .greet .hi{font-size:22px;font-weight:700;letter-spacing:-.01em;}
+  .greet .sub{font-size:14px;color:var(--fg-muted);margin-top:3px;}
+  .scan-cta{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--cinnabar-500);color:#fff;border:none;border-radius:18px;padding:18px 18px;cursor:pointer;box-shadow:var(--shadow-cinnabar);margin-bottom:10px;}
+  .scan-cta:active{transform:scale(.99);}
+  .scan-cta .si{width:50px;height:50px;border-radius:14px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;flex:none;}
+  .scan-cta .st{font-size:17px;font-weight:700;}
+  .scan-cta .sm{font-size:13px;opacity:.92;margin-top:2px;}
+  .scan-cta .sar{margin-left:auto;opacity:.85;}
+  .ask{display:flex;align-items:center;gap:11px;width:100%;background:var(--surface);border:1px solid var(--border-strong);border-radius:16px;padding:15px 16px;color:var(--fg-subtle);cursor:pointer;margin-bottom:22px;}
+  .ask .lic{width:19px;height:19px;color:var(--cinnabar-500);flex:none;}
+  .ask span{font-size:15px;}
+  .sec-lab{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);margin:0 2px 11px;}
+  .sec-lab .lic{width:14px;height:14px;color:var(--cinnabar-500);}
+  .sec-lab .cnt{margin-left:auto;letter-spacing:0;text-transform:none;color:var(--fg-muted);}
+  /* codo card */
+  .codo-card{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:15px;cursor:pointer;margin-bottom:11px;transition:border-color .12s var(--ease-out),box-shadow .12s var(--ease-out);}
+  .codo-card:active{transform:scale(.995);}
+  .codo-card:hover{border-color:var(--cinnabar-300);box-shadow:var(--shadow-sm);}
+  .codo-card .ci{width:50px;height:50px;border-radius:14px;background:var(--cinnabar-50);color:var(--cinnabar-500);display:flex;align-items:center;justify-content:center;flex:none;}
+  .codo-card .cid{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;color:var(--accent-fg);}
+  .codo-card .cn{font-size:16px;font-weight:700;letter-spacing:-.01em;margin-top:1px;line-height:1.2;}
+  .codo-card .cm{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-muted);margin-top:5px;display:flex;align-items:center;gap:7px;}
+  .codo-card .badge-vivo{display:inline-flex;align-items:center;gap:4px;color:var(--success-600);}
+  .codo-card .badge-vivo .bd{width:5px;height:5px;border-radius:50%;background:var(--success-600);}
+  .codo-card .car{margin-left:auto;color:var(--fg-subtle);flex:none;}
+  /* saved query */
+  .saved-q{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer;margin-bottom:9px;}
+  .saved-q:hover{border-color:var(--cinnabar-300);}
+  .saved-q .qi{width:38px;height:38px;border-radius:11px;background:var(--amate-50);color:var(--cinnabar-500);display:flex;align-items:center;justify-content:center;flex:none;}
+  .saved-q .qt{font-size:14.5px;font-weight:600;line-height:1.25;}
+  .saved-q .qm{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-muted);margin-top:3px;}
+  .saved-q .car{margin-left:auto;color:var(--fg-subtle);flex:none;}
+  .readonly-note{display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--fg-muted);background:var(--info-100);border-radius:12px;padding:12px 13px;line-height:1.45;margin-top:18px;}
+  .readonly-note .lic{width:16px;height:16px;color:var(--info-600);flex:none;margin-top:1px;}
+  /* ---- consult screen ---- */
+  .cons-top{display:flex;align-items:center;gap:11px;padding:4px 2px 16px;}
+  .back-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--border-strong);background:var(--surface);color:var(--fg-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+  .back-btn:hover{background:var(--amate-100);}
+  .back-btn .lic{width:18px;height:18px;}
+  .cons-ctx{min-width:0;}
+  .cons-ctx .cc{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;color:var(--accent-fg);display:flex;align-items:center;gap:6px;}
+  .cons-ctx .cc .dot{width:6px;height:6px;border-radius:50%;background:var(--cinnabar-500);}
+  .cons-ctx .cnm{font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.15;margin-top:2px;}
+  .qr-banner{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:11px;color:var(--success-600);background:var(--success-100);border-radius:11px;padding:9px 12px;margin-bottom:16px;}
+  .qr-banner .lic{width:15px;height:15px;flex:none;}
+  .sug{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font-size:15px;font-weight:500;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px 15px;cursor:pointer;margin-bottom:9px;min-height:52px;}
+  .sug:hover{border-color:var(--cinnabar-300);background:var(--cinnabar-50);}
+  .sug .lic{width:18px;height:18px;color:var(--cinnabar-500);flex:none;}
+  .sug .tx{flex:1;min-width:0;}
+  .sug .ar{color:var(--fg-subtle);}
+  .bubble{align-self:flex-end;background:var(--ink-900);color:var(--amate-50);font-size:15px;padding:11px 15px;border-radius:16px 16px 5px 16px;max-width:82%;margin:6px 0 14px auto;width:fit-content;}
+  .mode{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--success-600);margin-bottom:9px;}
+  .mode .pulse{width:7px;height:7px;border-radius:50%;background:var(--success-600);}
+  .mode.synth{color:var(--warning-600);}.mode.synth .pulse{background:var(--warning-600);}
+  .acard{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-sm);padding:17px;margin-bottom:8px;}
+  .acard .q{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-subtle);}
+  .acard .big{font-weight:700;font-size:42px;letter-spacing:-.02em;line-height:1;margin-top:8px;}
+  .acard .big .u{font-size:19px;font-weight:500;color:var(--fg-muted);margin-left:4px;}
+  .acard .note{font-size:15px;color:var(--fg-muted);line-height:1.5;margin:10px 0 0;}
+  .citerow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:15px;}
+  .cite2{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:12px;font-weight:500;color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);padding:7px 12px 7px 9px;border-radius:9px;cursor:pointer;}
+  .cite2 .brk{position:relative;width:13px;height:13px;flex:none;}
+  .cite2 .brk::before,.cite2 .brk::after{content:"";position:absolute;top:0;bottom:0;width:4px;border:1.5px solid var(--cinnabar-500);}
+  .cite2 .brk::before{left:0;border-right:none;border-radius:2px 0 0 2px;}
+  .cite2 .brk::after{right:0;border-left:none;border-radius:0 2px 2px 0;}
+  .savebtn{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--fg-muted);background:transparent;border:1px solid var(--border-strong);border-radius:9px;padding:7px 12px;cursor:pointer;}
+  .savebtn .lic{width:15px;height:15px;}
+  .savebtn.on{color:var(--success-600);border-color:var(--success-100);background:var(--success-100);}
+  .src{position:relative;margin-top:13px;}
+  .src .thr{position:absolute;left:20px;top:-11px;width:2px;height:13px;background:var(--cinnabar-300);}
+  .src2{background:var(--amate-50);border:1px solid var(--border);border-radius:12px;padding:13px 14px;}
+  .src2 .s-head{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:8px;}
+  .src2 .s-head .lic{width:13px;height:13px;}
+  .src2 .s-head .pg{margin-left:auto;}
+  .src2 .s-span{font-family:var(--font-serif);font-size:15px;line-height:1.6;color:var(--ink-800);}
+  .src2 .s-span mark{background:var(--cinnabar-100);color:var(--ink-900);padding:1px 3px;border-radius:3px;}
+  .src2 .s-orig{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle);margin-top:9px;}
+  .src2 .s-orig .lic{width:12px;height:12px;}
+  .src2 .s-actions{display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:11px;border-top:1px dashed var(--border);}
+  .src2 .s-ped{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);}
+  .src2 .s-ped .lic{width:13px;height:13px;color:var(--success-600);}
+  .openpdf{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--fg-muted);background:transparent;border:1px dashed var(--border-strong);padding:6px 11px;border-radius:8px;cursor:pointer;}
+  .openpdf .lic{width:13px;height:13px;}
+  .empty-thread{text-align:center;color:var(--fg-subtle);padding:30px 10px 10px;}
+  .empty-thread .lic{width:26px;height:26px;color:var(--cinnabar-400);}
+  .empty-thread p{font-size:14px;line-height:1.5;margin:11px 0 0;}
+  /* bottom dock query */
+  .dock{flex:none;padding:10px 14px calc(env(safe-area-inset-bottom) + 12px);border-top:1px solid var(--border);background:rgba(250,247,241,.92);backdrop-filter:blur(8px);}
+  .qbar{display:flex;align-items:center;gap:9px;background:var(--surface);border:2px solid var(--cinnabar-300);border-radius:30px;padding:6px 6px 6px 18px;box-shadow:0 0 0 3px var(--cinnabar-50);}
+  .qbar input{flex:1;border:none;outline:none;background:transparent;font-size:15px;color:var(--fg);font-family:var(--font-sans);}
+  .qbar .mic{width:42px;height:42px;border-radius:50%;border:none;background:var(--amate-100);color:var(--fg-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+  .qbar .send{width:42px;height:42px;border-radius:50%;border:none;background:var(--cinnabar-500);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+  .qbar .send .lic,.qbar .mic .lic{width:18px;height:18px;}
+  /* saved screen */
+  .scr-head{font-size:21px;font-weight:700;letter-spacing:-.01em;margin:2px 2px 4px;}
+  .scr-sub{font-size:13.5px;color:var(--fg-muted);margin:0 2px 18px;}
+  .prof{display:flex;align-items:center;gap:15px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:17px;margin-bottom:16px;}
+  .prof .pav{width:56px;height:56px;border-radius:16px;background:var(--ink-900);color:var(--amate-50);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600;flex:none;}
+  .prof .pn{font-size:17px;font-weight:700;}
+  .prof .pr{font-family:var(--font-mono);font-size:11px;color:var(--accent-fg);margin-top:3px;}
+  .prof-row{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:15px;margin-bottom:9px;font-size:14.5px;font-weight:500;}
+  .prof-row .lic{width:19px;height:19px;color:var(--fg-subtle);flex:none;}
+  .prof-row .pv{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--fg-muted);font-weight:400;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const LS = "docyan_colab_";
+function Icon({ name, size = 18, color }) {
+  const ref = useRef(null);
+  useEffect(() => { const el = ref.current; if (!el || !window.lucide) return; el.innerHTML = "";
+    const i = document.createElement("i"); i.setAttribute("data-lucide", name); el.appendChild(i);
+    try { window.lucide.createIcons(); } catch (e) {} }, [name]);
+  return <span className="lic" ref={ref} style={{ width: size, height: size, color }} />;
+}
+function Mark({ size = 22 }) {
+  return <svg width={size} height={size} viewBox="0 0 64 64" fill="none" style={{ flex: "none" }}>
+    <g stroke="var(--ink-900)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M13 23 V13 H23" /><path d="M41 13 H51 V23" /><path d="M51 41 V51 H41" /><path d="M23 51 H13 V41" /></g>
+    <rect x="25.5" y="25.5" width="13" height="13" rx="3" fill="#CF4124" /></svg>;
+}
+
+/* CoDos a los que el colaborador tiene acceso (read-only) */
+const CODOS = [
+  { key: "maxi10", id: "CODO-OBR-07", name: "Mezcladora de concreto MAXI-10ND", icon: "blend", docs: 3, loc: "Obra · cuadrilla 2",
+    sugs: [["gauge", "¿A cuántas RPM debe girar la olla?", "rpm"], ["settings", "¿A qué rpm calibro el motor?", "calib"], ["fuel", "¿Qué aceite usa el motor?", "aceite"], ["box", "¿Cómo pido una refacción?", "refa"]] },
+  { key: "lab04", id: "CODO-LAB-04", name: "Centrífuga Hettich Rotina 380", icon: "disc-3", docs: 12, loc: "Lab · mesa 3",
+    sugs: [["gauge", "¿Velocidad máxima del rotor?", "vel"], ["activity", "Vibra al arrancar", "vibra"]] },
+  { key: "maq02", id: "CODO-MAQ-02", name: "CNC Haas VF-2", icon: "cog", docs: 7, loc: "Maquinado · celda B",
+    sugs: [["wrench", "¿Cómo cambio el filtro de refrigerante?", "filtro"]] },
+];
+
+const A = {
+  rpm: { q: "RPM de la olla", value: "28–32", unit: "rpm", mode: "cache",
+    note: "Calibra el motor hasta que la olla trabaje de 28 a 32 rpm. Si no tienes tacómetro, coloca una marca en la olla y cuéntalas.",
+    cite: "Operación MAXI-10ND · Calibración del motor", page: 6, lang: "ES",
+    span: "En caso de no contar con tacómetro, colocar una marca en la olla y calibrar el motor hasta que la olla trabaje de 28 a 32 revoluciones por minuto.", mark: "28 a 32 revoluciones por minuto" },
+  calib: { q: "Calibración del motor", value: "2300–2400", unit: "rpm", mode: "cache",
+    note: "2300–2400 rpm en las versiones estándar; 3000–3100 rpm para motores de 5.5 hp. Aprieta el tornillo tope del acelerador en esa posición.",
+    cite: "Operación MAXI-10ND · Calibración del motor", page: 6, lang: "ES",
+    span: "gire la palanca del acelerador hasta obtener la velocidad necesaria (3000-3100 rpm para motores de 5.5 hp y 2300-2400 rpm para las demás versiones de motor). Apriete el tornillo tope a la posición que se encuentre la palanca.", mark: "2300-2400 rpm para las demás versiones" },
+  aceite: { q: "Aceite del motor", text: "El motor usa aceite SAE-30. En la lista de partes es la refacción con código CIP490482.", mode: "synth",
+    cite: "Lista de partes · Ensamble Motor", page: 3, lang: "ES",
+    span: "CIP490482   ACEITE SAE-30", mark: "ACEITE SAE-30" },
+  refa: { q: "Cómo pedir una refacción", text: "Al solicitar refacciones especifica el modelo (MAXI-10ND), el número de serie de la máquina y el código de la pieza (p. ej. CIP504107).", mode: "synth",
+    cite: "Operación MAXI-10ND · Uso de lista de partes", page: 12, lang: "ES",
+    span: "deberá especificar: Modelo de la máquina · Número de serie de la misma · Código de la pieza que necesita.", mark: "Modelo de la máquina · Número de serie de la misma · Código de la pieza que necesita" },
+  vel: { q: "Velocidad máxima del rotor", value: "4,000", unit: "rpm", mode: "cache",
+    note: "Rotor de ángulo fijo. No exceder con carga desbalanceada.",
+    cite: "Hettich · cap. 2", page: 9, lang: "ES", span: "Velocidad máxima de operación: 4,000 rpm con el rotor de ángulo fijo.", mark: "4,000 rpm" },
+  vibra: { q: "Vibración al arrancar", text: "Causa probable: desbalance del rotor. Revisa el asiento de los tubos y que las masas estén pareadas.", mode: "synth",
+    cite: "Guía de fallas · §3.5", page: 7, lang: "ES", span: "Vibración al arranque — verificar primero el balance del rotor y la holgura del acople motor-eje.", mark: "holgura del acople motor-eje" },
+  filtro: { q: "Cambio del filtro de refrigerante", text: "Detén la máquina y aplica LOTO; cierra la válvula y deja drenar 2 min antes de retirar la tapa.", mode: "synth",
+    cite: "Manual VF-2 · §7.3", page: 28, lang: "EN", span: "Stop the machine and apply lock-out/tag-out; the housing remains pressurized until fully drained.", mark: "the housing remains pressurized" },
+};
+
+function AnswerCard({ a, saved, onSave }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setOpen(true), 360); return () => clearTimeout(id); }, []);
+  const parts = a.mark && a.span && a.span.includes(a.mark) ? a.span.split(a.mark) : null;
+  return <div>
+    <div className={"mode" + (a.mode === "synth" ? " synth" : "")}><span className="pulse" />{a.mode === "synth" ? "Respuesta sintetizada" : "Respuesta instantánea · caché"}</div>
+    <div className="acard"><div className="q">{a.q}</div>
+      {a.value ? <><div className="big">{a.value}<span className="u">{a.unit}</span></div><p className="note">{a.note}</p></>
+        : <p className="note" style={{ fontSize: 15.5, color: "var(--fg)" }}>{a.text}</p>}
+      <div className="citerow"><button className="cite2" onClick={() => setOpen(o => !o)}><span className="brk" />{a.cite} · pág. {a.page} ↗</button>
+        <button className={"savebtn" + (saved ? " on" : "")} onClick={onSave}><Icon name={saved ? "check" : "bookmark"} size={15} />{saved ? "Guardada" : "Guardar"}</button></div>
+      {open && a.span && <div className="src"><span className="thr" /><div className="src2">
+        <div className="s-head"><Icon name="file-text" size={13} /><span>Fragmento original</span><span className="pg">pág. {a.page}</span></div>
+        <div className="s-span">{parts ? <>{parts[0]}<mark>{a.mark}</mark>{parts[1]}</> : a.span}</div>
+        {a.lang !== "ES" && <span className="s-orig"><Icon name="globe" size={12} />Documento original en inglés · preguntaste en español</span>}
+        <div className="s-actions"><span className="s-ped"><Icon name="shield-check" size={13} />Pedigree a span · SHA-256</span>
+          <button className="openpdf"><Icon name="external-link" size={13} />Abrir PDF</button></div>
+      </div></div>}
+    </div>
+  </div>;
+}
+
+function Home({ go, openCodo, saved }) {
+  return <>
+    <div className="greet"><div className="hi">Hola, Andrés</div><div className="sub">Escanea el QR del equipo o entra a un CoDo.</div></div>
+    <button className="scan-cta" onClick={() => go("scan")}>
+      <span className="si"><Icon name="scan-line" size={26} color="#fff" /></span>
+      <div><div className="st">Escanear QR</div><div className="sm">Apunta al equipo y pregunta</div></div>
+      <span className="sar"><Icon name="arrow-right" size={20} color="#fff" /></span>
+    </button>
+    <button className="ask" onClick={() => openCodo(CODOS[0])}><Icon name="search" size={19} /><span>Pregunta directo a un documento…</span></button>
+
+    <div className="sec-lab"><Icon name="folder-tree" size={14} />Tus CoDos<span className="cnt">{CODOS.length} con acceso</span></div>
+    {CODOS.map(c => <button key={c.key} className="codo-card" onClick={() => openCodo(c)}>
+      <span className="ci"><Icon name={c.icon} size={24} /></span>
+      <div style={{ minWidth: 0 }}><div className="cid">{c.id}</div><div className="cn">{c.name}</div>
+        <div className="cm"><span className="badge-vivo"><span className="bd" />{c.docs} docs vivos</span><span>·</span><span>{c.loc}</span></div></div>
+      <span className="car"><Icon name="chevron-right" size={20} /></span>
+    </button>)}
+
+    <div className="sec-lab" style={{ marginTop: 22 }}><Icon name="bookmark" size={14} />Consultas guardadas</div>
+    {saved.length === 0
+      ? <div style={{ fontSize: 13.5, color: "var(--fg-subtle)", padding: "4px 4px 0", lineHeight: 1.5 }}>Aún no guardas consultas. Toca <b>Guardar</b> en una respuesta para tenerla a la mano.</div>
+      : saved.slice(0, 3).map((s, i) => <button key={i} className="saved-q" onClick={() => openCodo(CODOS.find(c => c.key === s.codoKey) || CODOS[0], s.key)}>
+          <span className="qi"><Icon name="bookmark" size={17} /></span>
+          <div style={{ minWidth: 0 }}><div className="qt">{s.q}</div><div className="qm">{s.codoId}</div></div>
+          <span className="car"><Icon name="chevron-right" size={18} /></span>
+        </button>)}
+
+    <div className="readonly-note"><Icon name="info" size={16} />Como colaborador, consultas y guardas — la organización gestiona los documentos y los CoDos.</div>
+  </>;
+}
+
+function Consult({ codo, back, initialKey, saved, toggleSave }) {
+  const [thread, setThread] = useState([]);
+  const [text, setText] = useState("");
+  const ref = useRef(null);
+  const ask = (label, key) => {
+    const a = A[key] || { q: label, text: "DOCYAN clasifica tu pregunta y responde con cita a la fuente.", mode: "synth", cite: codo.id, page: "—", span: null, lang: "ES" };
+    setThread(t => [...t, { role: "u", text: label }, { role: "a", a, id: Date.now() + Math.random(), key }]);
+  };
+  useEffect(() => { if (initialKey && A[initialKey]) ask(A[initialKey].q, initialKey); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { const el = ref.current; if (el) el.scrollTop = el.scrollHeight; }, [thread]);
+  return <>
+    <div className="ph-body" ref={ref}>
+      <div className="cons-top"><button className="back-btn" onClick={back}><Icon name="arrow-left" size={18} /></button>
+        <div className="cons-ctx"><div className="cc"><span className="dot" />{codo.id}</div><div className="cnm">{codo.name}</div></div></div>
+      <div className="qr-banner"><Icon name="scan-line" size={15} /><span>QR escaneado · {codo.docs} docs vivos</span></div>
+      {thread.length === 0 && <>
+        <div className="sec-lab"><Icon name="sparkles" size={14} />Preguntas frecuentes aquí</div>
+        {codo.sugs.map((s, i) => <button key={i} className="sug" onClick={() => ask(s[1], s[2])}><Icon name={s[0]} size={18} /><span className="tx">{s[1]}</span><span className="ar">→</span></button>)}
+      </>}
+      {thread.map((m, i) => m.role === "u"
+        ? <div className="bubble" key={i}>{m.text}</div>
+        : <AnswerCard key={m.id} a={m.a} saved={saved.some(s => s.q === m.a.q)} onSave={() => toggleSave(m.a, codo)} />)}
+    </div>
+    <div className="dock"><form className="qbar" onSubmit={e => { e.preventDefault(); const v = text.trim(); if (v) { ask(v, null); setText(""); } }}>
+      <input value={text} onChange={e => setText(e.target.value)} placeholder="Pregunta sobre este equipo…" />
+      <button type="button" className="mic" title="Dictar"><Icon name="mic" size={18} /></button>
+      <button type="submit" className="send"><Icon name="arrow-up" size={18} /></button>
+    </form></div>
+  </>;
+}
+
+function Scan({ pick }) {
+  return <div className="ph-body" style={{ display: "flex", flexDirection: "column" }}>
+    <div className="greet" style={{ marginBottom: 18 }}><div className="hi">Escanear QR</div><div className="sub">Apunta la cámara al QR pegado en el equipo.</div></div>
+    <div style={{ aspectRatio: "1", borderRadius: 22, background: "var(--ink-950)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 18 }}>
+      {["tl", "tr", "bl", "br"].map(p => <span key={p} style={{ position: "absolute", width: 44, height: 44,
+        borderColor: "var(--cinnabar-500)", borderStyle: "solid",
+        borderWidth: p === "tl" ? "4px 0 0 4px" : p === "tr" ? "4px 4px 0 0" : p === "bl" ? "0 0 4px 4px" : "0 4px 4px 0",
+        borderTopLeftRadius: p === "tl" ? 12 : 0, borderTopRightRadius: p === "tr" ? 12 : 0, borderBottomLeftRadius: p === "bl" ? 12 : 0, borderBottomRightRadius: p === "br" ? 12 : 0,
+        top: p[0] === "t" ? 26 : "auto", bottom: p[0] === "b" ? 26 : "auto", left: p[1] === "l" ? 26 : "auto", right: p[1] === "r" ? 26 : "auto" }} />)}
+      <Icon name="scan-line" size={56} color="rgba(250,247,241,.5)" />
+    </div>
+    <div className="sec-lab"><Icon name="zap" size={14} />Detectados cerca de ti</div>
+    {CODOS.map(c => <button key={c.key} className="codo-card" onClick={() => pick(c)}>
+      <span className="ci"><Icon name={c.icon} size={24} /></span>
+      <div style={{ minWidth: 0 }}><div className="cid">{c.id}</div><div className="cn">{c.name}</div>
+        <div className="cm"><span>{c.loc}</span></div></div>
+      <span className="car"><Icon name="chevron-right" size={20} /></span>
+    </button>)}
+  </div>;
+}
+
+function Saved({ saved, openCodo }) {
+  return <div className="ph-body">
+    <div className="scr-head">Consultas guardadas</div>
+    <div className="scr-sub">Tus respuestas a la mano, con su cita a la fuente.</div>
+    {saved.length === 0
+      ? <div className="empty-thread"><Icon name="bookmark" size={26} /><p>Aún no guardas consultas.<br />Toca <b>Guardar</b> en cualquier respuesta.</p></div>
+      : saved.map((s, i) => <button key={i} className="saved-q" onClick={() => openCodo(CODOS.find(c => c.key === s.codoKey) || CODOS[0], s.key)}>
+          <span className="qi"><Icon name="bookmark" size={17} /></span>
+          <div style={{ minWidth: 0 }}><div className="qt">{s.q}</div><div className="qm">{s.codoId} · {s.cite}</div></div>
+          <span className="car"><Icon name="chevron-right" size={18} /></span>
+        </button>)}
+  </div>;
+}
+
+function Perfil() {
+  return <div className="ph-body">
+    <div className="scr-head">Perfil</div>
+    <div className="scr-sub">Tu cuenta de colaborador.</div>
+    <div className="prof"><div className="pav">AR</div><div><div className="pn">Andrés Ríos</div><div className="pr">COLABORADOR · ENTRA POR QR</div></div></div>
+    <div className="prof-row"><Icon name="globe" size={19} />Idioma<span className="pv">ES-MX</span></div>
+    <div className="prof-row"><Icon name="sparkles" size={19} />Sugerencias de IA<span className="pv">Activadas</span></div>
+    <div className="prof-row"><Icon name="building-2" size={19} />Organización<span className="pv">Laboratorio Estándar</span></div>
+    <div className="prof-row"><Icon name="bell" size={19} />Notificaciones<span className="pv">Solo alertas</span></div>
+    <div className="readonly-note"><Icon name="info" size={16} />No gestionas documentos ni CoDos. Si necesitas acceso a un equipo, pídelo a tu admin de organización.</div>
+  </div>;
+}
+
+const TABS = [["home", "Inicio", "house"], ["scan", "Escanear", "scan-line"], ["saved", "Guardadas", "bookmark"], ["perfil", "Perfil", "user"]];
+
+function App() {
+  const [tab, setTab] = useState("home");
+  const [consult, setConsult] = useState(null); // {codo, initialKey}
+  const [saved, setSaved] = useState(() => { try { return JSON.parse(localStorage.getItem(LS + "saved")) || []; } catch (e) { return []; } });
+  useEffect(() => { localStorage.setItem(LS + "saved", JSON.stringify(saved)); }, [saved]);
+
+  const openCodo = (codo, initialKey) => setConsult({ codo, initialKey });
+  const toggleSave = (a, codo) => setSaved(s => s.some(x => x.q === a.q)
+    ? s.filter(x => x.q !== a.q)
+    : [{ q: a.q, key: Object.keys(A).find(k => A[k].q === a.q), codoKey: codo.key, codoId: codo.id, cite: a.cite }, ...s]);
+
+  let body;
+  if (consult) {
+    body = <Consult codo={consult.codo} initialKey={consult.initialKey} back={() => setConsult(null)} saved={saved} toggleSave={toggleSave} />;
+  } else if (tab === "home") body = <div className="ph-body"><Home go={setTab} openCodo={openCodo} saved={saved} /></div>;
+  else if (tab === "scan") body = <Scan pick={openCodo} />;
+  else if (tab === "saved") body = <Saved saved={saved} openCodo={openCodo} />;
+  else body = <Perfil />;
+
+  const activeTab = consult ? null : tab;
+  return <div className="phone">
+    <div className="ph-status"><span>9:41</span><span className="rt"><Icon name="signal" size={15} /><Icon name="wifi" size={15} /><Icon name="battery-full" size={17} /></span></div>
+    <div className="ph-top"><Mark size={22} /><span className="w">DOCYAN</span><span className="lde">LDE</span><span className="av">AR</span></div>
+    {body}
+    <div className="tabbar">{TABS.map(t => <button key={t[0]} className={"tab" + (t[0] === "scan" ? " scan" : "") + (activeTab === t[0] ? " on" : "")}
+      onClick={() => { setConsult(null); setTab(t[0]); }}><Icon name={t[2]} size={t[0] === "scan" ? 30 : 24} />{t[1]}</button>)}</div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

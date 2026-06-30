@@ -270,6 +270,12 @@ def contexto_fingerprint(contexto: dict | None) -> str:
         [
             f"qr={ctx.get('token_qr') or ''}",
             f"ent={ctx.get('entidad_id') or ''}",
+            # `documento_id` segrega el caché por DOCUMENTO consultado. Sin esto, dos
+            # documentos sueltos del mismo tenant (entidad_id vacío, mismo tipo)
+            # comparten fingerprint → la misma pregunta sobre el doc B sirve la
+            # respuesta cacheada del doc A (colisión observada en el recorrido
+            # multi-documento, 15-jun). Es entrada conocida del lookup, no resultado.
+            f"doc={ctx.get('documento_id') or ''}",
             f"tipo={ctx.get('tipo_documento') or ''}",
             f"par={ctx.get('par_linguistico') or ''}",
         ]

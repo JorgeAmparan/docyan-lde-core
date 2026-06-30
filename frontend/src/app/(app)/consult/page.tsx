@@ -57,9 +57,14 @@ export default function ConsultPage() {
   const context: ConsultContext = {
     codo: data.id,
     entityId: data.entidad_id ?? undefined,
+    // CoDo de documento suelto → su id ES el :DocumentoSource a consultar; se manda
+    // como documento_id para acotar el retrieval y segregar el caché (aislamiento).
+    // CoDo de entidad → el scope va por entidad_id (la entidad agrupa varios docs).
+    documentoId: data.tipo === "documento" ? data.id : undefined,
     entityName: data.nombre,
     entityTitle: data.titulo,
     entityMeta: data.meta,
+    documentos: data.documentos ?? [],
   };
   return <ConsultView context={context} />;
 }

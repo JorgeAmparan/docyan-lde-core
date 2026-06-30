@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { Icon } from "@/components/icon";
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
-import { CitationChip } from "@/components/brand/citation-chip";
-import { citaLabel, citaToSource, type DiagramViewerPayload } from "../consult-data";
-import { SaveBtn } from "./save-btn";
+import { CitedFragment } from "./cited-fragment";
+import { citaToSource, type DiagramViewerPayload } from "../consult-data";
 
 /** Tipo 3 · Gráficos / Diagramas — etiquetas (pins x,y) sobre la imagen real del
  *  recurso, sincronizadas con la leyenda. Datos del payload (curación asistida). */
@@ -25,7 +24,6 @@ export function GraficosViewer({
   const etiquetas = payload.etiquetas ?? [];
   const leyenda = payload.leyenda_simbolica ?? [];
   const cita = (payload.citas ?? [])[0] ?? null;
-  const label = citaLabel(cita);
 
   return (
     <div className="acard">
@@ -38,7 +36,7 @@ export function GraficosViewer({
             : undefined
         }
       >
-        {!payload.recurso_url && <span className="ph-tag">DIAGRAMA TÉCNICO</span>}
+        {!payload.recurso_url && <span className="ph-tag">DIAGRAMA TÉCNICO · DROP IMAGE</span>}
         {/* Caja del rótulo (x,y,w,h auto-extraídos) cuando hay dimensiones; si no, pin. */}
         {etiquetas.map((p, i) =>
           p.w != null && p.h != null ? (
@@ -104,14 +102,12 @@ export function GraficosViewer({
           ))}
         </ul>
       )}
-      <div className="acard-foot">
-        {label ? (
-          <CitationChip label={label} onOpen={() => onCite(citaToSource(cita))} />
-        ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>Sin cita de fuente</span>
-        )}
-        <SaveBtn saved={saved} onSave={onSave} />
-      </div>
+      <CitedFragment
+        cita={cita}
+        saved={saved}
+        onSave={onSave}
+        onOpenDoc={() => onCite(citaToSource(cita))}
+      />
     </div>
   );
 }

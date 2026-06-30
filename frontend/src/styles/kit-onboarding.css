@@ -472,14 +472,29 @@
 .onb-kit .role-opt{display:flex;align-items:flex-start;gap:12px;border:1px solid var(--border-strong);border-radius:var(--radius-md);padding:12px 14px;cursor:pointer;transition:all var(--dur-fast);}
 .onb-kit .role-opt:hover{border-color:var(--cinnabar-300);}
 .onb-kit .role-opt.on{border-color:var(--cinnabar-500);background:var(--cinnabar-50);}
-.onb-kit .role-opt .ro-radio{width:18px;height:18px;border-radius:50%;border:2px solid var(--border-strong);flex:none;margin-top:1px;}
-.onb-kit .role-opt.on .ro-radio{border:5px solid var(--cinnabar-500);}
+/* Sprint UI-2 §1.3 — radio de selección de rol con GEOMETRÍA INVARIANTE. El bug
+   del "óvalo rosa gigante" (reincidencia patrón B13) venía de un radio sin
+   `box-sizing` ni anchos mínimos: el borde de 5px del estado seleccionado y el
+   flex podían inflar/deformar el círculo. Se fija a 18px en TODOS los estados
+   (box-sizing + min/max) y el punto seleccionado se pinta con `box-shadow`
+   interno, no con un borde que crece. */
+.onb-kit .role-opt .ro-radio{box-sizing:border-box;width:18px;height:18px;min-width:18px;max-width:18px;min-height:18px;max-height:18px;border-radius:50%;border:2px solid var(--border-strong);background:var(--surface);flex:none;margin-top:1px;transition:border-color var(--dur-fast),box-shadow var(--dur-fast);}
+.onb-kit .role-opt.on .ro-radio{border-color:var(--cinnabar-500);box-shadow:inset 0 0 0 4px var(--cinnabar-500);}
 .onb-kit .role-opt .ro-t{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px;}
 .onb-kit .role-opt .ro-perms{font-size:12px;color:var(--fg-muted);margin-top:3px;line-height:1.45;}
-.onb-kit .role-pill{font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:var(--radius-full);}
-.onb-kit .role-pill.admin{background:var(--cinnabar-50);color:var(--accent-fg);border:1px solid var(--cinnabar-100);}
-.onb-kit .role-pill.editor{background:var(--info-100);color:var(--info-600);}
-.onb-kit .role-pill.consulta{background:var(--amate-100);color:var(--fg-muted);}
+/* Modificador de rol NAMESPACED (`rp-<rol>`): el valor crudo del rol NO se usa como
+   clase. Antes era `role-pill admin`, y `admin` COLISIONABA con `.admin` del kit
+   (marco demo fijo 1120×760 de kit-admin.css) → el pill se inflaba a un óvalo rosa
+   gigante (radius-full + cinnabar-50). El prefijo `rp-` lo aísla de clases de layout.
+   Defensa extra: width/height/display fijos al contenido por si algún modificador
+   futuro vuelve a chocar (mayor especificidad que una clase de layout suelta). */
+.onb-kit .role-pill{display:inline-flex;align-items:center;width:auto;height:auto;box-shadow:none;font-family:var(--font-mono);font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:var(--radius-full);white-space:nowrap;}
+.onb-kit .role-pill.rp-admin{background:var(--cinnabar-50);color:var(--accent-fg);border:1px solid var(--cinnabar-100);}
+.onb-kit .role-pill.rp-editor{background:var(--info-100);color:var(--info-600);}
+/* El enum del backend es `viewer` (etiquetado "Consulta" en UI). Se estila el valor
+   real `viewer`; se conserva `consulta` por compatibilidad. */
+.onb-kit .role-pill.rp-viewer,
+.onb-kit .role-pill.rp-consulta{background:var(--amate-100);color:var(--fg-muted);}
 
 .onb-kit .user-section h2{font-size:14px;font-family:var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);font-weight:500;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
 .onb-kit .user-section h2 .cnt{background:var(--amate-100);color:var(--fg-muted);font-size:11px;padding:1px 8px;border-radius:var(--radius-full);}

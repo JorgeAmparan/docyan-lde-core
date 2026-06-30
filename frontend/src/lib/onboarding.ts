@@ -26,6 +26,7 @@ export type UsuariosList = S["UsuariosList"];
 export type CodoOut = S["CodoOut"];
 export type CodosResponse = S["CodosResponse"];
 export type CodoContextoOut = S["CodoContextoOut"];
+export type DocumentoRefOut = S["DocumentoRefOut"];
 export type CuentaResumen = S["CuentaResumen"];
 
 /** Resumen REAL de la cuenta (plan, cupo, saldo) — reemplaza el FALLBACK enlatado. */

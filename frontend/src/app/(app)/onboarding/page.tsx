@@ -10,6 +10,39 @@ import { useAuth } from "@/lib/auth";
 import type { FreemiumExcedePayload } from "@/lib/onboarding";
 import { ConsultView, type ConsultContext } from "@/app/(app)/consult/consult-view";
 import { IngestProgressRow } from "@/components/ingesta/ingest-progress-row";
+import { QuoteCard } from "@/components/ingesta/quote-card";
+
+interface UploadResponse {
+  job_id: string;
+  paginas_estimadas?: number;
+  tipo_documento?: string | null;
+  tipo_resuelto_por?: string;
+  cotizacion: {
+    costo_estimado_usd: number;
+    saldo_disponible_usd: number;
+    aprobado: boolean;
+    precio_setup_usd?: number;
+    dentro_de_cupo?: boolean;
+    cupo_restante?: number | null;
+  };
+  cotizacion_local?: { moneda: string; precio_setup: number } | null;
+  advertencia?: string | null;
+}
+
+interface PendingQuote {
+  jobId: string;
+  name: string;
+  tipo: string | null;
+  setupUsd: number;
+  costUsd: number;
+  setupLocal: number | null;
+  aprobado: boolean;
+  saldo: number;
+  dentroCupo: boolean;
+  cupoRestante: number | null;
+  tipoNoCubierto: boolean;
+  advertencia: string | null;
+}
 
 /**
  * Pantalla 4 (B13) — Onboarding Fase 1 (el momento "ájá"): bienvenida → sube tu
@@ -41,6 +74,9 @@ export default function OnboardingFase1Page() {
   const [convert, setConvert] = useState<FreemiumExcedePayload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [aha, setAha] = useState(false);
+  // Cotización pendiente de aprobación: el "ájá" también respeta el gate de gasto.
+  const [quote, setQuote] = useState<PendingQuote | null>(null);
+  const [approving, setApproving] = useState(false);
 
   const pct = Math.round(((step + 1) / STEPS.length) * 100);
   const cur = STEPS[step];
@@ -57,16 +93,26 @@ export default function OnboardingFase1Page() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.postForm<{ job_id: string; paginas_estimadas?: number }>(
-        "/ingesta/documents",
-        form,
-        { token },
-      );
+      const res = await api.postForm<UploadResponse>("/ingesta/documents", form, { token });
       setFileName(file.name);
       setPages(res.paginas_estimadas ?? null);
-      setJobId(res.job_id);
-      // Confirma para que el worker procese (idempotente; el cobro lo gobierna el backend).
-      await api.post(`/ingesta/documents/${res.job_id}/confirm`, undefined, { token }).catch(() => null);
+      // Gate canónico: NO se auto-confirma. Se muestra la cotización (Total $0.00
+      // tachado en freemium) y el usuario APRUEBA — el "ájá" empieza con control de gasto.
+      const c = res.cotizacion;
+      setQuote({
+        jobId: res.job_id,
+        name: file.name,
+        tipo: res.tipo_documento ?? null,
+        setupUsd: c.precio_setup_usd ?? c.costo_estimado_usd,
+        costUsd: c.costo_estimado_usd,
+        setupLocal: res.cotizacion_local?.moneda === "MXN" ? res.cotizacion_local.precio_setup : null,
+        aprobado: c.aprobado,
+        saldo: c.saldo_disponible_usd,
+        dentroCupo: c.dentro_de_cupo ?? false,
+        cupoRestante: c.cupo_restante ?? null,
+        tipoNoCubierto: res.tipo_resuelto_por === "worker_generara" || !res.tipo_documento,
+        advertencia: res.advertencia ?? null,
+      });
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
         const body = e.body as { detail?: FreemiumExcedePayload } | undefined;
@@ -82,6 +128,27 @@ export default function OnboardingFase1Page() {
       setUploading(false);
     }
   };
+
+  // Aprobación explícita → recién aquí se confirma y encola; habilita Continuar.
+  const approveQuote = async () => {
+    if (!quote || !token) return;
+    setApproving(true);
+    try {
+      await api.post(`/ingesta/documents/${quote.jobId}/confirm`, undefined, { token });
+      setJobId(quote.jobId);
+      setQuote(null);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "No pudimos confirmar la ingesta.");
+    } finally {
+      setApproving(false);
+    }
+  };
+  const cancelQuote = () => {
+    setQuote(null);
+    setFileName(null);
+    setPages(null);
+  };
+  const quoteCurrency: "USD" | "MXN" = quote?.setupLocal != null ? "MXN" : "USD";
 
   const canNext = step === 1 ? !!jobId : step === 3 ? aha : true;
 
@@ -100,7 +167,7 @@ export default function OnboardingFase1Page() {
   };
 
   return (
-    <div className="onb-kit">
+    <div className="entry-view">
     <div className="onb">
       <aside className="onb-rail">
         <BrandRow tone="light" size={26} />
@@ -185,7 +252,34 @@ export default function OnboardingFase1Page() {
                 Te mostramos el costo estimado antes de procesar.
               </p>
               <div className="onb-body">
-                {!jobId ? (
+                {quote && !jobId ? (
+                  /* §1.1 — cotización con control de gasto + aprobación (también en el
+                     onboarding freemium: Total $0.00 tachado, pero el usuario LO VE y aprueba). */
+                  <>
+                    <QuoteCard
+                      name={quote.name}
+                      tipo={quote.tipo}
+                      isFreemium
+                      valueUsd={quoteCurrency === "MXN" ? (quote.setupLocal ?? quote.setupUsd) : quote.setupUsd}
+                      totalUsd={quoteCurrency === "MXN" ? (quote.setupLocal ?? quote.costUsd) : quote.costUsd}
+                      currency={quoteCurrency}
+                      dentroCupo={quote.dentroCupo}
+                      cupoRestante={quote.cupoRestante}
+                      tipoNoCubierto={quote.tipoNoCubierto}
+                      rejected={!quote.aprobado}
+                      advertencia={quote.advertencia}
+                    />
+                    <div className="m-actions" style={{ marginTop: 12 }}>
+                      <button className="btn sec" onClick={cancelQuote} disabled={approving}>
+                        Cancelar
+                      </button>
+                      <button className="btn primary" onClick={approveQuote} disabled={approving || !quote.aprobado}>
+                        <Icon name="check" size={16} />
+                        {approving ? "Aprobando…" : "Aprobar e ingerir"}
+                      </button>
+                    </div>
+                  </>
+                ) : !jobId ? (
                   <div className="dropzone" onClick={onPick}>
                     <div className="dz-ic">
                       <Icon name={uploading ? "loader-2" : "upload-cloud"} size={24} />
@@ -307,8 +401,8 @@ export default function OnboardingFase1Page() {
             <>
               <h1>Listo. Tu primer CoDo está vivo.</h1>
               <p className="onb-lead">
-                Ya viste el valor. Desde aquí puedes gestionar tus documentos, invitar a tu equipo o
-                elegir un plan cuando lo necesites.
+                Ya viste el valor: una consulta citada en minutos. Desde aquí puedes gestionar tus
+                documentos, invitar a tu equipo o elegir un plan cuando lo necesites.
               </p>
               <div className="onb-body">
                 <div className="onb-hl">

@@ -67,7 +67,12 @@
 .idoc-status.load{color:var(--info-600);}
 .idoc-status.proc{color:var(--cinnabar-600);}
 .idoc-status .pdot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:ing-blink 1s var(--ease-in-out) infinite;}
-.idoc-acts{display:flex;align-items:center;gap:10px;flex:none;}
+.idoc-acts{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;}
+.idoc.done .idoc-acts .mini-btn{padding:6px 10px;}
+.idoc.done .mini-btn.primary-ghost{color:var(--cinnabar-600);border-color:var(--cinnabar-300);background:var(--cinnabar-50);}
+.idoc.done .mini-btn.primary-ghost:hover{background:var(--cinnabar-100);}
+.idoc.done .link-btn.danger{color:var(--danger-600);display:inline-flex;align-items:center;gap:5px;}
+@media(max-width:520px){.idoc.done{flex-wrap:wrap;}.idoc.done .idoc-acts{width:100%;justify-content:flex-start;margin-top:8px;}}
 
 /* tarjeta procesando (expandida) */
 .idoc-top{display:flex;align-items:center;gap:11px;margin-bottom:13px;}

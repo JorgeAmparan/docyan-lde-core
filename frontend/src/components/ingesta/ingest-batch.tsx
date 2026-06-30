@@ -35,6 +35,8 @@ export interface IngestBatchProps {
   onRetry?: (docId: string) => void;
   onSkip?: (docId: string) => void;
   onConsult?: (doc: DocProgress) => void;
+  onReplace?: (doc: DocProgress) => void;
+  onDelete?: (doc: DocProgress) => void;
   onMinimize?: () => void;
   onNewIngest?: () => void;
 }
@@ -44,6 +46,8 @@ export function IngestBatch({
   onRetry,
   onSkip,
   onConsult,
+  onReplace,
+  onDelete,
   onMinimize,
   onNewIngest,
 }: IngestBatchProps) {
@@ -109,13 +113,14 @@ export function IngestBatch({
           </div>
         </div>
       ) : (
-        <div className="batch-done">
-          <div className="bd-ic">
-            <Icon name="check-check" size={22} />
+        // Bloque de éxito del prototipo (.chain): cadena SHA-256 sellada.
+        <div className="chain" style={{ marginBottom: 16 }}>
+          <div className="ci2">
+            <Icon name="check" size={18} />
           </div>
-          <div className="bd-main">
-            <div className="bd-h">{t("ingesta.batch.doneTitle")}</div>
-            <div className="bd-sub">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ct">{t("ingesta.batch.doneTitle")}</div>
+            <div className="cm">
               {t("ingesta.batch.doneSub", { n: completado })}
               {error > 0 && (
                 <>
@@ -157,6 +162,8 @@ export function IngestBatch({
             onRetry={onRetry}
             onSkip={onSkip}
             onConsult={onConsult}
+            onReplace={onReplace}
+            onDelete={onDelete}
           />
         ))}
       </div>
@@ -194,12 +201,16 @@ function DocRow({
   onRetry,
   onSkip,
   onConsult,
+  onReplace,
+  onDelete,
 }: {
   doc: DocProgress;
   blip: number;
   onRetry?: (id: string) => void;
   onSkip?: (id: string) => void;
   onConsult?: (doc: DocProgress) => void;
+  onReplace?: (doc: DocProgress) => void;
+  onDelete?: (doc: DocProgress) => void;
 }) {
   const { t } = useTranslation("common");
 
@@ -220,7 +231,34 @@ function DocRow({
       </div>
     );
 
-  if (doc.status === "completado")
+  if (doc.status === "completado") {
+    // §1.1.3 — completed_sin_documento: el job terminó pero NO quedó :DocumentoSource.
+    // Estado terminal honesto con Reintentar (compatible con el fail-fast worker).
+    const sinDocumento = doc.completedSinDocumento || doc.disponibleParaConsulta === false;
+    if (sinDocumento)
+      return (
+        <div className="idoc err">
+          <span className="idoc-ic bad">
+            <Icon name="alert-triangle" size={15} />
+          </span>
+          <div className="idoc-main">
+            <div className="idoc-name">{doc.name}</div>
+            <div className="idoc-sub bad">
+              <Icon name="x-circle" size={12} />
+              {t("ingesta.doc.completedNoDoc")}
+            </div>
+          </div>
+          <div className="idoc-acts">
+            <button className="mini-btn" onClick={() => onRetry?.(doc.docId)}>
+              <Icon name="rotate-ccw" size={13} />
+              {t("ingesta.actions.retry")}
+            </button>
+            <button className="link-btn" onClick={() => onSkip?.(doc.docId)}>
+              {t("ingesta.actions.skip")}
+            </button>
+          </div>
+        </div>
+      );
     return (
       <div className="idoc done">
         <span className="idoc-ic ok">
@@ -235,11 +273,28 @@ function DocRow({
               : t("ingesta.doc.completed")}
           </div>
         </div>
-        <button className="link-btn" onClick={() => onConsult?.(doc)}>
-          {t("ingesta.actions.consult")}
-        </button>
+        {/* §1.1.4 — documento vivo: Consultar (al CoDo) + Reemplazar + Eliminar. */}
+        <div className="idoc-acts">
+          <button className="mini-btn primary-ghost" onClick={() => onConsult?.(doc)}>
+            <Icon name="message-square-text" size={13} />
+            {t("ingesta.actions.consult")}
+          </button>
+          {onReplace && (
+            <button className="mini-btn" onClick={() => onReplace(doc)} aria-label={t("ingesta.actions.replace")}>
+              <Icon name="refresh-cw" size={13} />
+              {t("ingesta.actions.replace")}
+            </button>
+          )}
+          {onDelete && (
+            <button className="link-btn danger" onClick={() => onDelete(doc)} aria-label={t("ingesta.actions.delete")}>
+              <Icon name="trash-2" size={13} />
+              {t("ingesta.actions.delete")}
+            </button>
+          )}
+        </div>
       </div>
     );
+  }
 
   if (doc.status === "error")
     return (

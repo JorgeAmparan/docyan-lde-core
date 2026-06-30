@@ -1,0 +1,115 @@
+/* kit-glosario.css — Glosario terminológico + lock de consulta (admin Capa A).
+ *
+ * Ported VERBATIM from the design system prototype
+ * (docs/DOCYAN LDE — Design System/app/cotizador.css · GlosarioView/GlosTerm,
+ *  + sch-head/sch-legend, + dc-dd dropdown from app/ui-kit.css).
+ *
+ * Scoped under `.glosario-view` so the prototype-exact rules win over the generic
+ * admin kit values WITHOUT redefining those selectors globally (which would shift
+ * other admin pages). Base classes already provided by kit-admin.css inside
+ * `.main .content` (.mono, .sev-dot, .admin-banner) are NOT redefined here.
+ */
+
+/* ---------- cabecera (sch-head / sch-legend) ---------- */
+.glosario-view .sch-head{display:flex;align-items:flex-end;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
+.glosario-view .sch-head .sh-t{font-size:19px;font-weight:700;letter-spacing:-.02em;}
+.glosario-view .sch-head .sh-m{font-size:13px;color:var(--fg-muted);margin-top:5px;max-width:64ch;line-height:1.5;}
+.glosario-view .sch-legend{display:flex;gap:14px;margin-left:auto;flex-wrap:wrap;}
+.glosario-view .sch-legend .sl{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--fg-muted);}
+
+/* ---------- toolbar (par lingüístico + stats) ---------- */
+.glosario-view .glos-toolbar{display:flex;align-items:center;gap:18px;margin-bottom:16px;flex-wrap:wrap;}
+.glosario-view .glos-toolbar .dc-dd{max-width:280px;}
+.glosario-view .glos-stats{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap;}
+.glosario-view .glos-stats span{font-size:12.5px;color:var(--fg-muted);}
+.glosario-view .glos-stats b{font-family:var(--font-mono);color:var(--fg);font-weight:600;}
+
+/* ---------- dropdown (dc-dd) ---------- */
+.glosario-view .dc-dd{position:relative;}
+.glosario-view .dc-dd-btn{display:flex;align-items:center;gap:9px;width:100%;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;padding:11px 13px;font-size:14px;color:var(--fg);cursor:pointer;font-family:var(--font-sans);}
+.glosario-view .dc-dd.open .dc-dd-btn{border-color:var(--cinnabar-400);box-shadow:0 0 0 3px var(--cinnabar-50);}
+.glosario-view .dc-dd-btn>.lic:first-child{color:var(--cinnabar-500);flex:none;}
+.glosario-view .dc-dd-lab{flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.glosario-view .dc-dd-btn>.lic:last-child{color:var(--fg-subtle);flex:none;transition:transform .12s var(--ease-out);}
+.glosario-view .dc-dd.open .dc-dd-btn>.lic:last-child{transform:rotate(180deg);}
+.glosario-view .dc-dd-menu{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow-lg,0 16px 40px -12px rgba(33,28,22,.3));padding:5px;max-height:240px;overflow-y:auto;}
+.glosario-view .dc-dd-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;border-radius:8px;padding:10px 11px;font-size:13.5px;color:var(--fg);cursor:pointer;}
+.glosario-view .dc-dd-item>span{flex:1;min-width:0;}
+.glosario-view .dc-dd-item:hover{background:var(--amate-100);}
+.glosario-view .dc-dd-item.on{color:var(--accent-fg);font-weight:500;}
+.glosario-view .dc-dd-item .lic{color:var(--cinnabar-500);}
+
+/* ---------- hint de orígenes ---------- */
+.glosario-view .glos-hint{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--fg-muted);background:var(--amate-50);border:1px solid var(--border);border-radius:9px;padding:9px 13px;margin-bottom:14px;line-height:1.5;}
+.glosario-view .glos-hint .lic{color:var(--fg-subtle);flex:none;}
+.glosario-view .glos-hint b{color:var(--fg);font-weight:600;}
+.glosario-view .gh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 1px 0 5px;vertical-align:middle;}
+.glosario-view .gh-dot.o-publico{background:var(--info-500,var(--info-600));}
+.glosario-view .gh-dot.o-grafo{background:var(--caution-500);}
+.glosario-view .gh-dot.o-cliente{background:var(--success-600);}
+
+/* ---------- lista de términos ---------- */
+.glosario-view .glos-list{display:flex;flex-direction:column;gap:10px;}
+.glosario-view .glos-row{display:grid;grid-template-columns:minmax(150px,1.1fr) auto minmax(220px,1.6fr) minmax(230px,1.2fr);align-items:center;gap:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow-xs);}
+.glosario-view .glos-row.critico{border-color:color-mix(in oklab,var(--warning-600) 32%,var(--border));}
+
+.glosario-view .gr-src{display:flex;align-items:center;gap:10px;min-width:0;}
+.glosario-view .gr-lock{width:26px;height:26px;border-radius:7px;background:var(--cinnabar-50);color:var(--cinnabar-600);display:flex;align-items:center;justify-content:center;flex:none;}
+.glosario-view .gr-term{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--fg);line-height:1.2;word-break:break-word;}
+.glosario-view .gr-lang{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.06em;color:var(--fg-subtle);margin-top:2px;}
+
+.glosario-view .gr-tgt{min-width:0;}
+.glosario-view .gr-variants{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;align-items:center;}
+.glosario-view .gr-var{display:inline-flex;align-items:stretch;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--amate-50);transition:all .15s;}
+.glosario-view .gr-var:hover{border-color:var(--border-strong);}
+.glosario-view .gr-var-pick{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:var(--fg-muted);background:none;border:none;padding:4px 4px 4px 9px;cursor:pointer;}
+.glosario-view .gr-var-pick .lic{color:var(--cinnabar-600);}
+.glosario-view .gr-vdot{width:7px;height:7px;border-radius:50%;flex:none;}
+.glosario-view .gr-var.o-publico .gr-vdot{background:var(--info-500,var(--info-600));}
+.glosario-view .gr-var.o-grafo .gr-vdot{background:var(--caution-500);}
+.glosario-view .gr-var.o-cliente .gr-vdot{background:var(--success-600);}
+.glosario-view .gr-var-edit{display:inline-flex;align-items:center;padding:0 7px;background:none;border:none;border-left:1px solid transparent;color:var(--fg-subtle);cursor:pointer;opacity:0;transition:opacity .15s;}
+.glosario-view .gr-var:hover .gr-var-edit{opacity:1;}
+.glosario-view .gr-var-edit:hover{color:var(--fg);background:var(--amate-100);}
+.glosario-view .gr-var.on{background:var(--cinnabar-50);border-color:var(--cinnabar-300);}
+.glosario-view .gr-var.on .gr-var-pick{color:var(--accent-fg);font-weight:600;}
+.glosario-view .gr-add{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:500;color:var(--accent-fg);background:none;border:1px dashed var(--cinnabar-300);border-radius:7px;padding:4px 9px;cursor:pointer;}
+.glosario-view .gr-add:hover{background:var(--cinnabar-50);}
+.glosario-view .gr-add .lic{color:var(--cinnabar-500);}
+.glosario-view .gr-edit{display:inline-flex;align-items:center;gap:3px;background:var(--surface);border:1px solid var(--cinnabar-300);border-radius:7px;padding:2px 3px;}
+.glosario-view .gr-edit.add{border-style:dashed;}
+.glosario-view .gr-input{border:none;outline:none;background:none;font-size:12.5px;font-weight:500;color:var(--fg);padding:2px 6px;width:148px;font-family:inherit;}
+.glosario-view .gr-ic{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:none;border:none;color:var(--fg-subtle);cursor:pointer;}
+.glosario-view .gr-ic:hover{background:var(--amate-100);color:var(--fg);}
+.glosario-view .gr-ic.ok{color:var(--success-600);}
+.glosario-view .gr-ic.ok:hover{background:var(--success-100);}
+.glosario-view .gr-tgt-lang{font-size:10.5px;color:var(--fg-subtle);line-height:1.4;}
+.glosario-view .gr-tgt-lang b{font-family:var(--font-mono);color:var(--accent-fg);font-weight:600;}
+
+.glosario-view .gr-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;justify-content:flex-end;}
+.glosario-view .gr-dom{font-size:10.5px;color:var(--fg-muted);background:var(--amate-100);border-radius:6px;padding:3px 8px;}
+.glosario-view .gr-origen{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;border-radius:6px;padding:3px 8px;border:1px solid var(--border);}
+.glosario-view .gr-origen .sev-dot{width:7px;height:7px;}
+.glosario-view .gr-origen.ok{color:var(--success-600);background:var(--success-100);border-color:transparent;}
+.glosario-view .gr-origen.info{color:var(--info-600);background:var(--info-100);border-color:transparent;}
+.glosario-view .gr-origen.caution{color:var(--caution-700,var(--caution-500));background:var(--caution-100,color-mix(in oklab,var(--caution-500) 16%,white));border-color:transparent;}
+.glosario-view .gr-anillo{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.03em;color:var(--fg-subtle);border:1px solid var(--border);border-radius:6px;padding:3px 7px;}
+.glosario-view .gr-modal{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;border-radius:6px;padding:3px 8px;}
+.glosario-view .gr-modal .lic{width:11px;height:11px;}
+.glosario-view .gr-modal.warn{color:var(--warning-600);background:var(--warning-100);}
+.glosario-view .gr-modal.caution{color:var(--caution-700,var(--caution-500));background:var(--caution-100,color-mix(in oklab,var(--caution-500) 16%,white));}
+.glosario-view .gr-modal.info{color:var(--info-600);background:var(--info-100);}
+
+/* ---------- pie (no es una CAT tool · informa, no certifica) ---------- */
+.glosario-view .glos-foot{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px;}
+.glosario-view .glos-foot-card{background:var(--amate-50);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+.glosario-view .glos-foot-card .gf-h{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--fg);margin-bottom:8px;}
+.glosario-view .glos-foot-card .gf-h .lic{color:var(--cinnabar-500);}
+.glosario-view .glos-foot-card p{font-size:12.5px;color:var(--fg-muted);line-height:1.55;margin:0;}
+.glosario-view .glos-foot-card .mono{font-family:var(--font-mono);font-size:11.5px;color:var(--fg);}
+
+@media (max-width:1100px){
+  .glosario-view .glos-row{grid-template-columns:1fr auto;grid-auto-rows:auto;}
+  .glosario-view .glos-row .gr-tgt,.glosario-view .glos-row .gr-meta{grid-column:1 / -1;justify-content:flex-start;}
+  .glosario-view .glos-foot{grid-template-columns:1fr;}
+}

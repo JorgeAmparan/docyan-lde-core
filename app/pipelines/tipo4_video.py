@@ -23,7 +23,7 @@ from app.schemas.pipeline_payloads import (
 
 def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPipeline:
     termino = ctx.params.get("termino", ctx.pregunta)
-    data = reader.video(ctx.tenant_id, termino, ctx.entidad_id)
+    data = reader.video(ctx.tenant_id, termino, ctx.entidad_id, ctx.documento_id)
     par_activo = ctx.params.get("par_linguistico") or data.get("par_activo")
 
     capitulos = [

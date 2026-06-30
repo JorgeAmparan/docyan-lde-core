@@ -1,0 +1,209 @@
+/* ============================================================================
+   DOCYAN LDE — Design Tokens: Color + Type
+   "in tlilli, in tlapalli" — the black ink, the red ink (náhuatl: writing/knowledge)
+   ----------------------------------------------------------------------------
+   Tlilli  = warm near-black ink  (text, structure)
+   Tlapalli= codex cinnabar/red   (accent + the CITATION PEDIGREE color)
+   Amate   = warm bone/paper      (backgrounds; amate = codex bark-paper)
+   ----------------------------------------------------------------------------
+   Fonts are loaded from Google Fonts in each HTML file:
+     IBM Plex Sans  (UI + display)
+     IBM Plex Mono  (data, citations, QR labels, technical eyebrows)
+     IBM Plex Serif (document-rendering / editorial moments only)
+   See fonts/README.md to bundle .woff2 for production / offline PWA.
+   Tailwind/shadcn note: these map 1:1 to CSS variables in tailwind.config.
+============================================================================ */
+
+/* Real IBM Plex @font-face declarations (self-contained; not a substitute). */
+@import "fonts/fonts.css";
+
+:root {
+  /* ---- RAW PALETTE -------------------------------------------------------- */
+
+  /* Amate — warm paper neutrals (backgrounds, surfaces) */
+  --amate-50:  #FAF7F1;
+  --amate-100: #F4EEE3;
+  --amate-200: #EAE1D1;
+  --amate-300: #DBCDB6;
+  --amate-400: #C2AF92;
+
+  /* Stone — warm mid neutrals (borders, muted text, dividers) */
+  --stone-400: #A4937C;
+  --stone-500: #82725E;
+  --stone-600: #635648;
+
+  /* Tlilli — warm near-black ink (text + dark surfaces) */
+  --ink-700: #463C32;
+  --ink-800: #332B23;
+  --ink-900: #211C16;
+  --ink-950: #15110D;
+
+  /* Tlapalli — codex cinnabar (brand accent + citation pedigree) */
+  --cinnabar-50:  #FBEEE9;
+  --cinnabar-100: #F6D8CC;
+  --cinnabar-200: #EDB39F;
+  --cinnabar-300: #E08A6C;
+  --cinnabar-400: #D9633F;
+  --cinnabar-500: #CF4124;  /* brand primary */
+  --cinnabar-600: #B5331A;  /* hover / pressed */
+  --cinnabar-700: #8F2713;
+
+  /* ---- SEMANTIC STATE COLORS (kept distinct from brand cinnabar) --------- */
+  --success-600: #2C7A57;  /* jade/pine — NOT the CWP green; deep + warm */
+  --success-100: #DCEEE4;
+  --warning-600: #C0820F;  /* amber/ochre */
+  --warning-100: #F7EACB;
+  --caution-500: #E6B72E;  /* ANSI caution yellow */
+  --danger-600:  #C2160E;  /* ANSI DANGER true red — STOP (≠ orange cinnabar) */
+  --danger-100:  #F8D9D6;
+  --info-600:    #3E6E78;  /* muted teal-slate (intentionally not corporate blue) */
+  --info-100:    #D8E7E9;
+
+  /* ---- SEMANTIC SURFACE / TEXT (LIGHT — default) ------------------------- */
+  --bg:            var(--amate-50);    /* app canvas */
+  --surface:       #FFFFFF;            /* cards, sheets */
+  --surface-sunken:var(--amate-100);   /* wells, code, insets */
+  --surface-raised:#FFFFFF;
+
+  --fg:            var(--ink-900);     /* primary text */
+  --fg-muted:      var(--stone-600);   /* secondary text */
+  --fg-subtle:     var(--stone-500);   /* tertiary / placeholder */
+  --fg-on-accent:  #FFFFFF;            /* text on cinnabar */
+  --fg-on-ink:     var(--amate-50);    /* text on dark ink */
+
+  --border:        var(--amate-200);   /* hairlines, card edges */
+  --border-strong: var(--amate-300);
+  --ring:          var(--cinnabar-500);/* focus ring */
+
+  --accent:        var(--cinnabar-500);
+  --accent-hover:  var(--cinnabar-600);
+  --accent-weak:   var(--cinnabar-50); /* tinted wash, citation highlight bg */
+  --accent-fg:     var(--cinnabar-700);/* cinnabar text on light */
+
+  /* ---- TYPE FAMILIES ----------------------------------------------------- */
+  --font-sans:  "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:  "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif: "IBM Plex Serif", ui-serif, Georgia, "Times New Roman", serif;
+
+  /* ---- TYPE SCALE (px in comments; rem assumes 16px root) ---------------- */
+  --text-display-2xl: 3.75rem;  /* 60 */
+  --text-display-xl:  3rem;     /* 48 */
+  --text-display-lg:  2.25rem;  /* 36 */
+  --text-h1:          1.875rem; /* 30 */
+  --text-h2:          1.5rem;   /* 24 */
+  --text-h3:          1.25rem;  /* 20 */
+  --text-body-lg:     1.125rem; /* 18 */
+  --text-body:        1rem;     /* 16 */
+  --text-body-sm:     0.875rem; /* 14 */
+  --text-caption:     0.8125rem;/* 13 */
+  --text-eyebrow:     0.75rem;  /* 12 — mono, uppercase */
+
+  --leading-tight:  1.1;
+  --leading-snug:   1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed:1.65;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;
+  --tracking-eyebrow:0.12em;  /* mono eyebrows / labels */
+
+  /* ---- RADII ------------------------------------------------------------- */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;    /* default control radius (shadcn-ish) */
+  --radius-lg: 12px;   /* cards */
+  --radius-xl: 16px;
+  --radius-2xl:22px;   /* QR plate, large sheets */
+  --radius-full: 999px;
+
+  /* ---- SPACING (4px base) ------------------------------------------------ */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px;  --space-6: 24px;  --space-8: 32px;  --space-10: 40px;
+  --space-12: 48px; --space-16: 64px; --space-20: 80px; --space-24: 96px;
+
+  /* ---- ELEVATION (warm, low, document-like — never bluish) --------------- */
+  --shadow-xs: 0 1px 2px rgba(33, 28, 22, 0.06);
+  --shadow-sm: 0 1px 3px rgba(33, 28, 22, 0.08), 0 1px 2px rgba(33, 28, 22, 0.05);
+  --shadow-md: 0 3px 8px rgba(33, 28, 22, 0.10), 0 1px 3px rgba(33, 28, 22, 0.06);
+  --shadow-lg: 0 12px 28px rgba(33, 28, 22, 0.14), 0 4px 8px rgba(33, 28, 22, 0.07);
+  --shadow-cinnabar: 0 6px 18px rgba(207, 65, 36, 0.22); /* accent glow on primary CTAs */
+
+  /* ---- MOTION ------------------------------------------------------------ */
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */ /* default UI ease */
+  --ease-in-out:cubic-bezier(0.65, 0, 0.35, 1); /* @kind other */
+  --dur-fast:   120ms; /* @kind other */
+  --dur-base:   200ms; /* @kind other */
+  --dur-slow:   320ms; /* @kind other */
+}
+
+/* ============================================================================
+   DARK MODE — operator in variable lighting (recommended per brief §7)
+   Warm dark, never cold. Cinnabar lifts slightly for contrast.
+============================================================================ */
+[data-theme="dark"] {
+  --bg:             var(--ink-950);
+  --surface:        var(--ink-900);
+  --surface-sunken: #1B1611;
+  --surface-raised: var(--ink-800);
+
+  --fg:            var(--amate-50);
+  --fg-muted:      var(--amate-300);
+  --fg-subtle:     var(--stone-400);
+  --fg-on-accent:  #FFFFFF;
+  --fg-on-ink:     var(--amate-50);
+
+  --border:        #352D24;
+  --border-strong: #463C32;
+  --ring:          var(--cinnabar-400);
+
+  --accent:        var(--cinnabar-400);
+  --accent-hover:  var(--cinnabar-300);
+  --accent-weak:   #2A1A12;
+  --accent-fg:     var(--cinnabar-300);
+
+  --success-100: #15261D;
+  --warning-100: #2A2110;
+  --danger-100:  #2C1310;
+  --info-100:    #142223;
+}
+
+/* ============================================================================
+   SEMANTIC TYPE CLASSES — apply directly or mirror in Tailwind @layer
+============================================================================ */
+.ds-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.ds-display-2xl { font-family: var(--font-sans); font-size: var(--text-display-2xl); font-weight: var(--weight-bold);     line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
+.ds-display-xl  { font-family: var(--font-sans); font-size: var(--text-display-xl);  font-weight: var(--weight-bold);     line-height: var(--leading-tight); letter-spacing: var(--tracking-tight); }
+.ds-display-lg  { font-family: var(--font-sans); font-size: var(--text-display-lg);  font-weight: var(--weight-semibold); line-height: var(--leading-snug);  letter-spacing: var(--tracking-tight); }
+.ds-h1 { font-family: var(--font-sans); font-size: var(--text-h1); font-weight: var(--weight-semibold); line-height: var(--leading-snug); letter-spacing: var(--tracking-tight); }
+.ds-h2 { font-family: var(--font-sans); font-size: var(--text-h2); font-weight: var(--weight-semibold); line-height: var(--leading-snug); }
+.ds-h3 { font-family: var(--font-sans); font-size: var(--text-h3); font-weight: var(--weight-semibold); line-height: var(--leading-snug); }
+.ds-body-lg { font-family: var(--font-sans); font-size: var(--text-body-lg); font-weight: var(--weight-regular); line-height: var(--leading-relaxed); }
+.ds-body    { font-family: var(--font-sans); font-size: var(--text-body);    font-weight: var(--weight-regular); line-height: var(--leading-normal); }
+.ds-body-sm { font-family: var(--font-sans); font-size: var(--text-body-sm); font-weight: var(--weight-regular); line-height: var(--leading-normal); }
+.ds-caption { font-family: var(--font-sans); font-size: var(--text-caption); font-weight: var(--weight-regular); line-height: var(--leading-normal); color: var(--fg-muted); }
+.ds-mono    { font-family: var(--font-mono); font-size: var(--text-body-sm); font-weight: var(--weight-regular); font-variant-numeric: tabular-nums; }
+.ds-serif   { font-family: var(--font-serif); }
+
+/* Base reset hooks (optional convenience) */
+.ds-root {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

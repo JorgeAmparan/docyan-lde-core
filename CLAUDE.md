@@ -248,7 +248,13 @@ worker B2); el backend solo usa el cliente `falkordb` (ligero).
 
 ---
 
-## 6. Plan de 14 bloques (Paso D, actualizado post-PoC — ver `docs/Plan_Desarrollo_MVP_DOCYAN_v2_postPoC.md`)
+## 6. Plan de 14 bloques (Paso D — numeración ORIGINAL, referencia estructural)
+
+> **El desarrollo real NO siguió esta numeración secuencial.** Se ejecutó por fases
+> (F1.5/F2/F3) + **Sprint Núcleo Consultable** + **B13.3 Retrieval**. Lo realmente
+> entregado vs. diferido vive en `docs/DOCYAN_Resumen_Ejecutivo_Plan_Dev_v2.md`
+> (verdad viva) y en `docs/sprints/historico/`. Esta tabla se conserva como mapa
+> conceptual del alcance, no como el plan de ejecución vigente.
 
 | # | Bloque | Salida verificable |
 |---|---|---|
@@ -466,10 +472,10 @@ Por orden de prioridad cuando algo entra en conflicto:
 
 1. **Mensaje directo de Jorge en la sesión actual.**
 2. **Sprint Contract activo** (lo que Jorge pega al inicio de la sesión).
-3. **Adenda post-PoC** (`docs/adenda_postPoC_28mayo2026.md`) + **Plan v2** (`docs/Plan_Desarrollo_MVP_DOCYAN_v2_postPoC.md`).
-4. **Docs 00-14 del modelado arquitectónico** (`docs/arquitectura/`, pegados cuando aplica).
+3. **Capa canónica viva:** `docs/DOCYAN_Resumen_Ejecutivo_Plan_Dev_v2.md` (estado + decisiones vigentes), `docs/Catalogo_Normativo_Schemas_v2.md` (14 tipos), `docs/DOCYAN_Modelo_Comercial_Canonico.md` + `docs/cotizador.md` (modelo comercial v1.1), y el **Design System** (`docs/DOCYAN LDE — Design System/`, ley visual pixel-perfect; prototipo = única verdad del frontend).
+4. **Referencia estructural histórica:** Plan v2 postPoC + adenda post-PoC (`docs/Plan_Desarrollo_MVP_DOCYAN_v2_postPoC.md`, `docs/adenda_postPoC_28mayo2026.md`) y los docs de arquitectura en `docs/` (CCP, dkg/dtm, worker, etc.).
 5. **Este CLAUDE.md.**
-6. **Estado actual del código en main.**
+6. **Estado actual del código en `main`.**
 
 Cuando hay conflicto entre modelado y código existente: seguir el modelado. El código existente del repo previo (`delfa-bridge-core` migrado) tiene deuda técnica que se está limpiando bloque por bloque. Cuando hay conflicto entre una decisión del Paso C y la adenda post-PoC: **gana la adenda** (está basada en PoC ejecutado), salvo marca de PENDIENTE DE JORGE.
 

@@ -161,7 +161,7 @@ pendiente oculto, es alcance declarado.
 **EN alcance MVP (operan contra Supabase service_role):**
 `app/core/edb.py`, `app/core/grg.py`, `app/core/matrix.py`, `app/core/ri.py`
 (vía edb), `app/api/auth.py`. (+ `app/ingesta/budget_manager.py` y
-`document_store.py` al mergear B2 — ver `docs/TODO_B0.7_service_role_en_B2.md`.)
+`document_store.py` — ya adoptaron service_role al mergear B2.)
 
 **FUERA de alcance MVP (guardados con `require_module_enabled`, fallan loud salvo
 flag):** `app/core/dii.py` (`DOCYAN_ENABLE_DII`), `app/api/routers/billing.py`
@@ -218,9 +218,9 @@ Implicaciones:
 
 - El gap de secrets es **real y aplica a `main`**: `edb`, `grg`, `matrix`,
   `auth` (camino crítico) SÍ están en `main` y SÍ dependen de Supabase.
-- El cotizador (`budget_manager` / `tenant_budget`) y `document_store` adoptarán
-  service_role al mergear B2 — acción registrada en
-  `docs/TODO_B0.7_service_role_en_B2.md`. El helper ya está listo.
+- El cotizador (`budget_manager` / `tenant_budget`) y `document_store` **ya
+  adoptaron** service_role (B2 mergeado): `require_supabase_config(..., service=True)`
+  en `budget_manager.py:144` y `document_store.py:66`.
 - El smoke test trata el check del cotizador como **SKIP** mientras el módulo no
   esté en el árbol, para no reportar un falso `FAIL`.
 

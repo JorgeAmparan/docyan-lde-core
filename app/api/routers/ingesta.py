@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.auth import requiere_rol
 from app.ingesta import providers
-from app.ingesta.text_extract import contar_paginas, extraer_texto
+from app.ingesta.text_extract import contar_figuras, contar_paginas, extraer_texto
 from app.jobs.job_models import CotizacionSnapshot, IngestJob, JobStatus
 from app.jobs.progress import DocProgress, build_doc_progress
 
@@ -124,13 +124,18 @@ async def cotizar_documento(
     tipo_heuristico, _conf = selector.clasificar_heuristica(texto[:8000], file.filename)
     tipo_tentativo = tipo_forzado or tipo_heuristico  # puede ser None → worker genera
 
-    # Cotización (mide tokens, estima costo/tiempo, verifica presupuesto). El costo
-    # NO depende del schema: se mide por tokens del documento.
+    # Figuras (Pieza 3): conteo ligero pre-ingesta para sumar el costo de VISIÓN al
+    # gate. Cota previa (sin Docling); el worker re-mide con Docling y aplica el tope.
+    num_figuras = contar_figuras(data, file.filename)
+
+    # Cotización (mide tokens + figuras, estima costo/tiempo, verifica presupuesto). El
+    # costo NO depende del schema: se mide por tokens del documento + costo de visión.
     cotizador = providers.get_cotizador()
     cotizacion = cotizador.cotizar(
         tenant_id=tenant_id,
         texto_documento=texto,
         tipo_documento=tipo_tentativo,
+        num_figuras=num_figuras,
     )
 
     # Guarda el binario y referencia (worker lo leerá si se confirma).
@@ -174,6 +179,10 @@ async def cotizar_documento(
             "heuristica" if tipo_heuristico else "worker_generara"
         ),
         "cotizacion": cotizacion.to_dict(),
+        # Conversión a moneda local de la banda del tenant (decisión Jorge): SOLO la
+        # cotización variable de ingesta usa FX en vivo (Banxico FIX + 3 % + ceil $10),
+        # congelado aquí. Banda A → MXN; B/C → None (la tarjeta muestra USD).
+        "cotizacion_local": _cotizacion_local(tenant_id, cotizacion.precio_setup_usd),
         "paginas_estimadas": paginas,
         "extraccion_confiable": confiable,
         "advertencia": None if confiable else (
@@ -182,6 +191,32 @@ async def cotizar_documento(
         ),
         "requiere_confirmacion": job.status == JobStatus.pending_confirmation,
     }
+
+
+def _cotizacion_local(tenant_id: str, precio_setup_usd: float) -> dict | None:
+    """Convierte el precio de setup a la moneda de la banda del tenant. Solo Banda A
+    (MXN) usa FX vivo; B/C facturan en USD (None → la UI muestra el importe USD).
+    Nunca rompe la cotización: ante cualquier fallo, devuelve None (degrada a USD)."""
+    try:
+        from app.ingesta.fx_banxico import convertir_usd_a_mxn
+        from app.onboarding import providers as onboarding_providers
+
+        org = onboarding_providers.get_store().get_org(tenant_id) or {}
+        banda = (org.get("banda_mercado") or "A").upper()
+        if banda != "A":
+            return None
+        c = convertir_usd_a_mxn(precio_setup_usd)
+        return {
+            "moneda": "MXN",
+            "precio_setup": c.mxn,
+            "fx_fix": c.fix,
+            "fx_fecha": c.fecha,
+            "fx_fuente": c.fuente,
+            "margen": c.margen,
+        }
+    except Exception:  # noqa: BLE001 — el FX nunca bloquea la ingesta (degrada a USD)
+        logger.warning("conversión MXN no disponible → la tarjeta muestra USD", exc_info=False)
+        return None
 
 
 @router.post("/documents/{job_id}/confirm")

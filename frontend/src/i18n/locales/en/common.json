@@ -38,8 +38,8 @@
   "theme": { "light": "Light", "dark": "Dark" },
   "ingesta": {
     "page": {
-      "quoteTitle": "Pre-ingest quote",
-      "aboutTitle": "Financial gate",
+      "quoteTitle": "Batch analysis",
+      "aboutTitle": "Ingest summary",
       "gateNote": "Every document is measured with tiktoken and checked against your balance and hard caps BEFORE processing. No confirmation, no ingestion.",
       "dropzone": "Drag up to {{max}} documents or select",
       "formats": "PDF · DOCX · XLSX · images with OCR",
@@ -52,10 +52,7 @@
       "rejected": "rejected by balance/cap",
       "overCapDoc": "over session cap",
       "removeDoc": "Remove document from batch",
-      "insufficient": "Insufficient balance for some documents in the batch.",
       "capExceeded": "{{fit}} of {{total}} documents fit within the session limit (${{cap}} USD). Remove documents or adjust the cap before confirming.",
-      "recharge": "Recharge balance →",
-      "contactRecharge": "Contact DOCYAN to recharge →",
       "confirmBatch": "Confirm & ingest batch ({{n}})",
       "confirming": "Enqueuing batch…"
     },
@@ -87,6 +84,7 @@
     "doc": {
       "completed": "Completed",
       "completedAvailable": "Completed · available for queries",
+      "completedNoDoc": "Processed, but no live document resulted",
       "error": "Error · {{reason}}",
       "eta": "{{clock}} left"
     },
@@ -129,7 +127,9 @@
       "newIngest": "New ingestion",
       "minimize": "Minimize",
       "viewProgress": "View progress",
-      "consult": "Query →",
+      "consult": "Query",
+      "replace": "Replace",
+      "delete": "Delete",
       "retry": "Retry",
       "skip": "Skip",
       "remove": "Remove"

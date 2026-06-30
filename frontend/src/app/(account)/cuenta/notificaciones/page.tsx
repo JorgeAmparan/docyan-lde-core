@@ -24,7 +24,7 @@ const FALLBACK: NotifPrefs = {
 
 const ROWS: Array<[PrefKey, string, string]> = [
   ["facturacion", "Facturación", "Recibos, cargos y avisos de cobro."],
-  ["alertas_saldo", "Alertas de saldo", "Aviso cuando tu saldo de ingesta esté por agotarse."],
+  ["alertas_saldo", "Alertas de cupo", "Aviso cuando tu cupo de ingestas esté por agotarse."],
   ["novedades", "Novedades del producto", "Nuevas funciones y mejoras de DOCYAN LDE."],
   ["soporte", "Soporte", "Respuestas a tus tickets y avisos de servicio."],
 ];

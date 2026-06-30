@@ -1,0 +1,42 @@
+/* kit-gobernanza.css — Gobernanza & FAT admin view.
+ *
+ * Ported VERBATIM from the design system prototype
+ * (docs/DOCYAN LDE — Design System/app/views.css · GobernanzaView).
+ *
+ * Scoped under `.gobernanza-view` so the prototype-exact rules win over the
+ * generic admin/ingesta kit values WITHOUT redefining those selectors globally
+ * (which would shift other admin pages). Only the deltas vs kit-admin.css /
+ * kit-ingesta.css are restated here; the rest is inherited from kit-admin.css.
+ */
+
+/* Section header — prototype `.sec-h2` (kit-ingesta defines a different one for
+ * the ingesta view: align-items flex-end / weight 600). Restore the prototype's
+ * centered, weight-700 header for this view. */
+.gobernanza-view .sec-h2 {
+  display: flex;
+  align-items: center;
+  margin: 0 0 14px;
+}
+.gobernanza-view .sec-h2 h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* GRG threshold rows — prototype widths + mono threshold readout. */
+.gobernanza-view .grg-name {
+  width: 100px;
+}
+.gobernanza-view .grg-th {
+  font-family: var(--font-mono);
+  width: 54px;
+}
+
+/* Cuarentena metadata rows — prototype spacing (per-row padding, not a column
+ * gap on the parent). */
+.gobernanza-view .quar-meta {
+  display: block;
+}
+.gobernanza-view .quar-meta > div {
+  padding: 3px 0;
+}

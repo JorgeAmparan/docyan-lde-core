@@ -23,6 +23,11 @@ class ContextoPipeline:
     tenant_id: str
     pregunta: str
     entidad_id: str | None = None
+    # `documento_id` ACOTA la consulta a un :DocumentoSource concreto (documento
+    # suelto / CoDo de documento). Sin él, el retrieval barre todo el grafo del
+    # tenant y un doc puede citar el contenido de otro (cross-citation). El frontend
+    # lo manda como el documento activo del CoDo; el reader lo usa para el scope.
+    documento_id: str | None = None
     token_qr: str | None = None
     tipo_documento: str | None = None
     user_id: str | None = None

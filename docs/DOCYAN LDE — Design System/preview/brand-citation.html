@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- @dsCard group="Brand" name="Citation pedigree" subtitle="The signature object — tappable cite to exact source span" viewport="700x210" --><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="../colors_and_type.css" rel="stylesheet"><link href="_card.css" rel="stylesheet">
+<style>
+  /* The "span bracket" — corner brackets enclosing the source reference (echoes the logo mark) */
+  .cite{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:12px;font-weight:500;
+    color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);
+    padding:5px 10px 5px 8px;border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap;transition:all var(--dur-fast) var(--ease-out);}
+  .cite:hover{background:var(--cinnabar-100);box-shadow:var(--shadow-xs);}
+  .cite .brk{position:relative;width:14px;height:14px;flex:none;}
+  .cite .brk::before,.cite .brk::after{content:"";position:absolute;top:0;bottom:0;width:5px;border:1.5px solid var(--cinnabar-500);}
+  .cite .brk::before{left:0;border-right:none;border-radius:2px 0 0 2px;}
+  .cite .brk::after{right:0;border-left:none;border-radius:0 2px 2px 0;}
+  .cite .arrow{opacity:.6}
+  /* Inline cited span inside answer text */
+  .span-cite{background:linear-gradient(transparent 62%, var(--cinnabar-100) 62%);
+    border-bottom:1.5px solid var(--cinnabar-500);padding-bottom:1px;cursor:pointer;}
+  .sup{font-family:var(--font-mono);font-size:9px;color:var(--accent-fg);font-weight:600;vertical-align:super;
+    background:var(--cinnabar-100);border-radius:3px;padding:1px 3px;margin-left:1px;}
+</style></head>
+<body>
+  <div class="eyebrow" style="margin-bottom:12px;">Cita · pedigree cliqueable a fuente</div>
+  <p class="ds-body" style="margin:0 0 14px;max-width:62ch;color:var(--fg)">El par de apriete del <span class="span-cite">perno B es 85&nbsp;N·m<span class="sup">1</span></span>, aplicado en cruz en tres etapas.</p>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <span class="cite"><span class="brk"></span>Manual CNC Haas&nbsp;VF-2 · §4.2.1<span class="arrow">↗</span></span>
+    <span class="cite"><span class="brk"></span>MSDS Refrigerante · p.3<span class="arrow">↗</span></span>
+  </div>
+  <p style="margin-top:16px;font-family:var(--font-sans);font-size:12px;color:var(--fg-muted);max-width:64ch;line-height:1.5">Tap abre el documento en el span exacto resaltado. Nunca un subrayado pasivo: la cita es un objeto vivo, cliqueable, reconocible. El bracket repite la firma de la marca.</p>
+</body></html>

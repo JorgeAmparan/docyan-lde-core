@@ -1,0 +1,190 @@
+/* kit-documentos.css — Pantalla "Documentos vivos" (B13).
+   Portado VERBATIM del prototipo (DOCYAN LDE — Design System):
+     · app/cotizador.css → bloque "Documentos vivos" (.dv-*)
+     · app/views.css     → .sec-h2 / .cnt / .codo-pill / .sev-dot / .manual-note
+   Todo SCOPEADO bajo .documentos-view para no colisionar con las definiciones
+   globales de kit-ingesta (.sec-h2 14px), kit-admin (.sev-dot.s-*), etc.
+   La columna "CoDo" del prototipo se omite (sin fuente real); la grilla pasa
+   de 5 a 4 columnas. */
+
+.documentos-view {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* Encabezado de sección — prototipo app/views.css .sec-h2 (15px / margin 0 0 14px).
+   Difiere del .sec-h2 global de kit-ingesta (14px), por eso va scopeado. */
+.documentos-view .sec-h2 {
+  display: flex;
+  align-items: center;
+  margin: 0 0 14px;
+}
+.documentos-view .sec-h2 h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+.documentos-view .sec-h2 .cnt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-left: auto;
+}
+
+/* Línea explicativa bajo el encabezado. */
+.documentos-view .dv-lead {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+/* Panel contenedor de la lista. */
+.documentos-view .panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-xs);
+}
+.documentos-view .panel.flush {
+  padding: 0;
+}
+
+/* ── Documentos vivos (cotizador.css) — grilla a 4 columnas (sin CoDo) ───── */
+.documentos-view .dv-head,
+.documentos-view .dv-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(150px, 1.2fr) 150px 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+}
+.documentos-view .dv-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+.documentos-view .dv-row {
+  border-bottom: 1px solid var(--border);
+}
+.documentos-view .dv-row:last-child {
+  border-bottom: none;
+}
+.documentos-view .dv-row:hover {
+  background: var(--amate-50);
+}
+.documentos-view .dv-c-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.documentos-view .dv-ic {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--amate-100);
+  color: var(--fg-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.documentos-view .dv-n {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.documentos-view .dv-sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-subtle);
+  margin-top: 2px;
+}
+.documentos-view .dv-tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.documentos-view .dv-tipo.muted {
+  color: var(--fg-subtle);
+}
+.documentos-view .dv-c-meta {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.documentos-view .dv-c-act {
+  display: flex;
+  justify-content: flex-end;
+}
+.documentos-view .dv-del {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--fg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.documentos-view .dv-del:hover {
+  background: var(--danger-100, color-mix(in oklab, var(--danger-600) 12%, white));
+  color: var(--danger-600);
+  border-color: color-mix(in oklab, var(--danger-600) 25%, transparent);
+}
+
+/* Vacío. */
+.documentos-view .dv-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--fg-subtle);
+  font-size: 13.5px;
+}
+
+/* Nota administrativa al pie — prototipo app/views.css .manual-note. */
+.documentos-view .manual-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  background: var(--info-100);
+  border-radius: 8px;
+  padding: 11px 13px;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+.documentos-view .manual-note svg {
+  color: var(--info-600);
+  flex: none;
+  margin-top: 1px;
+}
+
+@media (max-width: 1000px) {
+  .documentos-view .dv-head {
+    display: none;
+  }
+  .documentos-view .dv-row {
+    grid-template-columns: 1fr 44px;
+    gap: 8px;
+  }
+  .documentos-view .dv-row .dv-c-tipo,
+  .documentos-view .dv-row .dv-c-meta {
+    grid-column: 1;
+    padding-left: 40px;
+  }
+}

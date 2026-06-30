@@ -8,7 +8,8 @@ export const API_URL =
 export const STRIPE_PUBLISHABLE_KEY =
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
 
-/** Whether Stripe is configured (drives recharge button vs mailto fallback, B.10). */
+/** Whether Stripe is configured (drives el cobro automático vs. cobro manual de
+ *  piloto / contacto). Modelo vigente: cupo + excedente cotizado, sin prepago. */
 export const STRIPE_ENABLED = STRIPE_PUBLISHABLE_KEY.startsWith("pk_");
 
 export const CONTACT_EMAIL = "hola@docyan.com";
@@ -19,7 +20,7 @@ export const INGEST_BATCH_MAX = 10;
 /**
  * Hard cap de sesión en USD (default alfa $20, decisión rectora F1 #2). Guardrail
  * de UX del lado cliente para "cuántos caben"; el gate financiero autoritativo
- * sigue siendo el cotizador del backend por documento (saldo + caps, sin bypass).
+ * sigue siendo el cotizador del backend por documento (cupo + excedente, sin bypass).
  */
 export const SESSION_HARD_CAP_USD = Number(
   process.env.NEXT_PUBLIC_SESSION_HARD_CAP_USD ?? "20",

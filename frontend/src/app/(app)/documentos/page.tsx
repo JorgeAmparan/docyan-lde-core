@@ -5,16 +5,51 @@ import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Icon } from "@/components/icon";
-import { ProductShell } from "@/components/onboarding/product-shell";
+import { OrgShell } from "@/components/org-shell";
 import {
   listDocumentos,
   deleteDocumento,
+  getCuenta,
   type DocumentoOut,
   type FreemiumExcedePayload,
 } from "@/lib/onboarding";
 import { api, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import { IngestProgressRow } from "@/components/ingesta/ingest-progress-row";
+import { QuoteCard } from "@/components/ingesta/quote-card";
+
+/** Respuesta de POST /ingesta/documents (cotización, NO ingiere). */
+interface UploadResponse {
+  job_id: string;
+  tipo_documento?: string | null;
+  tipo_resuelto_por?: string;
+  cotizacion: {
+    costo_estimado_usd: number;
+    saldo_disponible_usd: number;
+    aprobado: boolean;
+    precio_setup_usd?: number;
+    dentro_de_cupo?: boolean;
+    cupo_restante?: number | null;
+  };
+  cotizacion_local?: { moneda: string; precio_setup: number } | null;
+  advertencia?: string | null;
+}
+
+/** Cotización pendiente de APROBACIÓN explícita (control de gasto — todos los planes). */
+interface PendingQuote {
+  jobId: string;
+  name: string;
+  tipo: string | null;
+  setupUsd: number;
+  costUsd: number;
+  setupLocal: number | null;
+  aprobado: boolean;
+  saldo: number;
+  dentroCupo: boolean;
+  cupoRestante: number | null;
+  tipoNoCubierto: boolean;
+  advertencia: string | null;
+}
 
 /**
  * Pantalla 6 (B13) — Gestión de documentos vivos. Lista real (`GET /mis-documentos`),
@@ -34,6 +69,13 @@ export default function DocumentsPage() {
     queryFn: () => listDocumentos(token as string),
     enabled: !!token,
   });
+  // Nombre real del plan para la línea de conteo (".cnt"): "plan Profesional",
+  // "plan gratuito", etc. No se hardcodea — viene de /onboarding/cuenta.
+  const { data: cuenta } = useQuery({
+    queryKey: ["cuenta-resumen"],
+    queryFn: () => getCuenta(token as string),
+    enabled: !!token,
+  });
   const reload = () => qc.invalidateQueries({ queryKey: ["mis-documentos"] });
 
   const docs: DocumentoOut[] = data?.items ?? [];
@@ -49,6 +91,9 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [convert, setConvert] = useState<FreemiumExcedePayload | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Cotización pendiente de aprobación (gate de gasto SIEMPRE visible, incl. freemium).
+  const [pendingQuote, setPendingQuote] = useState<PendingQuote | null>(null);
+  const [approving, setApproving] = useState(false);
   // Job en ingesta activa: se sondea su estado real (D6) hasta término. No se
   // adivina con un timeout: el documento aparece cuando el worker termina.
   const [activeJob, setActiveJob] = useState<{ id: string; name: string } | null>(null);
@@ -84,19 +129,25 @@ export default function DocumentsPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.postForm<{ requiere_confirmacion?: boolean; job_id: string }>(
-        "/ingesta/documents",
-        form,
-        { token },
-      );
-      // Cotización aceptada → confirma y deja al worker procesar.
-      if (res.job_id) {
-        await api
-          .post(`/ingesta/documents/${res.job_id}/confirm`, undefined, { token })
-          .catch(() => null);
-        // Sondeo real del estado hasta término (D6); la lista se recarga al completar.
-        setActiveJob({ id: res.job_id, name: file.name });
-      }
+      const res = await api.postForm<UploadResponse>("/ingesta/documents", form, { token });
+      // PRINCIPIO CANÓNICO: la cotización con control de gasto + aprobación se muestra
+      // SIEMPRE, en TODOS los planes (freemium ve Total $0.00 tachado pero DEBE
+      // aprobar). NO se auto-confirma: se presenta la tarjeta y el usuario decide.
+      const c = res.cotizacion;
+      setPendingQuote({
+        jobId: res.job_id,
+        name: file.name,
+        tipo: res.tipo_documento ?? null,
+        setupUsd: c.precio_setup_usd ?? c.costo_estimado_usd,
+        costUsd: c.costo_estimado_usd,
+        setupLocal: res.cotizacion_local?.moneda === "MXN" ? res.cotizacion_local.precio_setup : null,
+        aprobado: c.aprobado,
+        saldo: c.saldo_disponible_usd,
+        dentroCupo: c.dentro_de_cupo ?? false,
+        cupoRestante: c.cupo_restante ?? null,
+        tipoNoCubierto: res.tipo_resuelto_por === "worker_generara" || !res.tipo_documento,
+        advertencia: res.advertencia ?? null,
+      });
     } catch (err) {
       // 402 = gate de tamaño freemium → payload de conversión (no muro seco).
       if (err instanceof ApiError && err.status === 402) {
@@ -116,10 +167,44 @@ export default function DocumentsPage() {
     }
   };
 
-  const counter = limit !== null ? `${usados} de ${limit}` : null;
+  // Aprobación explícita → recién aquí se confirma y encola (gate de gasto).
+  const approveQuote = async () => {
+    if (!pendingQuote || !token) return;
+    setApproving(true);
+    try {
+      await api.post(`/ingesta/documents/${pendingQuote.jobId}/confirm`, undefined, { token });
+      setActiveJob({ id: pendingQuote.jobId, name: pendingQuote.name });
+      setPendingQuote(null);
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "No pudimos confirmar la ingesta.");
+    } finally {
+      setApproving(false);
+    }
+  };
+  // Cancelar: el job queda en pending_confirmation y nunca se ingiere (sin cobro).
+  const cancelQuote = () => setPendingQuote(null);
+
+  const quoteCurrency: "USD" | "MXN" =
+    pendingQuote?.setupLocal != null ? "MXN" : "USD";
+
+  // Línea de conteo del prototipo: "N consultables · plan … · cupo …".
+  // Bind real: conteo = lista real; plan = plan_nombre real; cupo = límite real
+  // (ilimitado cuando el plan no impone doc_limit, como Profesional).
+  const planNombre = cuenta?.plan_nombre ?? null;
+  const cupoTexto =
+    limit !== null
+      ? `cupo ${limit} ${limit === 1 ? "documento" : "documentos"}`
+      : "cupo ilimitado";
+  const cntPartes = [
+    `${docs.length} ${docs.length === 1 ? "consultable" : "consultables"}`,
+    planNombre ? `plan ${planNombre}` : null,
+    cupoTexto,
+  ].filter(Boolean);
+  const cnt = cntPartes.join(" · ");
 
   return (
-    <ProductShell active="documents" counter={counter} isFreemium={isFreemium}>
+    <OrgShell>
+      <div className="documentos-view">
       <input
         ref={fileRef}
         type="file"
@@ -128,15 +213,14 @@ export default function DocumentsPage() {
         onChange={onFile}
       />
 
-      <div className="app-head">
-        <div>
-          <h1>Documentos vivos</h1>
-          <p>
-            Tus documentos consultables.
-            {limit !== null ? ` En el plan gratuito puedes tener hasta ${limit}.` : ""}
-          </p>
-        </div>
+      <div className="sec-h2">
+        <h2>Documentos vivos</h2>
+        <span className="cnt">{cnt}</span>
       </div>
+      <p className="dv-lead">
+        Todo lo que ingieres queda aquí, consultable y citado. Eliminar un documento lo borra del
+        grafo <b>sin residuo</b> y libera cupo del plan; el borrado se registra en el FAT.
+      </p>
 
       {isFreemium && (
         <div className="usage-bar">
@@ -190,59 +274,63 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {!loading && docs.length === 0 && !loadErr && (
-        <div className="consult-empty" style={{ padding: "28px 0" }}>
-          <Icon name="files" size={26} />
-          <p>Aún no tienes documentos vivos. Carga el primero para empezar a consultar.</p>
-        </div>
-      )}
-
-      <div className="doc-list">
-        {docs.map((d) => (
-          <div className="doc-row" key={d.id}>
-            <span className="dr-ic">
-              <Icon name="file-text" size={20} />
-            </span>
-            <div className="dr-main">
-              <div className="dr-n">
-                {d.nombre_archivo ?? "Documento"}
-                <span className="badge vivo">
-                  <span className="bd" />
-                  vivo
+      {!loading && !loadErr && (
+        <div className="panel flush">
+          <div className="dv-head">
+            <span className="dv-c-name">Documento</span>
+            <span className="dv-c-tipo">Tipo documental</span>
+            <span className="dv-c-meta">Detalle</span>
+            <span className="dv-c-act" />
+          </div>
+          {docs.map((d) => {
+            const sub = [
+              d.idioma_origen?.toUpperCase(),
+              d.version ? (d.version.startsWith("v") ? d.version : `v${d.version}`) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              <div className="dv-row" key={d.id}>
+                <span className="dv-c-name">
+                  <span className="dv-ic">
+                    <Icon name="file-text" size={15} />
+                  </span>
+                  <span style={{ minWidth: 0 }}>
+                    <span className="dv-n">{d.nombre_archivo ?? "Documento"}</span>
+                    {sub && <span className="dv-sub">{sub}</span>}
+                  </span>
+                </span>
+                <span className="dv-c-tipo">
+                  {d.tipo_documento ? (
+                    <span className="dv-tipo">{d.tipo_documento}</span>
+                  ) : (
+                    <span className="dv-tipo muted">genérico</span>
+                  )}
+                </span>
+                <span className="dv-c-meta">
+                  {d.contenido_directo}{" "}
+                  {d.contenido_directo === 1 ? "nodo de contenido" : "nodos de contenido"}
+                </span>
+                <span className="dv-c-act">
+                  <button
+                    className="dv-del"
+                    title="Eliminar y liberar cupo"
+                    aria-label="Eliminar y liberar cupo"
+                    onClick={() => setToDelete(d)}
+                  >
+                    <Icon name="trash-2" size={15} />
+                  </button>
                 </span>
               </div>
-              <div className="dr-meta">
-                {d.tipo_documento && (
-                  <>
-                    <span>{d.tipo_documento}</span>
-                    <span className="sep">·</span>
-                  </>
-                )}
-                <span>{d.contenido_directo} nodos de contenido</span>
-                {d.version && (
-                  <>
-                    <span className="sep">·</span>
-                    <span className="mono">v{d.version}</span>
-                  </>
-                )}
-              </div>
+            );
+          })}
+          {docs.length === 0 && (
+            <div className="dv-empty">
+              No quedan documentos vivos. Ingiere desde <b>Ingesta</b> para empezar.
             </div>
-            <div className="dr-acts">
-              <button className="icon-btn" title="Cargar otro" aria-label="Cargar otro documento" onClick={onPick} disabled={uploading}>
-                <Icon name="refresh-cw" size={16} />
-              </button>
-              <button
-                className="icon-btn danger"
-                title="Eliminar"
-                aria-label="Eliminar documento"
-                onClick={() => setToDelete(d)}
-              >
-                <Icon name="trash-2" size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </div>
+      )}
 
       <div style={{ marginTop: 14 }}>
         {!atLimit ? (
@@ -305,16 +393,23 @@ export default function DocumentsPage() {
         )}
       </div>
 
+      <div className="manual-note" style={{ marginTop: 14 }}>
+        <Icon name="shield-check" size={15} />
+        Reemplazar = eliminar + volver a ingerir. Al borrar liberas cupo; luego cargas otro dentro
+        del límite. El rastro auditable se conserva 7 años aunque canceles.
+      </div>
+
       {toDelete && (
         <div className="modal-overlay" onClick={() => !deleting && setToDelete(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="m-ic danger">
               <Icon name="trash-2" size={24} />
             </div>
-            <h3>¿Eliminar este documento?</h3>
+            <h3>Eliminar documento vivo</h3>
             <p>
-              Se elimina de tu cuenta y deja de estar consultable. Los QR que apunten a su CoDo
-              dejarán de resolver esta fuente.
+              Se elimina “{toDelete.nombre_archivo ?? "Documento"}” del grafo, sin residuo, y se
+              libera una posición de tu cupo. El evento queda en la bitácora FAT (auditoría),
+              aunque el contenido deje de ser consultable. Para reemplazarlo, vuelve a ingerirlo.
             </p>
             <div className="m-doc">
               <Icon name="file-text" size={17} />
@@ -331,7 +426,53 @@ export default function DocumentsPage() {
               </button>
               <button className="btn danger" onClick={confirmDelete} disabled={deleting}>
                 <Icon name="trash-2" size={16} />
-                {deleting ? "Eliminando…" : "Eliminar documento"}
+                {deleting ? "Eliminando…" : "Eliminar y liberar cupo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* §1.1 — cotización SIEMPRE visible + aprobación explícita (todos los planes). */}
+      {pendingQuote && (
+        <div className="modal-overlay" onClick={() => !approving && cancelQuote()}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div className="m-ic" style={{ background: "var(--cinnabar-50)", color: "var(--cinnabar-600)" }}>
+              <Icon name="receipt-text" size={22} />
+            </div>
+            <h3>Cotización de ingesta</h3>
+            <p style={{ marginBottom: 4 }}>
+              {isFreemium
+                ? "Tu plan gratuito cubre el 100% de esta ingesta. Revisa el valor y aprueba para procesar."
+                : "Revisa el costo de esta ingesta y aprueba para procesar. Sin aprobación no se cobra ni se ingiere."}
+            </p>
+            <div style={{ width: "100%", margin: "6px 0 4px" }}>
+              <QuoteCard
+                name={pendingQuote.name}
+                tipo={pendingQuote.tipo}
+                isFreemium={isFreemium}
+                valueUsd={quoteCurrency === "MXN" ? (pendingQuote.setupLocal ?? pendingQuote.setupUsd) : pendingQuote.setupUsd}
+                totalUsd={quoteCurrency === "MXN" ? (pendingQuote.setupLocal ?? pendingQuote.costUsd) : pendingQuote.costUsd}
+                currency={quoteCurrency}
+                saldoUsd={quoteCurrency === "USD" ? pendingQuote.saldo : null}
+                dentroCupo={pendingQuote.dentroCupo}
+                cupoRestante={pendingQuote.cupoRestante}
+                tipoNoCubierto={pendingQuote.tipoNoCubierto}
+                rejected={!pendingQuote.aprobado}
+                advertencia={pendingQuote.advertencia}
+              />
+            </div>
+            <div className="m-actions">
+              <button className="btn sec" onClick={cancelQuote} disabled={approving}>
+                Cancelar
+              </button>
+              <button
+                className="btn primary"
+                onClick={approveQuote}
+                disabled={approving || !pendingQuote.aprobado}
+              >
+                <Icon name="check" size={16} />
+                {approving ? "Aprobando…" : "Aprobar e ingerir"}
               </button>
             </div>
           </div>
@@ -369,6 +510,7 @@ export default function DocumentsPage() {
           </div>
         </div>
       )}
-    </ProductShell>
+      </div>
+    </OrgShell>
   );
 }

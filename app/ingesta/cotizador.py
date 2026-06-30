@@ -47,10 +47,14 @@ class DesgloseCosto:
     extraccion_usd: float
     qa_usd: float
     embeddings_usd: float
+    # Costo de VISIÓN de las figuras (Pieza 3): entra al GATE igual que el texto.
+    vision_usd: float = 0.0
 
     @property
     def total_usd(self) -> float:
-        return round(self.extraccion_usd + self.qa_usd + self.embeddings_usd, 6)
+        return round(
+            self.extraccion_usd + self.qa_usd + self.embeddings_usd + self.vision_usd, 6
+        )
 
 
 @dataclass
@@ -82,6 +86,13 @@ class Cotizacion:
     # (freemium / org sin cupo) y rige la fórmula de setup como siempre.
     dentro_de_cupo: bool = False
     cupo_restante: int | None = None
+    # Figuras (Pieza 3): `num_figuras` = detectadas (estimación ligera pre-ingesta);
+    # `figuras_cotizadas` = las que entran al costo de visión (capadas al tope por
+    # documento); `figuras_excedidas` = cuántas se omitirán (aviso honesto). El costo
+    # de visión vive en `desglose.vision_usd` y ya está sumado al total/gate.
+    num_figuras: int = 0
+    figuras_cotizadas: int = 0
+    figuras_excedidas: int = 0
 
     @property
     def aprobado(self) -> bool:
@@ -108,10 +119,16 @@ def contar_tokens(texto: str) -> int:
         return max(1, len(texto) // 4)
 
 
-def estimar_costo(tokens_documento: int) -> tuple[DesgloseCosto, dict]:
+def estimar_costo(
+    tokens_documento: int, figuras_cotizadas: int = 0
+) -> tuple[DesgloseCosto, dict]:
     """
-    Traduce tokens del documento a costo USD usando el modelo de uso calibrado
-    (pricing_table). Devuelve el desglose y el detalle de tokens facturables.
+    Traduce tokens del documento (+ figuras) a costo USD usando el modelo de uso
+    calibrado (pricing_table). Devuelve el desglose y el detalle de tokens facturables.
+
+    `figuras_cotizadas` ya viene CAPADO al tope por documento (lo aplica `cotizar`):
+    aquí solo se cuantifica su costo de visión. El costo de visión entra al total y,
+    por tanto, al gate del presupuesto — exactamente como el texto.
     """
     gemini = pt.model_pricing("gemini/gemini-2.5-flash")
     mini = pt.model_pricing("gpt-4o-mini")
@@ -125,11 +142,14 @@ def estimar_costo(tokens_documento: int) -> tuple[DesgloseCosto, dict]:
     qa_usd = mini.cost(qa_in, qa_out)
     # Embeddings BGE-M3: se embeben los tokens del documento (cómputo propio).
     embeddings_usd = tokens_documento / 1_000_000 * pt.BGE_M3_COMPUTE_USD_PER_1M
+    # Visión de figuras (Pieza 3): costo estimado ANTES de ingerir.
+    vision_usd = pt.costo_vision_figuras(figuras_cotizadas)
 
     desglose = DesgloseCosto(
         extraccion_usd=round(extraccion_usd, 6),
         qa_usd=round(qa_usd, 6),
         embeddings_usd=round(embeddings_usd, 6),
+        vision_usd=vision_usd,
     )
     detalle = {
         "extraccion_input_tokens": int(extr_in),
@@ -137,6 +157,9 @@ def estimar_costo(tokens_documento: int) -> tuple[DesgloseCosto, dict]:
         "qa_input_tokens": int(qa_in),
         "qa_output_tokens": int(qa_out),
         "embeddings_tokens": int(tokens_documento),
+        "figuras_cotizadas": int(figuras_cotizadas),
+        "vision_input_tokens": int(figuras_cotizadas * pt.VISION_INPUT_TOKENS_POR_FIGURA),
+        "vision_output_tokens": int(figuras_cotizadas * pt.VISION_OUTPUT_TOKENS_POR_FIGURA),
     }
     return desglose, detalle
 
@@ -165,9 +188,14 @@ class Cotizador:
         texto_documento: str,
         tipo_documento: str | None = None,
         costo_sesion_acumulado_usd: float = 0.0,
+        num_figuras: int = 0,
     ) -> Cotizacion:
         """
         Cotiza un documento y decide si la ingesta puede proceder. NO ingiere.
+
+        `num_figuras` es el conteo (ligero, pre-ingesta) de figuras del documento; su
+        costo de VISIÓN entra al gate (Pieza 3), capado al tope por documento. El worker
+        re-mide las figuras reales (Docling) y aplica el MISMO tope al extraer.
 
         Devuelve una Cotizacion con la decisión:
           - rechazado_hard_cap   → excede cap por documento o por sesión.
@@ -175,7 +203,11 @@ class Cotizador:
           - aprobado_requiere_confirmacion → procede SOLO con confirmación explícita.
         """
         tokens = contar_tokens(texto_documento)
-        desglose, detalle = estimar_costo(tokens)
+        # Cap de figuras por documento: solo se cotiza (y se extraerá) hasta el tope.
+        num_figuras = max(0, int(num_figuras or 0))
+        figuras_cotizadas = min(num_figuras, pt.MAX_FIGURAS_POR_DOCUMENTO)
+        figuras_excedidas = num_figuras - figuras_cotizadas
+        desglose, detalle = estimar_costo(tokens, figuras_cotizadas)
         costo = desglose.total_usd
         tiempo = estimar_tiempo_seg(tokens)
         # Precio de setup comercial (Modelo Comercial §2.3 v1.1): MAX($15, costo×25)×factor.
@@ -235,4 +267,7 @@ class Cotizador:
             detalle_tokens=detalle,
             dentro_de_cupo=dentro_de_cupo,
             cupo_restante=cupo_restante,
+            num_figuras=num_figuras,
+            figuras_cotizadas=figuras_cotizadas,
+            figuras_excedidas=figuras_excedidas,
         )

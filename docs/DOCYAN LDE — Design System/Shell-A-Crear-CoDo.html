@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOCYAN — Crear CoDo · organización</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link href="colors_and_type.css" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;font-family:var(--font-sans);color:var(--fg);background:var(--bg);}
+  .lic{display:inline-flex;align-items:center;justify-content:center;}
+  .lic svg{width:100%;height:100%;}
+  .app{display:flex;height:100vh;overflow:hidden;}
+  /* ---- sidebar (admin) ---- */
+  .side{width:228px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 12px;}
+  .side-logo{display:flex;align-items:center;gap:9px;padding:6px 8px 16px;}
+  .side-logo .w{font-weight:700;font-size:18px;letter-spacing:-.01em;}
+  .side-logo .lde{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;color:var(--accent-fg);border:1px solid var(--cinnabar-200);border-radius:4px;padding:1px 4px;}
+  .nav{display:flex;flex-direction:column;gap:2px;overflow:auto;}
+  .nav a{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;font-size:13.5px;font-weight:500;color:var(--fg-muted);cursor:pointer;text-decoration:none;}
+  .nav a:hover{background:var(--amate-100);color:var(--fg);}
+  .nav a.on{background:var(--cinnabar-50);color:var(--accent-fg);}
+  .nav a .lic{flex:none;color:var(--fg-subtle);}
+  .nav a.on .lic{color:var(--cinnabar-500);}
+  .nav .grp{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);padding:14px 11px 6px;}
+  .org{margin-top:auto;display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;}
+  .org .av{width:30px;height:30px;border-radius:6px;background:var(--ink-900);color:var(--amate-50);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none;}
+  .org .ot{font-size:12.5px;font-weight:600;line-height:1.2;}
+  .org .om{font-size:11px;color:var(--fg-muted);}
+  /* ---- main ---- */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .topbar{height:60px;flex:none;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 24px;background:rgba(250,247,241,.85);backdrop-filter:blur(8px);}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--fg-muted);white-space:nowrap;}
+  .crumb b{color:var(--fg);font-weight:600;}
+  .crumb .lic{color:var(--fg-subtle);}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+  .seg.sm{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden;background:var(--surface);}
+  .seg.sm button{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12px;font-weight:500;border:none;background:transparent;color:var(--fg-muted);padding:7px 12px;cursor:pointer;}
+  .seg.sm button.on{background:var(--ink-900);color:var(--amate-50);}
+  .seg.sm button .lic{width:13px;height:13px;}
+  .av-user{width:34px;height:34px;border-radius:50%;background:var(--cinnabar-500);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none;}
+  .content{flex:1;overflow-y:auto;padding:22px 26px 30px;}
+  .wrap{max-width:1000px;margin:0 auto;}
+  /* ---- goal strip (meta clara, siempre visible) ---- */
+  .goal-strip{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 16px;box-shadow:var(--shadow-xs);margin-bottom:18px;flex-wrap:wrap;}
+  .goal-strip .gs-ic{width:40px;height:40px;border-radius:10px;background:var(--cinnabar-50);color:var(--cinnabar-600);display:flex;align-items:center;justify-content:center;flex:none;}
+  .goal-strip .gs-t{min-width:0;}
+  .goal-strip .gs-codo{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;color:var(--accent-fg);display:block;}
+  .goal-strip .gs-name{font-size:15.5px;font-weight:700;letter-spacing:-.01em;}
+  .goal-strip .gs-name.ph{color:var(--fg-subtle);font-weight:500;font-style:italic;}
+  .goal-strip .gs-facts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+  .goal-strip .gs-fact{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--fg-muted);background:var(--amate-100);padding:5px 10px;border-radius:999px;}
+  .goal-strip .gs-fact .lic{width:13px;height:13px;}
+  .goal-strip .gs-fact.warn{background:var(--warning-100);color:var(--warning-600);}
+  /* ---- stepper ---- */
+  .stepper{display:flex;align-items:center;gap:0;margin-bottom:22px;}
+  .step{display:flex;align-items:center;gap:11px;cursor:pointer;padding:6px;border-radius:8px;}
+  .step .sn{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--fg-subtle);flex:none;}
+  .step .st{font-size:13.5px;font-weight:600;color:var(--fg-muted);line-height:1.1;}
+  .step .stm{font-size:11px;color:var(--fg-subtle);margin-top:2px;}
+  .step.on .sn{background:var(--cinnabar-500);border-color:var(--cinnabar-500);color:#fff;}
+  .step.on .st{color:var(--fg);}
+  .step.done .sn{background:var(--success-600);border-color:var(--success-600);color:#fff;}
+  .step.done .st{color:var(--fg);}
+  .step-line{flex:1;height:1.5px;background:var(--border-strong);margin:0 6px;min-width:24px;}
+  .step-line.done{background:var(--success-600);}
+  /* ---- panels / sections ---- */
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow-xs);}
+  .sec-lead{margin:0 0 4px;}
+  .sec-lead h2{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:0;}
+  .sec-lead p{margin:5px 0 0;font-size:13.5px;color:var(--fg-muted);line-height:1.5;max-width:62ch;}
+  .sec-eyebrow{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:5px;}
+  /* form */
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px;}
+  .field{display:flex;flex-direction:column;gap:7px;}
+  .field.col2{grid-column:span 2;}
+  .field label{font-family:var(--font-mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--fg-subtle);display:flex;align-items:center;gap:6px;}
+  .field label .req{color:var(--cinnabar-500);}
+  .field input,.field .selbox{height:44px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);padding:0 13px;font-family:var(--font-sans);font-size:14.5px;color:var(--fg);outline:none;display:flex;align-items:center;}
+  .field input:focus{border-color:var(--cinnabar-500);box-shadow:0 0 0 3px var(--cinnabar-50);}
+  .field .selbox{justify-content:space-between;cursor:pointer;color:var(--fg);}
+  .field .selbox .lic{color:var(--fg-subtle);}
+  .field .hint{font-size:11.5px;color:var(--fg-subtle);}
+  .id-chip{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;font-family:var(--font-mono);font-size:13px;color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);border-radius:8px;padding:11px 13px;}
+  .id-chip .lic{color:var(--cinnabar-500);}
+  /* chips de criticidad / par */
+  .chips{display:flex;gap:7px;flex-wrap:wrap;}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--fg-muted);background:var(--amate-50);border:1px solid var(--border-strong);border-radius:999px;padding:8px 13px;cursor:pointer;font-family:var(--font-sans);}
+  .chip .lic{width:14px;height:14px;}
+  .chip.on{background:var(--ink-900);color:var(--amate-50);border-color:var(--ink-900);}
+  .chip.crit.on{background:var(--cinnabar-500);border-color:var(--cinnabar-500);color:#fff;}
+  .chip .b{font-family:var(--font-mono);font-size:11px;opacity:.8;}
+  /* ---- documentos step ---- */
+  .docs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px;align-items:start;}
+  .col-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+  .col-head h3{font-size:13.5px;font-weight:700;margin:0;}
+  .col-head .cnt{font-family:var(--font-mono);font-size:11px;color:var(--fg-muted);margin-left:auto;}
+  .acervo-search{display:flex;align-items:center;gap:9px;height:40px;border:1px solid var(--border-strong);border-radius:8px;padding:0 12px;color:var(--fg-subtle);margin-bottom:12px;}
+  .acervo-search .lic{width:15px;height:15px;flex:none;}
+  .acervo-search input{flex:1;border:none;outline:none;background:transparent;font-family:var(--font-sans);font-size:13.5px;color:var(--fg);}
+  .doc-pick{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--surface);cursor:pointer;transition:border-color .12s var(--ease-out),background .12s var(--ease-out);}
+  .doc-pick:hover{border-color:var(--cinnabar-300);background:var(--cinnabar-50);}
+  .doc-pick.added{opacity:.5;cursor:default;}
+  .doc-pick.added:hover{border-color:var(--border);background:var(--surface);}
+  .doc-pick .di{width:34px;height:34px;border-radius:8px;background:var(--amate-50);display:flex;align-items:center;justify-content:center;color:var(--fg-muted);flex:none;}
+  .doc-pick .dn{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px;}
+  .doc-pick .dlang{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.08em;color:var(--fg-subtle);border:1px solid var(--border);border-radius:3px;padding:1px 4px;}
+  .doc-pick .dm{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-muted);margin-top:3px;}
+  .doc-pick .badge-vivo{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:8.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--success-600);}
+  .doc-pick .badge-vivo .bd{width:5px;height:5px;border-radius:50%;background:var(--success-600);}
+  .doc-pick .act{margin-left:auto;width:30px;height:30px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--cinnabar-600);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+  .doc-pick .act .lic{width:16px;height:16px;}
+  .doc-pick.added .act{border:none;background:transparent;color:var(--success-600);cursor:default;}
+  .dropzone{border:1.5px dashed var(--border-strong);border-radius:10px;padding:22px;text-align:center;color:var(--fg-subtle);background:var(--amate-50);cursor:pointer;margin-top:4px;}
+  .dropzone:hover{border-color:var(--cinnabar-300);background:var(--cinnabar-50);}
+  .dropzone .lic{color:var(--cinnabar-500);}
+  .dropzone .dz-t{font-size:13.5px;color:var(--fg);margin-top:8px;}
+  .dropzone .dz-t b{color:var(--accent-fg);}
+  .dropzone .dz-m{font-family:var(--font-mono);font-size:11px;color:var(--fg-muted);margin-top:4px;}
+  .set-panel{background:var(--amate-50);border:1px solid var(--border);border-radius:12px;padding:16px;min-height:240px;}
+  .set-doc{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--surface);}
+  .set-doc .di{width:34px;height:34px;border-radius:8px;background:var(--cinnabar-50);color:var(--cinnabar-500);display:flex;align-items:center;justify-content:center;flex:none;}
+  .set-doc .dn{font-size:13.5px;font-weight:600;}
+  .set-doc .dm{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-muted);margin-top:3px;}
+  .set-doc .rm{margin-left:auto;width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:var(--fg-subtle);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+  .set-doc .rm:hover{background:var(--amate-100);color:var(--danger-600);}
+  .set-doc .rm .lic{width:15px;height:15px;}
+  .set-doc .new{font-family:var(--font-mono);font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--warning-600);background:var(--warning-100);border-radius:3px;padding:1px 5px;}
+  .empty-set{text-align:center;color:var(--fg-subtle);padding:46px 16px;}
+  .empty-set .lic{width:24px;height:24px;color:var(--cinnabar-400);}
+  .empty-set p{font-size:13px;line-height:1.5;margin:10px 0 0;}
+  /* ---- relaciones step ---- */
+  .seg-cols{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px;}
+  .seg-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow-xs);}
+  .seg-card .sh{display:flex;align-items:center;gap:9px;padding-bottom:11px;border-bottom:1px solid var(--border);margin-bottom:11px;}
+  .seg-card .sh .si{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--amate-100);color:var(--fg-muted);}
+  .seg-card .sh .stt{font-size:13.5px;font-weight:700;}
+  .seg-card .sh .scrit{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.04em;padding:3px 8px;border-radius:999px;}
+  .seg-card .sh .scrit.sec{background:var(--cinnabar-50);color:var(--cinnabar-600);}
+  .seg-card .sh .scrit.op{background:var(--amate-100);color:var(--fg-muted);}
+  .rel-doc{display:flex;align-items:center;gap:10px;padding:9px 4px;}
+  .rel-doc .di{width:30px;height:30px;border-radius:7px;background:var(--amate-50);color:var(--fg-muted);display:flex;align-items:center;justify-content:center;flex:none;}
+  .rel-doc .dn{font-size:13px;font-weight:600;}
+  .rel-doc .dm{font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);margin-top:2px;}
+  .rel-doc .move{margin-left:auto;font-family:var(--font-sans);font-size:11.5px;font-weight:500;color:var(--fg-muted);background:var(--surface);border:1px solid var(--border-strong);border-radius:7px;padding:5px 9px;cursor:pointer;display:flex;align-items:center;gap:5px;}
+  .rel-doc .move:hover{border-color:var(--cinnabar-300);color:var(--accent-fg);}
+  .rel-doc .move .lic{width:13px;height:13px;}
+  .seg-empty{font-size:12px;color:var(--fg-subtle);font-style:italic;padding:10px 4px;}
+  /* ---- publicar step ---- */
+  .pub-grid{display:grid;grid-template-columns:1fr 320px;gap:20px;margin-top:18px;align-items:start;}
+  .summary-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
+  .summary-row:last-child{border-bottom:none;}
+  .summary-row .sl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle);width:160px;flex:none;}
+  .summary-row .sv{font-size:13.5px;font-weight:500;flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .summary-row .sv .lic{width:14px;height:14px;color:var(--cinnabar-500);}
+  .qr-side{display:flex;flex-direction:column;align-items:stretch;gap:14px;}
+  .qr-plate{display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .qr-frame{position:relative;background:var(--surface);border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-sm);border:1px solid var(--border);}
+  .qr-frame .qb{position:absolute;width:18px;height:18px;}
+  .qr-frame .qb::before,.qr-frame .qb::after{content:"";position:absolute;background:var(--cinnabar-500);}
+  .qr-frame .qb::before{width:100%;height:3px;}.qr-frame .qb::after{width:3px;height:100%;}
+  .qr-frame .qb.tl{top:9px;left:9px;}.qr-frame .qb.tl::before{top:0;left:0;}.qr-frame .qb.tl::after{top:0;left:0;}
+  .qr-frame .qb.tr{top:9px;right:9px;}.qr-frame .qb.tr::before{top:0;right:0;}.qr-frame .qb.tr::after{top:0;right:0;}
+  .qr-frame .qb.bl{bottom:9px;left:9px;}.qr-frame .qb.bl::before{bottom:0;left:0;}.qr-frame .qb.bl::after{bottom:0;left:0;}
+  .qr-frame .qb.br{bottom:9px;right:9px;}.qr-frame .qb.br::before{bottom:0;right:0;}.qr-frame .qb.br::after{bottom:0;right:0;}
+  .qr-grid{display:grid;grid-template-columns:repeat(21,1fr);grid-template-rows:repeat(21,1fr);}
+  .qr-grid .m{background:transparent;}
+  .qr-grid .m.on{background:var(--ink-900);}
+  .qr-logo{position:absolute;background:var(--surface);border-radius:5px;padding:3px;display:flex;}
+  .qr-cap{font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;color:var(--fg-muted);text-align:center;max-width:220px;line-height:1.4;}
+  .qr-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow-xs);}
+  .qr-card .qh{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:14px;}
+  .seg{display:flex;gap:6px;margin-top:14px;}
+  .seg button{flex:1;font-family:var(--font-sans);font-size:12px;font-weight:500;border:1px solid var(--border-strong);background:var(--surface);color:var(--fg-muted);padding:9px 6px;border-radius:8px;cursor:pointer;}
+  .seg button.on{background:var(--ink-900);color:var(--amate-50);border-color:var(--ink-900);}
+  .seg-lab{font-family:var(--font-mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--fg-subtle);}
+  /* ---- footer nav ---- */
+  .foot{display:flex;align-items:center;gap:12px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border);}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-sans);font-size:13.5px;font-weight:600;border-radius:8px;padding:11px 17px;cursor:pointer;border:1px solid transparent;}
+  .btn .lic{width:16px;height:16px;}
+  .btn-primary{background:var(--cinnabar-500);color:#fff;}
+  .btn-primary:hover{background:var(--cinnabar-600);box-shadow:var(--shadow-cinnabar);}
+  .btn-primary:disabled{background:var(--amate-300);color:var(--amate-50);cursor:not-allowed;box-shadow:none;}
+  .btn-ghost{background:var(--surface);color:var(--fg-muted);border-color:var(--border-strong);}
+  .btn-ghost:hover{background:var(--amate-100);color:var(--fg);}
+  .btn-draft{margin-left:auto;background:transparent;color:var(--fg-muted);border:none;font-weight:500;font-size:12.5px;}
+  .btn-draft:hover{color:var(--accent-fg);}
+  /* ---- success ---- */
+  .done-card{max-width:560px;margin:40px auto;text-align:center;}
+  .done-card .dic{width:64px;height:64px;border-radius:50%;background:var(--success-100);color:var(--success-600);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;}
+  .done-card h1{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:0;}
+  .done-card .dcodo{font-family:var(--font-mono);font-size:13px;color:var(--accent-fg);margin-top:6px;}
+  .done-card p{font-size:14px;color:var(--fg-muted);line-height:1.55;margin:12px auto 0;max-width:46ch;}
+  .done-acts{display:flex;gap:10px;justify-content:center;margin-top:24px;flex-wrap:wrap;}
+  .dense .content{padding-top:14px;}
+  .dense .panel{padding:15px;}
+  .dense .form-grid{gap:11px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+function Icon({ name, size = 18, color }) {
+  const ref = useRef(null);
+  useEffect(() => { const el = ref.current; if (!el || !window.lucide) return; el.innerHTML = "";
+    const i = document.createElement("i"); i.setAttribute("data-lucide", name); el.appendChild(i);
+    try { window.lucide.createIcons(); } catch (e) {} }, [name]);
+  return <span className="lic" ref={ref} style={{ width: size, height: size, color }} />;
+}
+function Mark({ size = 24 }) {
+  return <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="DOCYAN" style={{ flex: "none" }}>
+    <g stroke="var(--ink-900)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M13 23 V13 H23" /><path d="M41 13 H51 V23" /><path d="M51 41 V51 H41" /><path d="M23 51 H13 V41" /></g>
+    <rect x="25.5" y="25.5" width="13" height="13" rx="3" fill="#CF4124" /></svg>;
+}
+function qrCells(seed) {
+  const n = 21, on = [];
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const finder = (fx, fy) => x >= fx && x < fx + 7 && y >= fy && y < fy + 7;
+    const isFinder = finder(0, 0) || finder(n - 7, 0) || finder(0, n - 7);
+    if (isFinder) {
+      const rx = x >= n - 7 ? x - (n - 7) : x, ry = y >= n - 7 ? y - (n - 7) : y;
+      const cx = x < 7 ? x : rx, cy = y < 7 ? y : ry;
+      const ring = cx === 0 || cx === 6 || cy === 0 || cy === 6, core = cx >= 2 && cx <= 4 && cy >= 2 && cy <= 4;
+      on.push(ring || core);
+    } else on.push(((x * 73 + y * 151 + seed * 31 + x * y) % 7) < 3);
+  }
+  return on;
+}
+function QRPlate({ size = 188, seed = 7, label }) {
+  const cells = qrCells(seed);
+  return <div className="qr-plate" style={{ width: size + 36 }}>
+    <div className="qr-frame" style={{ width: size, height: size }}>
+      <span className="qb tl" /><span className="qb tr" /><span className="qb bl" /><span className="qb br" />
+      <div className="qr-grid" style={{ width: size - 30, height: size - 30 }}>{cells.map((c, i) => <span key={i} className={c ? "m on" : "m"} />)}</div>
+      <div className="qr-logo"><Mark size={Math.round(size * 0.15)} /></div>
+    </div>
+    {label && <div className="qr-cap">{label}</div>}
+  </div>;
+}
+
+const ADMIN_NAV = [
+  ["grp", "Operación"], ["layout-dashboard", "Resumen", "resumen"], ["folder-tree", "CoDos", "codos"], ["bell", "Alertas", "alertas"],
+  ["grp", "Administración"], ["upload", "Ingesta", "ingesta"], ["shield-check", "Gobernanza & FAT", "gobernanza"], ["qr-code", "Generar QRs", "qrs"], ["users", "Usuarios", "usuarios"],
+];
+
+const SEGMENTS = [
+  { key: "manuales", label: "Manuales de equipo", icon: "book-open", crit: "op" },
+  { key: "operacion", label: "Operación & mantenimiento", icon: "list-checks", crit: "op" },
+  { key: "seguridad", label: "Seguridad & MSDS", icon: "shield-alert", crit: "sec" },
+  { key: "calibracion", label: "Calibración & registros", icon: "ruler", crit: "op" },
+];
+const SEG_LABEL = Object.fromEntries(SEGMENTS.map(s => [s.key, s.label]));
+
+/* acervo ya ingerido — disponibles para vincular (documentos reales CIPSA MAXI-10ND) */
+const ACERVO = [
+  { id: "d1", name: "Instrucciones de operación — MAXI-10ND", lang: "ES", kind: "manual · PDF", pages: 12, mb: 1.2, seg: "operacion" },
+  { id: "d2", name: "Lista de partes — MAXI-10ND", lang: "ES", kind: "refacciones · PDF", pages: 17, mb: 1.6, seg: "operacion" },
+  { id: "d3", name: "Ficha técnica — MAXI-10ND", lang: "ES", kind: "ficha técnica · PDF", pages: 1, mb: 0.3, seg: "manuales" },
+  { id: "d4", name: "NOM-018-STPS — pictogramas", lang: "ES", kind: "norma · PDF", pages: 12, mb: 0.7, seg: "seguridad" },
+  { id: "d5", name: "Bitácora de mantenimiento 2025", lang: "ES", kind: "registro · XLSX", pages: 1, mb: 0.2, seg: "calibracion" },
+  { id: "d6", name: "Garantía y datos del motor", lang: "ES", kind: "ficha técnica · PDF", pages: 4, mb: 0.4, seg: "operacion" },
+];
+
+const VERTICALES = ["Construcción — planta de concreto", "Laboratorio ISO 17025", "Maquila IMMEX", "Minería & agregados", "Farmacéutica"];
+const PARES = ["ES-MX · EN-US", "ES-MX", "EN-US · ES-MX", "ES-CO · EN-US"];
+
+function Sidebar() {
+  return <aside className="side">
+    <div className="side-logo"><Mark size={24} /><span className="w">DOCYAN</span><span className="lde">LDE</span></div>
+    <nav className="nav">
+      {ADMIN_NAV.map((n, i) => n[0] === "grp"
+        ? <div className="grp" key={i}>{n[1]}</div>
+        : <a key={i} className={n[2] === "codos" ? "on" : ""}><Icon name={n[0]} size={17} />{n[1]}</a>)}
+    </nav>
+    <div className="org"><div className="av">LE</div>
+      <div style={{ minWidth: 0 }}><div className="ot">Laboratorio Estándar</div><div className="om">Plan Profesional</div></div>
+      <Icon name="chevrons-up-down" size={15} color="var(--fg-subtle)" /></div>
+  </aside>;
+}
+
+/* ---------- Paso 1 · Entidad ---------- */
+function StepEntidad({ codo, set }) {
+  const CRITS = [["sec", "Seguridad ≥0.95"], ["cal", "Calidad ≥0.85"], ["op", "Operacional ≥0.75"]];
+  return <div className="panel">
+    <div className="sec-eyebrow">Paso 1 · Entidad</div>
+    <div className="sec-lead"><h2>Define la entidad del CoDo</h2>
+      <p>Un CoDo agrupa todos los documentos que describen una entidad — un equipo, un proceso o un lugar. Empieza por nombrarla; los colaboradores la verán al escanear el QR.</p></div>
+    <div className="form-grid">
+      <div className="field col2"><label>Nombre de la entidad <span className="req">*</span></label>
+        <input value={codo.nombre} placeholder="Ej. Mezcladora de concreto MAXI-10ND" onChange={e => set({ nombre: e.target.value })} /></div>
+      <div className="field"><label>ID del CoDo · auto</label>
+        <span className="id-chip"><Icon name="hash" size={14} />{codo.id}</span>
+        <span className="hint">Generado por vertical y secuencia. Editable más tarde.</span></div>
+      <div className="field"><label>Tipo / categoría</label>
+        <input value={codo.tipo} placeholder="Ej. Revolvedora para concreto · CIPSA" onChange={e => set({ tipo: e.target.value })} /></div>
+      <div className="field"><label>Ubicación / área</label>
+        <input value={codo.ubicacion} placeholder="Ej. Obra · cuadrilla 2" onChange={e => set({ ubicacion: e.target.value })} /></div>
+      <div className="field"><label>Vertical</label>
+        <div className="selbox" onClick={() => set({ vertical: VERTICALES[(VERTICALES.indexOf(codo.vertical) + 1) % VERTICALES.length] })}>{codo.vertical}<Icon name="chevron-down" size={15} /></div>
+        <span className="hint">Define umbrales de gobernanza y plantilla de segmentos.</span></div>
+      <div className="field col2"><label>Par lingüístico default</label>
+        <div className="chips">{PARES.map(p => <button key={p} className={"chip" + (codo.par === p ? " on" : "")} onClick={() => set({ par: p })}>{p}</button>)}</div></div>
+      <div className="field col2"><label><Icon name="shield-check" size={12} />Criticidad por segmento de seguridad</label>
+        <div className="chips">{CRITS.map(([k, l]) => <button key={k} className={"chip crit" + (codo.crit === k ? " on" : "")} onClick={() => set({ crit: k })}><Icon name={k === "sec" ? "shield-alert" : k === "cal" ? "badge-check" : "settings"} size={14} />{l}</button>)}</div>
+        <span className="hint">Confianza mínima del caché para emitir respuesta en este CoDo. Las respuestas de seguridad exigen el umbral más alto.</span></div>
+    </div>
+  </div>;
+}
+
+/* ---------- Paso 2 · Documentos ---------- */
+function StepDocumentos({ codo, addDoc, removeDoc }) {
+  const [q, setQ] = useState("");
+  const added = new Set(codo.docs.map(d => d.id));
+  const filtered = ACERVO.filter(d => d.name.toLowerCase().includes(q.toLowerCase()));
+  return <div className="panel">
+    <div className="sec-eyebrow">Paso 2 · Documentos</div>
+    <div className="sec-lead"><h2>Vincula los documentos de la entidad</h2>
+      <p>Relaciona documentos ya ingeridos en tu acervo, o sube nuevos. Esto es lo que vuelve consultable al CoDo — cada respuesta citará a uno de estos documentos.</p></div>
+    <div className="docs-grid">
+      <div>
+        <div className="col-head"><h3>Acervo disponible</h3><span className="cnt">{filtered.length} documentos vivos</span></div>
+        <div className="acervo-search"><Icon name="search" size={15} /><input value={q} placeholder="Filtra tu acervo…" onChange={e => setQ(e.target.value)} /></div>
+        {filtered.map(d => {
+          const isAdded = added.has(d.id);
+          return <div key={d.id} className={"doc-pick" + (isAdded ? " added" : "")} onClick={() => !isAdded && addDoc(d)}>
+            <span className="di"><Icon name="file-text" size={17} /></span>
+            <div style={{ minWidth: 0 }}><div className="dn">{d.name}<span className="dlang">{d.lang}</span></div>
+              <div className="dm">{d.kind} · {d.pages} {d.pages === 1 ? "pág" : "págs"} · <span className="badge-vivo"><span className="bd" />vivo</span></div></div>
+            <span className="act"><Icon name={isAdded ? "check" : "plus"} size={16} /></span>
+          </div>;
+        })}
+        <div className="dropzone"><Icon name="upload-cloud" size={24} />
+          <div className="dz-t">Arrastra o <b>sube documentos nuevos</b></div>
+          <div className="dz-m">PDF · DOCX · XLSX · imágenes con OCR — se ingieren y se vinculan al CoDo</div></div>
+      </div>
+      <div>
+        <div className="col-head"><h3>Documentos de este CoDo</h3><span className="cnt">{codo.docs.length} vinculados</span></div>
+        <div className="set-panel">
+          {codo.docs.length === 0
+            ? <div className="empty-set"><Icon name="folder-plus" size={24} /><p>Aún no vinculas documentos.<br />Elige del acervo o sube nuevos a la izquierda.</p></div>
+            : codo.docs.map(d => <div key={d.id} className="set-doc">
+                <span className="di"><Icon name="file-text" size={17} /></span>
+                <div style={{ minWidth: 0 }}><div className="dn">{d.name} {d.isNew && <span className="new">nuevo</span>}</div>
+                  <div className="dm">{SEG_LABEL[d.seg]} · {d.lang}</div></div>
+                <button className="rm" onClick={() => removeDoc(d.id)}><Icon name="x" size={15} /></button>
+              </div>)}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ---------- Paso 3 · Relaciones ---------- */
+function StepRelaciones({ codo, moveDoc }) {
+  return <div className="panel">
+    <div className="sec-eyebrow">Paso 3 · Relaciones</div>
+    <div className="sec-lead"><h2>Organiza el expediente del CoDo</h2>
+      <p>Agrupa los documentos por segmento. Así verá el colaborador la entidad, y así aplica DOCYAN la criticidad de gobernanza a cada respuesta.</p></div>
+    <div className="seg-cols">
+      {SEGMENTS.map(seg => {
+        const docs = codo.docs.filter(d => d.seg === seg.key);
+        return <div key={seg.key} className="seg-card">
+          <div className="sh"><span className="si"><Icon name={seg.icon} size={15} /></span><span className="stt">{seg.label}</span>
+            <span className={"scrit " + seg.crit}>{seg.crit === "sec" ? "Seguridad ≥0.95" : "Operacional ≥0.75"}</span></div>
+          {docs.length === 0 ? <div className="seg-empty">Sin documentos en este segmento.</div>
+            : docs.map(d => {
+              const nextSeg = SEGMENTS[(SEGMENTS.findIndex(s => s.key === d.seg) + 1) % SEGMENTS.length];
+              return <div key={d.id} className="rel-doc"><span className="di"><Icon name="file-text" size={15} /></span>
+                <div style={{ minWidth: 0 }}><div className="dn">{d.name}</div><div className="dm">{d.kind} · {d.lang}</div></div>
+                <button className="move" onClick={() => moveDoc(d.id, nextSeg.key)} title={"Mover a " + nextSeg.label}><Icon name="corner-down-right" size={13} />Mover</button></div>;
+            })}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+/* ---------- Paso 4 · Publicar ---------- */
+function StepPublicar({ codo, fmt, setFmt }) {
+  const FMTS = ["Etiqueta 5×5cm", "Placa 10×10cm", "Lámina A5"];
+  const segCount = SEGMENTS.filter(s => codo.docs.some(d => d.seg === s.key)).length;
+  return <div className="panel">
+    <div className="sec-eyebrow">Paso 4 · Publicar</div>
+    <div className="sec-lead"><h2>Revisa y genera el QR persistente</h2>
+      <p>El QR es la puerta del colaborador al CoDo. Al crear, se imprime y se pega físicamente en la entidad.</p></div>
+    <div className="pub-grid">
+      <div>
+        <div className="summary-row"><span className="sl">Entidad</span><span className="sv">{codo.nombre || "—"}</span></div>
+        <div className="summary-row"><span className="sl">ID del CoDo</span><span className="sv" style={{ fontFamily: "var(--font-mono)" }}>{codo.id}</span></div>
+        <div className="summary-row"><span className="sl">Tipo · ubicación</span><span className="sv">{codo.tipo || "—"} · {codo.ubicacion || "—"}</span></div>
+        <div className="summary-row"><span className="sl">Vertical</span><span className="sv">{codo.vertical}</span></div>
+        <div className="summary-row"><span className="sl">Documentos</span><span className="sv"><Icon name="files" size={14} />{codo.docs.length} vivos · {segCount} segmentos</span></div>
+        <div className="summary-row"><span className="sl">Par lingüístico</span><span className="sv">{codo.par}</span></div>
+        <div className="summary-row"><span className="sl">Criticidad seguridad</span><span className="sv"><span className="chip crit on" style={{ cursor: "default", padding: "5px 11px" }}><Icon name="shield-alert" size={13} />{codo.crit === "sec" ? "Seguridad ≥0.95" : codo.crit === "cal" ? "Calidad ≥0.85" : "Operacional ≥0.75"}</span></span></div>
+      </div>
+      <div className="qr-side">
+        <div className="qr-card">
+          <div className="qh">Previsualización del QR</div>
+          <QRPlate seed={7} label={codo.id + " · " + (codo.nombre || "entidad sin nombre")} />
+          <div className="seg-lab" style={{ marginTop: 16 }}>Formato físico</div>
+          <div className="seg">{FMTS.map((f, i) => <button key={f} className={fmt === i ? "on" : ""} onClick={() => setFmt(i)}>{f}</button>)}</div>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+const BLANK = { id: "CODO-OBR-07", nombre: "", tipo: "", ubicacion: "", vertical: VERTICALES[0], par: PARES[0], crit: "sec", docs: [] };
+/* prefill del ejemplo: revolvedora de concreto MAXI-10ND con sus 3 documentos reales */
+const PREFILL = {
+  ...BLANK, nombre: "Mezcladora de concreto MAXI-10ND", tipo: "Revolvedora para concreto · CIPSA",
+  ubicacion: "Obra · cuadrilla 2", vertical: VERTICALES[0], par: PARES[1], crit: "sec",
+  docs: ACERVO.slice(0, 3).map(d => ({ ...d })),
+};
+
+const STEPS = [["Entidad", "nombre + metadatos"], ["Documentos", "vincular acervo"], ["Relaciones", "organizar expediente"], ["Publicar", "revisar + QR"]];
+
+function App() {
+  const [step, setStep] = useState(0);
+  const [maxStep, setMaxStep] = useState(0);
+  const [codo, setCodo] = useState(PREFILL);
+  const [fmt, setFmt] = useState(1);
+  const [dense, setDense] = useState(false);
+  const [created, setCreated] = useState(false);
+
+  const set = (patch) => setCodo(c => ({ ...c, ...patch }));
+  const addDoc = (d) => setCodo(c => c.docs.some(x => x.id === d.id) ? c : ({ ...c, docs: [...c.docs, { ...d }] }));
+  const removeDoc = (id) => setCodo(c => ({ ...c, docs: c.docs.filter(d => d.id !== id) }));
+  const moveDoc = (id, seg) => setCodo(c => ({ ...c, docs: c.docs.map(d => d.id === id ? { ...d, seg } : d) }));
+
+  const canNext = step === 0 ? codo.nombre.trim().length > 0 : step === 1 ? codo.docs.length > 0 : true;
+  const go = (s) => { if (s <= maxStep) { setStep(s); } };
+  const next = () => { if (step < 3) { const n = step + 1; setStep(n); setMaxStep(m => Math.max(m, n)); } };
+
+  if (created) return <div className="app"><Sidebar />
+    <div className="main">
+      <header className="topbar"><div className="crumb"><Icon name="folder-tree" size={16} />CoDos<Icon name="chevron-right" size={14} /><b>Crear CoDo</b></div>
+        <div className="tb-right"><div className="av-user">JM</div></div></header>
+      <div className="content"><div className="wrap"><div className="done-card">
+        <div className="dic"><Icon name="check" size={30} /></div>
+        <h1>CoDo creado</h1>
+        <div className="dcodo">{codo.id} · {codo.nombre}</div>
+        <p>{codo.docs.length} documentos vivos quedaron vinculados y consultables. Imprime el QR y pégalo en la entidad para que los colaboradores entren.</p>
+        <div className="done-acts">
+          <button className="btn btn-primary"><Icon name="printer" size={16} />Imprimir QR</button>
+          <button className="btn btn-ghost"><Icon name="folder-tree" size={16} />Ver el CoDo</button>
+          <button className="btn btn-ghost" onClick={() => { setCodo({ ...BLANK }); setStep(0); setMaxStep(0); setCreated(false); }}><Icon name="plus" size={16} />Crear otro</button>
+        </div>
+      </div></div></div>
+    </div>
+  </div>;
+
+  return <div className={"app" + (dense ? " dense" : "")}>
+    <Sidebar />
+    <div className="main">
+      <header className="topbar">
+        <div className="crumb"><Icon name="folder-tree" size={16} />CoDos<Icon name="chevron-right" size={14} /><b>Crear CoDo</b></div>
+        <div className="tb-right">
+          <div className="seg sm"><button className={dense ? "" : "on"} onClick={() => setDense(false)}>Cómodo</button><button className={dense ? "on" : ""} onClick={() => setDense(true)}>Compacto</button></div>
+          <div className="av-user">JM</div>
+        </div>
+      </header>
+      <div className="content"><div className="wrap">
+        {/* meta clara — siempre visible */}
+        <div className="goal-strip">
+          <span className="gs-ic"><Icon name="disc-3" size={20} /></span>
+          <div className="gs-t"><span className="gs-codo">{codo.id} · nuevo</span>
+            <span className={"gs-name" + (codo.nombre ? "" : " ph")}>{codo.nombre || "Entidad sin nombre"}</span></div>
+          <div className="gs-facts">
+            <span className="gs-fact"><Icon name="files" size={13} />{codo.docs.length} docs</span>
+            <span className="gs-fact warn"><Icon name="shield-alert" size={13} />{codo.crit === "sec" ? "Seguridad ≥0.95" : codo.crit === "cal" ? "Calidad ≥0.85" : "Operacional ≥0.75"}</span>
+          </div>
+        </div>
+
+        {/* stepper */}
+        <div className="stepper">
+          {STEPS.map(([t, m], i) => <React.Fragment key={i}>
+            <div className={"step" + (i === step ? " on" : "") + (i < step || i < maxStep && i !== step ? " done" : "")} onClick={() => go(i)}>
+              <span className="sn">{(i < step) ? <Icon name="check" size={14} /> : i + 1}</span>
+              <div><div className="st">{t}</div><div className="stm">{m}</div></div>
+            </div>
+            {i < 3 && <div className={"step-line" + (i < step ? " done" : "")} />}
+          </React.Fragment>)}
+        </div>
+
+        {step === 0 && <StepEntidad codo={codo} set={set} />}
+        {step === 1 && <StepDocumentos codo={codo} addDoc={addDoc} removeDoc={removeDoc} />}
+        {step === 2 && <StepRelaciones codo={codo} moveDoc={moveDoc} />}
+        {step === 3 && <StepPublicar codo={codo} fmt={fmt} setFmt={setFmt} />}
+
+        <div className="foot">
+          {step > 0 && <button className="btn btn-ghost" onClick={() => setStep(step - 1)}><Icon name="arrow-left" size={16} />Atrás</button>}
+          {step < 3
+            ? <button className="btn btn-primary" disabled={!canNext} onClick={next}>Siguiente<Icon name="arrow-right" size={16} /></button>
+            : <button className="btn btn-primary" onClick={() => setCreated(true)}><Icon name="check" size={16} />Crear CoDo y generar QR</button>}
+          <button className="btn btn-draft">Guardar borrador</button>
+        </div>
+      </div></div>
+    </div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

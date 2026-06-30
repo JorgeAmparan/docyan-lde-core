@@ -20,3 +20,4 @@ playwright/.cache/
 *.tsbuildinfo
 .vercel
 .env*.local
+screenshots/

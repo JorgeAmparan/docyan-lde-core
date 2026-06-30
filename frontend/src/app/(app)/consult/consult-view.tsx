@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Icon } from "@/components/icon";
-import { DocyanMark } from "@/components/brand/docyan-mark";
 import {
   ConsultaSpanOverlay,
   type SourceSpan,
@@ -45,6 +44,22 @@ export interface ConsultContext {
   tokenQr?: string;
   /** Entity id for /mo/query (when known). */
   entityId?: string;
+  /** Active document id for a loose-document CoDo. Forwarded to /mo/query as
+   *  documento_id so retrieval scopes to THIS document (and the PCL cache keys
+   *  on it) — without it, a query can cite another document of the same tenant
+   *  (cross-citation) and two loose docs collide in the cache. */
+  documentoId?: string;
+  /** Documentos reales del CoDo (de `GET /mo/codos/{id}`). Alimentan las doc-tabs
+   *  del shell de escritorio (Shell-A): cada pestaña acota el retrieval a SU
+   *  documento_id. Vacío/1 doc ⇒ sin pestañas. NO se inventan documentos. */
+  documentos?: Array<{
+    id: string;
+    nombre?: string | null;
+    tipo?: string | null;
+    /** Preguntas sugeridas por DOCYAN para ESTE documento (de su ontología/EDB).
+     *  Reales, del backend; en el `/demo` showcase vienen del CoDo MAXI-10. */
+    sugerencias?: string[] | null;
+  }>;
 }
 
 interface Message {
@@ -52,6 +67,13 @@ interface Message {
   role: "user" | "answer";
   text?: string;
   answer?: Answer;
+}
+
+/** Un id "tipo hash" (SHA-256 de un documento suelto, u otra cadena hex larga sin
+ *  separadores legibles) NO se muestra al usuario: la cabecera de consulta usa el
+ *  nombre del CoDo en su lugar (DEF-4). Heurística: ≥16 chars hex contiguos. */
+function isHashLike(id: string): boolean {
+  return /[0-9a-f]{16,}/i.test(id.replace(/[^0-9a-z]/gi, ""));
 }
 
 /** The mode line: jade pulse "instantáneo · caché" or amber blinking "buscando…". */
@@ -124,6 +146,64 @@ function AnswerBody({
   }
 }
 
+/* Traza cada RENDER (eje B) a su TIPO DOCUMENTAL representativo (eje A) — hace
+   visible la relación render↔schema, igual que answers.jsx (KIND_SCHEMA). No es
+   dato inventado: es el mapeo determinista tipo-de-render → tipo documental. */
+const KIND_SCHEMA: Record<string, string> = {
+  info: "ficha_tecnica",
+  steps: "manual_mantenimiento",
+  troubleshoot: "manual_mantenimiento",
+  diagram: "manual_operacion",
+  video: "manual_operacion",
+  history: "registro_historico",
+  alerts: "certificado_calibracion",
+  compare: "manual_operacion",
+};
+const SCHEMA_LABEL: Record<string, string> = {
+  ficha_tecnica: "Ficha técnica",
+  manual_mantenimiento: "Manual de mantenimiento",
+  manual_operacion: "Manual de operación",
+  registro_historico: "Registro histórico",
+  certificado_calibracion: "Certificado de calibración",
+  memoria_traduccion: "Memoria de traducción",
+};
+
+/** Envoltura de respuesta del prototipo (answers.jsx → AnswerBody): `.dc-answer`
+ *  con `.dc-prov` (línea de modo + chip del tipo documental de origen) sobre la
+ *  tarjeta de tipo. El error no lleva provenance. */
+function AnswerCard({
+  a,
+  saved,
+  onSave,
+  onCite,
+  onNavigate,
+}: {
+  a: Answer;
+  saved: boolean;
+  onSave: () => void;
+  onCite: (s: SourceSpan | null) => void;
+  onNavigate: (nodoId: string) => void;
+}) {
+  if (a.kind === "error") {
+    return <AnswerBody a={a} saved={saved} onSave={onSave} onCite={onCite} onNavigate={onNavigate} />;
+  }
+  const label = SCHEMA_LABEL[KIND_SCHEMA[a.kind] ?? "ficha_tecnica"];
+  return (
+    <div className="dc-answer">
+      <div className="dc-prov">
+        <ModeLine mode={a.mode} />
+        {label && (
+          <span className="prov-tipo" title="Tipo documental del que proviene esta respuesta">
+            <Icon name="library" size={11} />
+            {label}
+          </span>
+        )}
+      </div>
+      <AnswerBody a={a} saved={saved} onSave={onSave} onCite={onCite} onNavigate={onNavigate} />
+    </div>
+  );
+}
+
 function answerTitle(a: Answer): string {
   const p = a.payload as { titulo?: string } | undefined;
   return p?.titulo || a.question || "Consulta";
@@ -135,10 +215,20 @@ function answerTitle(a: Answer): string {
  * real `/mo/query` (8 typed payloads). On backend failure shows an honest error
  * (NO canned data — B9.5 §2.5).
  */
+/** Función de consulta inyectable. Por defecto la vista pega a `/mo/query` con la
+ *  sesión autenticada (ruta /consult y /q/[token]). El demo público la sustituye
+ *  para enrutar TODA consulta por `demoQuery` (backend demo real, sin token) sin
+ *  tocar el camino autenticado. Devuelve un `Answer` (real o error honesto). */
+export type QueryFn = (
+  label: string,
+  params?: Record<string, unknown>,
+) => Promise<Answer>;
+
 export function ConsultView({
   context,
   embedded = false,
   onFirstAnswer,
+  queryFn,
 }: {
   /** Contexto REAL del CoDo/entidad. Requerido: el llamador lo resuelve del backend
    *  (`/mo/codos/{id}` o `/qr/{token}`). No hay contexto enlatado de respaldo. */
@@ -149,6 +239,9 @@ export function ConsultView({
   /** Se dispara UNA vez al aparecer la primera respuesta (éxito o error honesto).
    *  El wizard de onboarding lo usa para confirmar el "ájá" y habilitar Continuar. */
   onFirstAnswer?: () => void;
+  /** Consulta inyectada (demo público): si se pasa, la vista enruta por aquí en vez
+   *  de pegar a `/mo/query`. Sin ella, comportamiento idéntico al autenticado. */
+  queryFn?: QueryFn;
 }) {
   const ctx = context;
   const router = useRouter();
@@ -162,17 +255,99 @@ export function ConsultView({
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // Chat persistente (Pieza 6): una SESIÓN por CoDo. El backend acumula el historial
+  // por session_id (multi-turno nativo del SDK); sin enviarlo, cada consulta sería
+  // stateless y el seguimiento perdería el contexto. Se crea al montar / al cambiar
+  // de CoDo (conversación nueva) y se reenvía en cada /mo/query.
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const codoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    let cancelado = false;
+    // Reset de conversación al CAMBIAR de CoDo. Se hace dentro de los callbacks
+    // async (no síncrono en el effect, que dispararía renders en cascada) marcando
+    // si es un CoDo nuevo respecto al anterior visto.
+    const esNuevoCodo = codoRef.current !== ctx.codo;
+    codoRef.current = ctx.codo;
+    firstAnswerRef.current = false;
+    api
+      .post<{ session_id: string }>(
+        "/mo/sessions",
+        { session_type: "consulta", canal: "pwa" },
+        { token },
+      )
+      .then((r) => {
+        if (cancelado) return;
+        setSessionId(r.session_id);
+        if (esNuevoCodo) setMsgs([]); // CoDo nuevo ⇒ conversación nueva
+      })
+      .catch(() => {
+        // Sin sesión, la consulta sigue funcionando (stateless): no se bloquea el CoDo.
+        if (!cancelado) setSessionId(null);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [token, ctx.codo]);
   const [savedIds, setSavedIds] = useState<number[]>([]);
   const [source, setSource] = useState<SourceSpan | null>(null);
   const convoRef = useRef<HTMLDivElement>(null);
+  const idRef = useRef(0);
+  const nextId = () => (idRef.current += 1);
 
-  const appendAnswer = useCallback((label: string, a: Answer) => {
-    setMsgs((m) => [
-      ...m,
-      { id: Date.now(), role: "user", text: label },
-      { id: Date.now() + 1, role: "answer", answer: a },
-    ]);
+  // Doc-tabs reales (Shell-A): el documento activo acota el retrieval a SU id.
+  // No se inventan documentos — vienen de `GET /mo/codos/{id}`.
+  const documentos = useMemo(() => ctx.documentos ?? [], [ctx.documentos]);
+  const [activeDocIdx, setActiveDocIdx] = useState(0);
+  const activeDoc = documentos[activeDocIdx];
+  const activeDocumentoId =
+    activeDoc?.id ?? ("documentoId" in ctx ? ctx.documentoId : undefined);
+
+  // "Tus consultas" — etiquetas de las respuestas guardadas en esta sesión (real).
+  const [savedQ, setSavedQ] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [addVal, setAddVal] = useState("");
+
+  // Observaciones del operador — persistidas localmente (como el prototipo).
+  // PENDIENTE DE JORGE: no hay endpoint para persistir/auditar observaciones
+  // server-side; aquí quedan en localStorage por CoDo, sin fingir guardado remoto.
+  const obsKey = `docyan_obs_${ctx.codo}`;
+  const [obs, setObs] = useState<Array<{ t: string; at: string }>>([]);
+  const [obsAdding, setObsAdding] = useState(false);
+  const [obsVal, setObsVal] = useState("");
+  // Hidrata las observaciones del cliente tras el montaje (evita mismatch SSR; el
+  // server no conoce localStorage). setState-en-effect es el patrón correcto aquí
+  // y consistente con el resto del repo (site-i18n).
+  useEffect(() => {
+    let parsed: Array<{ t: string; at: string }> = [];
+    try {
+      parsed = JSON.parse(localStorage.getItem(obsKey) || "[]");
+    } catch {
+      parsed = [];
+    }
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+    setObs(parsed);
+  }, [obsKey]);
+  const persistObs = (next: Array<{ t: string; at: string }>) => {
+    setObs(next);
+    try {
+      localStorage.setItem(obsKey, JSON.stringify(next));
+    } catch {
+      /* almacenamiento no disponible — la UI sigue funcionando en memoria */
+    }
+  };
+
+  // Fix lag del input (Sprint UI-2 §1.2.8): la burbuja del usuario se pinta AL
+  // INSTANTE al enviar (y se limpia el campo) — la respuesta del motor llega después.
+  // Antes ambas se agregaban juntas tras `await query`, así que el texto tardaba
+  // ~lo que tardara el backend en aparecer. El demo público ya lo hace instantáneo.
+  const appendUser = useCallback((label: string) => {
+    setMsgs((m) => [...m, { id: nextId(), role: "user", text: label }]);
     setText("");
+  }, []);
+
+  const appendAnswer = useCallback((a: Answer) => {
+    setMsgs((m) => [...m, { id: nextId(), role: "answer", answer: a }]);
     if (!firstAnswerRef.current) {
       firstAnswerRef.current = true;
       onFirstAnswerRef.current?.();
@@ -181,13 +356,18 @@ export function ConsultView({
 
   const query = useCallback(
     async (label: string, params?: Record<string, unknown>): Promise<Answer> => {
+      // Demo público: la consulta va por la función inyectada (demoQuery), no a
+      // /mo/query. El camino autenticado (sin queryFn) queda intacto.
+      if (queryFn) return queryFn(label, params);
       const res = await api.post<{ resultado: ConsultaResuelta }>(
         "/mo/query",
         {
           texto: label,
           canal: "pwa",
           entidad_id: ("entityId" in ctx && ctx.entityId) || undefined,
+          documento_id: activeDocumentoId || undefined,
           token_qr: ("tokenQr" in ctx && ctx.tokenQr) || undefined,
+          session_id: sessionId ?? undefined,
           params,
         },
         { token },
@@ -195,37 +375,39 @@ export function ConsultView({
       const resuelta = res.resultado ?? (res as unknown as ConsultaResuelta);
       return mapResueltaToAnswer(resuelta, label);
     },
-    [ctx, token],
+    [ctx, token, sessionId, activeDocumentoId, queryFn],
   );
 
   /** Both free-text and suggestions hit the real MO; failure → honest error. */
   const askFree = useCallback(
     async (label: string) => {
+      appendUser(label); // pinta la pregunta al instante; la respuesta llega después
       setBusy(true);
       try {
-        appendAnswer(label, await query(label));
+        appendAnswer(await query(label));
       } catch {
-        appendAnswer(label, errorAnswer(label, "El motor no respondió. Reintenta en unos segundos."));
+        appendAnswer(errorAnswer(label, "El motor no respondió. Reintenta en unos segundos."));
       } finally {
         setBusy(false);
       }
     },
-    [appendAnswer, query],
+    [appendUser, appendAnswer, query],
   );
 
   /** Tipo 5 navigation — re-query the next decision node and append it. */
   const navigateNode = useCallback(
     async (nodoId: string) => {
+      appendUser("Continuar diagnóstico");
       setBusy(true);
       try {
-        appendAnswer("Continuar diagnóstico", await query("Continuar diagnóstico", { nodo_id: nodoId }));
+        appendAnswer(await query("Continuar diagnóstico", { nodo_id: nodoId }));
       } catch {
-        appendAnswer("Continuar diagnóstico", errorAnswer("Continuar diagnóstico", "No se pudo avanzar en el diagnóstico."));
+        appendAnswer(errorAnswer("Continuar diagnóstico", "No se pudo avanzar en el diagnóstico."));
       } finally {
         setBusy(false);
       }
     },
-    [appendAnswer, query],
+    [appendUser, appendAnswer, query],
   );
 
   useEffect(() => {
@@ -237,6 +419,8 @@ export function ConsultView({
     async (id: number, a: Answer) => {
       if (savedIds.includes(id)) return;
       setSavedIds((s) => [...s, id]);
+      const titulo = answerTitle(a);
+      setSavedQ((q) => (q.includes(titulo) ? q : [...q, titulo]));
       try {
         await api.post(
           "/mo/queries/save",
@@ -252,142 +436,363 @@ export function ConsultView({
 
   const showNudge = savedIds.length >= 2;
 
-  return (
-    <div
-      className={embedded ? "consult-embed" : undefined}
-      style={
-        embedded
-          ? undefined
-          : {
-              position: "fixed",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              background: "var(--bg)",
-              maxWidth: 560,
-              margin: "0 auto",
-            }
-      }
+  // ── handlers del shell (Shell-A) ───────────────────────────────────────────
+  const selectDoc = (i: number) => {
+    setActiveDocIdx(i);
+    setMsgs([]); // conversación por documento (paridad con el prototipo)
+  };
+  const addUser = () => {
+    const v = addVal.trim();
+    if (!v || busy) return;
+    setSavedQ((q) => (q.includes(v) ? q : [...q, v]));
+    setAddVal("");
+    setAdding(false);
+    askFree(v);
+  };
+  const delSavedQ = (i: number) => setSavedQ((q) => q.filter((_, k) => k !== i));
+  const addObs = () => {
+    const v = obsVal.trim();
+    if (!v) return;
+    persistObs([...obs, { t: v, at: "ahora" }]);
+    setObsVal("");
+    setObsAdding(false);
+  };
+  const delObs = (i: number) => persistObs(obs.filter((_, k) => k !== i));
+
+  const renderAnswer = (m: Message) =>
+    m.role === "user" ? (
+      <div className="bubble" key={m.id}>
+        {m.text}
+      </div>
+    ) : (
+      <AnswerCard
+        key={m.id}
+        a={m.answer!}
+        saved={savedIds.includes(m.id)}
+        onSave={() => onSave(m.id, m.answer!)}
+        onCite={(s) => s && setSource(s)}
+        onNavigate={navigateNode}
+      />
+    );
+
+  const qbarForm = (
+    <form
+      className="qbar"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const q = text.trim();
+        if (q && !busy) askFree(q);
+      }}
     >
-      <div className="ctx">
-        <DocyanMark size={26} />
-        <div className="ctx-t">
-          <div className="ctx-lab">Estás consultando</div>
-          <div className="ctx-name">
-            <span className="ctx-codo">{ctx.codo}</span> · {ctx.entityName}
-          </div>
-        </div>
-        {!embedded && (
-          <>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => router.push("/saved")}
-              aria-label="Mis consultas"
-            >
-              <Icon name="bookmark" size={19} />
-            </button>
-            {/* Vuelta a gestión (B13/D5): consulta ⇄ gestión es bidireccional. */}
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={() => router.push("/documentos")}
-              aria-label="Ir a gestión"
-            >
-              <Icon name="layout-grid" size={19} />
-            </button>
-          </>
-        )}
-      </div>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={`Pregunta sobre ${activeDoc?.nombre || ctx.entityName}…`}
+        disabled={busy}
+      />
+      <button type="button" className="mic" aria-label="Voz a texto">
+        <Icon name="mic" size={19} />
+      </button>
+      <button type="submit" className="send" aria-label="Enviar" disabled={busy}>
+        <Icon name="arrow-up" size={19} />
+      </button>
+    </form>
+  );
 
-      <div className="convo" ref={convoRef}>
-        <div className="entity-card">
-          <div className="eh">
-            <div className="ic">
-              <Icon name="scan-line" size={21} />
+  // ── Embebido (wizard de onboarding): single-column inline, mismo motor real ──
+  if (embedded) {
+    return (
+      <div className="consult-embed">
+        <div className="convo" ref={convoRef}>
+          <div className="entity-card">
+            <div className="eh">
+              <div className="ic">
+                <Icon name="scan-line" size={21} />
+              </div>
+              <div>
+                <h3>{ctx.entityTitle}</h3>
+                <div className="meta">{ctx.entityMeta}</div>
+              </div>
             </div>
-            <div>
-              <h3>{ctx.entityTitle}</h3>
-              <div className="meta">{ctx.entityMeta}</div>
-            </div>
-          </div>
-          {/* Sin sugerencias estáticas (D2): las preguntas precargadas eran de un
-              CoDo de demo, no del documento real del usuario — fake-success. El
-              usuario escribe su propia pregunta sobre SU documento/entidad y la
-              respuesta llega citada a la fuente real. */}
-          <p className="meta" style={{ marginTop: 10 }}>
-            Escribe abajo una pregunta sobre {ctx.entityName} para ver la respuesta con cita a la
-            fuente.
-          </p>
-        </div>
-
-        {msgs.map((m) =>
-          m.role === "user" ? (
-            <div className="bubble-user" key={m.id}>
-              {m.text}
-            </div>
-          ) : (
-            <div className="answer" key={m.id}>
-              <ModeLine mode={m.answer!.mode} />
-              <AnswerBody
-                a={m.answer!}
-                saved={savedIds.includes(m.id)}
-                onSave={() => onSave(m.id, m.answer!)}
-                onCite={(s) => s && setSource(s)}
-                onNavigate={navigateNode}
-              />
-            </div>
-          ),
-        )}
-
-        {showNudge && (
-          <div className="nudge">
-            <div className="nh">
-              <Icon name="git-branch" size={17} />
-              Secuencia detectada
-            </div>
-            <p>
-              Guardaste varias consultas sobre {ctx.entityName}. Un <strong>Playbook</strong> es una secuencia que repites como rutina — DOCYAN puede unirlas en una.
+            <p className="meta" style={{ marginTop: 10 }}>
+              Escribe abajo una pregunta sobre {ctx.entityName} para ver la respuesta con cita a la
+              fuente.
             </p>
-            <div className="acts">
+          </div>
+          {msgs.map(renderAnswer)}
+        </div>
+        <div className="qbar">
+          <form
+            className="qbox"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = text.trim();
+              if (q && !busy) askFree(q);
+            }}
+          >
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Pregunta sobre este equipo…"
+              disabled={busy}
+            />
+            <button type="button" className="mic" aria-label="Voz a texto">
+              <Icon name="mic" size={19} />
+            </button>
+            <button type="submit" className="send" aria-label="Enviar" disabled={busy}>
+              <Icon name="arrow-up" size={19} />
+            </button>
+          </form>
+        </div>
+        <ConsultaSpanOverlay
+          open={source !== null}
+          onOpenChange={(o) => !o && setSource(null)}
+          source={source}
+        />
+      </div>
+    );
+  }
+
+  // ── Shell-A escritorio (dos columnas) — colapsa a una en pantallas angostas ──
+  return (
+    <div className="consult-desktop">
+      <div className="consult-wrap">
+        <div className="ctxbar">
+          <div className="eyebrow">
+            <span className="dot" />
+            Consultando
+            {/* DEF-4: nunca el SHA crudo — solo código legible del CoDo. */}
+            {ctx.codo && !isHashLike(ctx.codo) ? ` · ${ctx.codo}` : ""}
+          </div>
+          <h1>{ctx.entityName}</h1>
+        </div>
+
+        {documentos.length > 1 && (
+          <div className="doctabs">
+            {documentos.map((d, i) => (
               <button
+                key={d.id}
                 type="button"
-                className="sug"
-                style={{ background: "var(--cinnabar-500)", color: "#fff", border: "none", justifyContent: "center", fontWeight: 600 }}
-                onClick={() => router.push("/saved")}
+                className={"doctab" + (i === activeDocIdx ? " on" : "")}
+                onClick={() => selectDoc(i)}
               >
-                Crear Playbook
+                <Icon name="file-text" size={14} />
+                {d.nombre || "Documento"}
               </button>
-            </div>
+            ))}
           </div>
         )}
+
+        <div className="cwrap">
+          <div className="col-left">
+            <div className="doc-card2">
+              <div className="dh">
+                <span className="di">
+                  <Icon name="file-text" size={19} />
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="dn">{activeDoc?.nombre || ctx.entityTitle}</div>
+                  <div className="dm">{ctx.entityMeta}</div>
+                </div>
+                <span className="badge-vivo">
+                  <span className="bd" />
+                  documento vivo
+                </span>
+              </div>
+            </div>
+
+            {/* Sugeridas por DOCYAN — preguntas que el documento sabe responder
+                (de su ontología/EDB). Sección del diseño; alimentada por datos
+                reales del documento activo. En consulta LIVE no se enlatan (D2);
+                el /demo showcase las trae del CoDo MAXI-10. */}
+            {(activeDoc?.sugerencias ?? []).length > 0 && (
+              <div className="cb-group">
+                <div className="cb-lab">
+                  <Icon name="sparkles" size={13} />
+                  Sugeridas por DOCYAN
+                </div>
+                {(activeDoc?.sugerencias ?? []).map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="sug"
+                    onClick={() => !busy && askFree(s)}
+                  >
+                    <Icon name="sparkles" size={15} />
+                    <span className="tx">{s}</span>
+                    <span className="ar">→</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Tus consultas — guardadas en esta sesión (real). */}
+            <div className="cb-group">
+              <div className="cb-lab">
+                <Icon name="bookmark" size={13} />
+                Tus consultas
+              </div>
+              {savedQ.map((q, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className="sug saved"
+                  onClick={() => !busy && askFree(q)}
+                >
+                  <Icon name="bookmark" size={15} />
+                  <span className="tx">{q}</span>
+                  <span
+                    className="del"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      delSavedQ(i);
+                    }}
+                  >
+                    <Icon name="x" size={13} />
+                  </span>
+                </button>
+              ))}
+              {adding ? (
+                <div className="add-row">
+                  <input
+                    autoFocus
+                    value={addVal}
+                    placeholder="Escribe una consulta…"
+                    onChange={(e) => setAddVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addUser();
+                      if (e.key === "Escape") setAdding(false);
+                    }}
+                  />
+                  <button type="button" className="ok" onClick={addUser}>
+                    <Icon name="check" size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="add-q" onClick={() => setAdding(true)}>
+                  <Icon name="plus" size={15} />
+                  Agregar consulta
+                </button>
+              )}
+            </div>
+
+            {/* Observaciones del operador — nota sobre la entidad, no instrucción.
+                Persisten localmente (como el prototipo); persistencia/auditoría
+                server-side: PENDIENTE DE JORGE (sin endpoint). */}
+            <div className="cb-group">
+              <div className="cb-lab">
+                <Icon name="pencil-line" size={13} />
+                Observaciones
+              </div>
+              <p className="obs-hint">
+                Anota algo que viste en el equipo. Queda como tu nota; no es una instrucción.
+              </p>
+              {obs.map((o, i) => (
+                <div className="obs-item" key={i}>
+                  <span className="obs-ic">
+                    <Icon name="message-square-text" size={14} />
+                  </span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="obs-t">{o.t}</div>
+                    <div className="obs-m">tú · {o.at}</div>
+                  </div>
+                  <button type="button" className="obs-del" onClick={() => delObs(i)}>
+                    <Icon name="x" size={13} />
+                  </button>
+                </div>
+              ))}
+              {obsAdding ? (
+                <div className="add-row">
+                  <input
+                    autoFocus
+                    value={obsVal}
+                    placeholder="Ej. holgura en el acople motor-eje…"
+                    onChange={(e) => setObsVal(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addObs();
+                      if (e.key === "Escape") setObsAdding(false);
+                    }}
+                  />
+                  <button type="button" className="ok" onClick={addObs}>
+                    <Icon name="check" size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="add-q" onClick={() => setObsAdding(true)}>
+                  <Icon name="plus" size={15} />
+                  Anotar observación
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="col-right">
+            <div className="threadbar">
+              <span className="tb-l">
+                <Icon name="messages-square" size={14} />
+                Conversación{activeDoc?.nombre ? ` · ${activeDoc.nombre}` : ""}
+              </span>
+              {msgs.length > 0 && (
+                <button type="button" className="clearbtn" onClick={() => setMsgs([])}>
+                  <Icon name="eraser" size={14} />
+                  Limpiar conversación
+                </button>
+              )}
+            </div>
+
+            <div className="thread" ref={convoRef}>
+              {msgs.length === 0 && (
+                <div className="empty">
+                  <Icon name="message-circle-question" size={26} />
+                  <p>
+                    Escribe tu pregunta sobre <b>{ctx.entityName}</b>. La respuesta llega con su cita
+                    a la fuente.
+                  </p>
+                </div>
+              )}
+              {msgs.map(renderAnswer)}
+
+              {showNudge && (
+                <div className="nudge">
+                  <div className="nh">
+                    <Icon name="git-branch" size={17} />
+                    Secuencia detectada
+                  </div>
+                  <p>
+                    Guardaste varias consultas sobre {ctx.entityName}. Un{" "}
+                    <strong>Playbook</strong> es una secuencia que repites como rutina — DOCYAN puede
+                    unirlas en una.
+                  </p>
+                  <div className="acts">
+                    <button
+                      type="button"
+                      className="sug"
+                      style={{
+                        background: "var(--cinnabar-500)",
+                        color: "#fff",
+                        border: "none",
+                        justifyContent: "center",
+                        fontWeight: 600,
+                      }}
+                      onClick={() => router.push("/saved")}
+                    >
+                      Crear Playbook
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {qbarForm}
+          </div>
+        </div>
       </div>
 
-      <div className="qbar">
-        <form
-          className="qbox"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const q = text.trim();
-            if (q && !busy) askFree(q);
-          }}
-        >
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Pregunta sobre este equipo…"
-            disabled={busy}
-          />
-          <button type="button" className="mic" aria-label="Voz a texto">
-            <Icon name="mic" size={19} />
-          </button>
-          <button type="submit" className="send" aria-label="Enviar" disabled={busy}>
-            <Icon name="arrow-up" size={19} />
-          </button>
-        </form>
-      </div>
-
-      <ConsultaSpanOverlay open={source !== null} onOpenChange={(o) => !o && setSource(null)} source={source} />
+      <ConsultaSpanOverlay
+        open={source !== null}
+        onOpenChange={(o) => !o && setSource(null)}
+        source={source}
+      />
     </div>
   );
 }

@@ -103,7 +103,7 @@ export function DemoAnswerCard({ data, autoOpen = false }: { data: DemoCardData;
                 ) : null}
                 <div className="s-actions">
                   <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Pedigree al fragmento exacto · SHA-256", en: "Span pedigree · SHA-256" })}</span>
-                  {data.citeUrl ? <a className="s-open" href={data.citeUrl} target="_blank" rel="noopener noreferrer"><Icon name="external-link" size={12} />{t({ es: "Abrir PDF", en: "Open PDF" })}</a> : null}
+                  {data.citeUrl ? <a className="openpdf" href={data.citeUrl} target="_blank" rel="noopener noreferrer"><Icon name="external-link" size={12} />{t({ es: "Abrir PDF", en: "Open PDF" })}</a> : null}
                 </div>
               </>
             ) : (
@@ -115,7 +115,7 @@ export function DemoAnswerCard({ data, autoOpen = false }: { data: DemoCardData;
                 <div className="s-span s-span-na">{t({ es: "Esta respuesta aún no tiene el span de caracteres del documento. Se muestra la procedencia, no texto generado.", en: "This answer doesn't yet have the document's character span. Provenance is shown, not generated text." })}</div>
                 <div className="s-actions">
                   <span className="s-ped"><Icon name="shield-check" size={12} />{t({ es: "Procedencia al documento · sin span exacto", en: "Document provenance · no exact span" })}</span>
-                  {data.citeUrl ? <a className="s-open" href={data.citeUrl} target="_blank" rel="noopener noreferrer"><Icon name="external-link" size={12} />{t({ es: "Abrir PDF", en: "Open PDF" })}</a> : null}
+                  {data.citeUrl ? <a className="openpdf" href={data.citeUrl} target="_blank" rel="noopener noreferrer"><Icon name="external-link" size={12} />{t({ es: "Abrir PDF", en: "Open PDF" })}</a> : null}
                 </div>
               </>
             )}

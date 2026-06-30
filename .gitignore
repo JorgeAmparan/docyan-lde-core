@@ -40,3 +40,6 @@ openapi.json
 
 # Claude Code runtime state
 .claude/
+
+# Vercel local project link (no commitear)
+.vercel/

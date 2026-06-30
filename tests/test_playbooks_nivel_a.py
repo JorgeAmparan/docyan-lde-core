@@ -41,7 +41,7 @@ def test_disparo_reevalua_contra_grafo_actual():
         def __init__(self):
             self.valor = "40"
 
-        def informativa(self, t, term, e):
+        def informativa(self, t, term, e, d=None):
             return {"especificaciones": [{"nombre": "Par", "valor": self.valor, "unidad": "Nm"}],
                     "termino": "Par", "definicion": None}
 

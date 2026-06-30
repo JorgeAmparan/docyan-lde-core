@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOCYAN — Dirección A · shell + consulta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link href="colors_and_type.css" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;font-family:var(--font-sans);color:var(--fg);background:var(--bg);}
+  .lic{display:inline-flex;align-items:center;justify-content:center;}
+  .lic svg{width:100%;height:100%;}
+  .app{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+  /* ---- global header: marca DOCYAN siempre visible + buscador + cuenta ---- */
+  .header{display:flex;align-items:center;gap:16px;height:58px;padding:0 18px 0 20px;border-bottom:1px solid var(--border);background:var(--surface);flex:none;z-index:30;}
+  .hbrand{display:flex;align-items:center;gap:9px;flex:none;}
+  .hbrand .w{font-weight:700;letter-spacing:.04em;font-size:15.5px;}
+  .hbrand .lde{font-family:var(--font-mono);font-size:9px;color:var(--accent-fg);border:1px solid var(--cinnabar-200);border-radius:4px;padding:1px 4px;}
+  .hsep{width:1px;height:26px;background:var(--border);flex:none;}
+  .search{display:flex;align-items:center;gap:9px;background:var(--amate-50);border:1px solid var(--border);border-radius:11px;padding:9px 14px;color:var(--fg-subtle);flex:1;min-width:0;}
+  .search:focus-within{border-color:var(--cinnabar-300);background:var(--surface);}
+  .search .lic{width:16px;height:16px;flex:none;}
+  .search input{border:none;background:transparent;outline:none;font-family:var(--font-sans);font-size:13.5px;color:var(--fg);width:100%;}
+  .haccount{display:flex;align-items:center;gap:9px;flex:none;}
+  .av-user{width:34px;height:34px;border-radius:9px;background:var(--cinnabar-500);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none;border:none;cursor:pointer;}
+  .av-user:hover{background:var(--cinnabar-600);}
+  .av-user.on{box-shadow:0 0 0 3px var(--cinnabar-100);}
+  .logout{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--fg-muted);background:transparent;border:1px solid var(--border);border-radius:9px;padding:8px 11px;cursor:pointer;}
+  .logout:hover{border-color:var(--cinnabar-300);color:var(--accent-fg);background:var(--cinnabar-50);}
+  .logout .lic{width:15px;height:15px;}
+  /* ---- body: rail (desde el borde inferior del header) + main ---- */
+  .body{display:flex;flex:1;min-height:0;}
+  .rail{width:66px;flex:none;position:relative;z-index:20;}
+  .rail-in{position:absolute;inset:0 auto 0 0;width:66px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 13px;overflow:hidden;transition:width .18s var(--ease-out);}
+  .rail:hover .rail-in{width:216px;box-shadow:10px 0 34px -14px rgba(33,28,22,.28);}
+  .nav{display:flex;flex-direction:column;gap:3px;}
+  .nav a{display:flex;align-items:center;gap:13px;padding:10px;border-radius:10px;color:var(--fg-muted);cursor:pointer;font-weight:500;font-size:13.5px;white-space:nowrap;}
+  .nav a .lic{width:19px;height:19px;flex:none;color:var(--fg-subtle);}
+  .nav a .label{opacity:0;transition:opacity .14s;}
+  .rail:hover .nav a .label{opacity:1;}
+  .nav a:hover{background:var(--amate-50);}
+  .nav a.on{background:var(--cinnabar-50);color:var(--accent-fg);}
+  .nav a.on .lic{color:var(--cinnabar-500);}
+  /* rail bottom: cerrar sesión + etiqueta de la org (hover icono+label) */
+  .rail-foot{margin-top:auto;display:flex;flex-direction:column;gap:3px;padding-top:10px;border-top:1px solid var(--border);}
+  .rail-logout{display:flex;align-items:center;gap:13px;padding:10px;border-radius:10px;color:var(--fg-muted);cursor:pointer;font-weight:500;font-size:13.5px;white-space:nowrap;background:transparent;border:none;text-align:left;}
+  .rail-logout .lic{width:19px;height:19px;flex:none;color:var(--fg-subtle);}
+  .rail-logout:hover{background:var(--amate-50);color:var(--accent-fg);}
+  .rail-logout:hover .lic{color:var(--cinnabar-500);}
+  .rail-logout .label{opacity:0;transition:opacity .14s;}
+  .rail:hover .rail-logout .label{opacity:1;}
+  .rail-org{display:flex;align-items:center;gap:11px;padding:8px;border-radius:10px;}
+  .rail-org .av{width:30px;height:30px;border-radius:9px;background:var(--ink-900);color:var(--amate-50);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:none;}
+  .rail-org .ot{white-space:nowrap;opacity:0;transition:opacity .14s;min-width:0;}
+  .rail:hover .rail-org .ot{opacity:1;}
+  .rail-org .otn{font-size:12.5px;font-weight:600;line-height:1.2;}
+  .rail-org .otm{font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;}
+  .content{flex:1;min-height:0;overflow:auto;padding:20px 26px 28px;}
+  .content.consult{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0;}
+  /* context bar (qué consultas) */
+  .ctxbar{flex:none;margin-bottom:16px;}
+  .ctxbar .eyebrow{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);display:flex;align-items:center;gap:6px;}
+  .ctxbar .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--cinnabar-500);}
+  .ctxbar h1{font-size:19px;font-weight:700;letter-spacing:-.01em;margin:3px 0 0;}
+  /* ---- doc tabs (de la vista C), a todo el ancho ---- */
+  .doctabs{display:flex;gap:8px;flex-wrap:wrap;flex:none;padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--border);}
+  .doctab{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11.5px;color:var(--fg-muted);background:var(--amate-50);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer;transition:all .12s var(--ease-out);}
+  .doctab .lic{width:14px;height:14px;color:var(--fg-subtle);}
+  .doctab .lt{font-size:8.5px;letter-spacing:.1em;color:var(--fg-subtle);border:1px solid var(--border);border-radius:3px;padding:1px 4px;}
+  .doctab:hover{border-color:var(--border-strong);}
+  .doctab.on{border-color:var(--cinnabar-300);background:var(--surface);color:var(--fg);box-shadow:var(--shadow-xs);}
+  .doctab.on .lic{color:var(--cinnabar-500);}
+  /* ---- two columns ---- */
+  .cwrap{display:flex;gap:22px;align-items:stretch;flex:1;min-height:0;}
+  .col-left{width:340px;flex:none;display:flex;flex-direction:column;gap:14px;overflow:auto;padding-right:2px;padding-bottom:24px;}
+  .col-right{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;}
+  .threadbar{flex:none;display:flex;align-items:center;gap:9px;padding:0 0 12px;}
+  .threadbar .tb-l{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-subtle);min-width:0;}
+  .threadbar .tb-l .lic{width:14px;height:14px;color:var(--cinnabar-500);flex:none;}
+  .clearbtn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--fg-muted);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 12px;cursor:pointer;flex:none;}
+  .clearbtn:hover{border-color:var(--cinnabar-300);color:var(--accent-fg);background:var(--cinnabar-50);}
+  .clearbtn .lic{width:14px;height:14px;}
+  .doc-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:15px;}
+  .doc-card .dh{display:flex;align-items:center;gap:11px;}
+  .doc-card .di{width:38px;height:38px;border-radius:10px;background:var(--cinnabar-50);color:var(--cinnabar-500);display:flex;align-items:center;justify-content:center;flex:none;}
+  .doc-card .dn{font-size:14.5px;font-weight:700;line-height:1.2;}
+  .doc-card .dm{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-muted);margin-top:3px;}
+  .doc-card .badge-vivo{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--success-600);background:var(--success-100);border-radius:20px;padding:2px 7px;margin-top:8px;}
+  .doc-card .badge-vivo .bd{width:5px;height:5px;border-radius:50%;background:var(--success-600);}
+  .cb-group{display:flex;flex-direction:column;gap:8px;}
+  .cb-lab{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle);margin:6px 2px 2px;}
+  .cb-lab .lic{width:13px;height:13px;color:var(--cinnabar-500);}
+  .sug{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer;text-align:left;transition:all .12s var(--ease-out);}
+  .sug:hover{border-color:var(--cinnabar-300);background:var(--cinnabar-50);}
+  .sug .lic{width:15px;height:15px;color:var(--cinnabar-500);flex:none;}
+  .sug .tx{flex:1;min-width:0;}
+  .sug .ar{color:var(--fg-subtle);}
+  .sug.saved .lic{color:var(--accent-fg);}
+  .sug .del{width:22px;height:22px;border-radius:6px;border:none;background:transparent;color:var(--fg-subtle);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+  .sug .del:hover{background:var(--amate-100);color:var(--danger-600);}
+  .sug .del .lic{width:13px;height:13px;color:inherit;}
+  .add-q{display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:600;color:var(--accent-fg);background:transparent;border:1.5px dashed var(--cinnabar-200);border-radius:10px;padding:10px 12px;cursor:pointer;}
+  .add-q .lic{width:15px;height:15px;}
+  .add-row{display:flex;gap:7px;}
+  .add-row input{flex:1;min-width:0;border:1.5px solid var(--cinnabar-300);border-radius:10px;padding:9px 12px;font-family:var(--font-sans);font-size:13px;outline:none;box-shadow:0 0 0 3px var(--cinnabar-50);}
+  .add-row .ok{border:none;background:var(--cinnabar-500);color:#fff;border-radius:9px;padding:0 13px;cursor:pointer;display:flex;align-items:center;}
+  .add-row .ok .lic{width:16px;height:16px;}
+  /* ---- right column: thread ---- */
+  .thread{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:14px;padding-right:4px;}
+  .empty{margin:auto;text-align:center;color:var(--fg-subtle);max-width:34ch;padding:40px 0;}
+  .empty .lic{width:26px;height:26px;color:var(--cinnabar-400);}
+  .empty p{font-size:13.5px;line-height:1.5;margin:10px 0 0;}
+  .bubble{align-self:flex-end;background:var(--ink-900);color:var(--amate-50);font-size:13.5px;padding:9px 13px;border-radius:14px 14px 4px 14px;max-width:74%;}
+  .answer{display:flex;flex-direction:column;gap:8px;}
+  .mode{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--success-600);}
+  .mode .pulse{width:7px;height:7px;border-radius:50%;background:var(--success-600);}
+  .mode.synth{color:var(--warning-600);}.mode.synth .pulse{background:var(--warning-600);}
+  .acard{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-sm);padding:16px;}
+  .acard .q{font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-subtle);}
+  .acard .big{font-weight:700;font-size:34px;letter-spacing:-.02em;line-height:1;margin-top:6px;}
+  .acard .big .u{font-size:16px;font-weight:500;color:var(--fg-muted);margin-left:3px;}
+  .acard .note{font-size:13.5px;color:var(--fg-muted);line-height:1.5;margin:8px 0 0;}
+  .citerow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px;}
+  .cite2{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);padding:5px 10px 5px 8px;border-radius:8px;cursor:pointer;}
+  .cite2 .brk{position:relative;width:12px;height:12px;flex:none;}
+  .cite2 .brk::before,.cite2 .brk::after{content:"";position:absolute;top:0;bottom:0;width:4px;border:1.5px solid var(--cinnabar-500);}
+  .cite2 .brk::before{left:0;border-right:none;border-radius:2px 0 0 2px;}
+  .cite2 .brk::after{right:0;border-left:none;border-radius:0 2px 2px 0;}
+  .openpdf{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--fg-muted);background:transparent;border:1px dashed var(--border-strong);padding:5px 11px;border-radius:8px;cursor:pointer;}
+  .openpdf .lic{width:13px;height:13px;}
+  .savebtn{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:var(--fg-muted);background:transparent;border:1px solid var(--border);border-radius:9px;padding:6px 11px;cursor:pointer;}
+  .savebtn .lic{width:14px;height:14px;}
+  .savebtn.on{color:var(--success-600);border-color:var(--success-100);background:var(--success-100);}
+  .src{position:relative;margin-top:12px;}
+  .src .thr{position:absolute;left:18px;top:-10px;width:2px;height:12px;background:var(--cinnabar-300);}
+  .src2{background:var(--amate-50);border:1px solid var(--border);border-radius:10px;padding:11px 13px;}
+  .src2 .s-head{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:7px;}
+  .src2 .s-head .lic{width:12px;height:12px;}
+  .src2 .s-head .pg{margin-left:auto;}
+  .src2 .s-span{font-family:var(--font-serif);font-size:13px;line-height:1.55;color:var(--ink-800);}
+  .src2 .s-span mark{background:var(--cinnabar-100);color:var(--ink-900);padding:1px 3px;border-radius:3px;}
+  .src2 .s-orig{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-subtle);margin-top:8px;}
+  .src2 .s-orig .lic{width:11px;height:11px;}
+  .src2 .s-actions{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);}
+  .src2 .s-ped{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-subtle);}
+  .src2 .s-ped .lic{width:12px;height:12px;color:var(--success-600);}
+  .src2 .s-actions .openpdf{margin-left:auto;}
+  .qbar{flex:none;display:flex;align-items:center;gap:9px;background:var(--surface);border:2px solid var(--cinnabar-300);border-radius:30px;padding:5px 5px 5px 17px;margin:14px 0 18px;box-shadow:0 0 0 3px var(--cinnabar-50);}
+  .qbar input{flex:1;border:none;outline:none;background:transparent;font-size:13.5px;color:var(--fg);}
+  .qbar .send{width:38px;height:38px;border-radius:50%;border:none;background:var(--cinnabar-500);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;}
+  .qbar .send .lic{width:16px;height:16px;}
+  /* ---- documentos (stub coherente) ---- */
+  .ph-head h2{font-size:20px;font-weight:700;margin:0;}
+  .ph-head p{margin:5px 0 0;color:var(--fg-muted);font-size:13.5px;}
+  .usage{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 16px;margin:16px 0;}
+  .usage .ut{font-size:13px;font-weight:600;}.usage .um{font-size:11.5px;color:var(--fg-muted);margin-top:2px;}
+  .usage .track{flex:1;height:7px;border-radius:5px;background:var(--amate-100);overflow:hidden;}
+  .usage .track i{display:block;height:100%;background:var(--cinnabar-500);}
+  .usage .num{font-family:var(--font-mono);font-size:13px;color:var(--fg-muted);}.usage .num b{color:var(--fg);}
+  .drow{display:flex;align-items:center;gap:13px;padding:13px 15px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--surface);cursor:pointer;transition:background .12s var(--ease-out),border-color .12s var(--ease-out);}
+  .drow:hover{background:var(--cinnabar-50);border-color:var(--cinnabar-200);}
+  .drow .di{width:38px;height:38px;border-radius:10px;background:var(--amate-50);display:flex;align-items:center;justify-content:center;color:var(--fg-muted);flex:none;}
+  .drow .dn{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .drow .dm{font-family:var(--font-mono);font-size:11px;color:var(--fg-muted);margin-top:4px;}
+  .drow .hint-go{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--fg-subtle);display:flex;align-items:center;gap:6px;}
+  .drow:hover .hint-go{color:var(--accent-fg);}
+  .drow .hint-go .lic{width:15px;height:15px;}
+  /* cuenta */
+  .acct{max-width:680px;}
+  .acct h2{font-size:20px;font-weight:700;margin:0 0 4px;}
+  .acct .lead{color:var(--fg-muted);font-size:13.5px;margin:0 0 18px;}
+  .acct-sec{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:18px;margin-bottom:14px;}
+  .acct-sec h3{margin:0 0 12px;font-size:11px;font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle);}
+  .acct-prof{display:flex;align-items:center;gap:15px;}
+  .acct-prof .pav{width:54px;height:54px;border-radius:14px;background:var(--ink-900);color:var(--amate-50);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600;flex:none;}
+  .acct-prof .pn{font-size:17px;font-weight:700;}
+  .acct-prof .pe{font-size:13px;color:var(--fg-muted);margin-top:2px;}
+  .acct-prof .pr{font-family:var(--font-mono);font-size:10.5px;color:var(--accent-fg);margin-top:4px;}
+  .acct-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);}
+  .acct-row:last-child{border-bottom:none;}
+  .acct-row .l{font-size:13px;color:var(--fg-muted);width:200px;flex:none;}
+  .acct-row .v{font-size:13.5px;font-weight:500;flex:1;}
+  .btn-sec{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 14px;cursor:pointer;}
+  .btn-sec:hover{border-color:var(--border-strong);background:var(--amate-50);}
+  .btn-sec .lic{width:15px;height:15px;}
+  .btn-logout-lg{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--danger-600);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 15px;cursor:pointer;}
+  .btn-logout-lg:hover{border-color:var(--danger-600);}
+  .btn-logout-lg .lic{width:15px;height:15px;}
+  .stub{color:var(--fg-muted);font-size:14px;padding:40px 0;text-align:center;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const LS = "docyan_shellA_";
+function Icon({ name, size = 18, color }) {
+  const ref = useRef(null);
+  useEffect(() => { const el = ref.current; if (!el || !window.lucide) return; el.innerHTML = "";
+    const i = document.createElement("i"); i.setAttribute("data-lucide", name); el.appendChild(i);
+    try { window.lucide.createIcons(); } catch (e) {} }, [name]);
+  return <span className="lic" ref={ref} style={{ width: size, height: size, color }} />;
+}
+function Mark({size=24}){
+  return <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="DOCYAN" style={{flex:"none"}}>
+    <g stroke="var(--ink-900)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M13 23 V13 H23"/><path d="M41 13 H51 V23"/><path d="M51 41 V51 H41"/><path d="M23 51 H13 V41"/>
+    </g>
+    <rect x="25.5" y="25.5" width="13" height="13" rx="3" fill="#CF4124"/>
+  </svg>;
+}
+const NAV = [["files","Documentos","documentos"],["scan-line","Consultar","consultar"],["users","Usuarios","usuarios"],["gem","Plan","plan"]];
+
+/* respuestas canónicas (con fragmento inline = patrón del hero) */
+const A = {
+  torque:{ q:"Torque del perno B — cabezal", value:"85", unit:"N·m", mode:"cache",
+    note:"Aplicado en cruz, en tres etapas progresivas (40 → 65 → 85 N·m).",
+    cite:"Manual VF-2 · §4.2.1", page:12, spanLang:"EN",
+    span:"Head assembly — bolt B torque: 85 N·m, applied crosswise in three progressive stages (40 → 65 → 85 N·m).", mark:"bolt B torque: 85 N·m" },
+  filtro:{ q:"Cambio del filtro de refrigerante", text:"Detén la máquina y aplica LOTO; cierra la válvula y deja drenar 2 min antes de retirar la tapa.", mode:"synth",
+    cite:"Manual VF-2 · §7.3", page:28, spanLang:"EN",
+    span:"Stop the machine and apply lock-out/tag-out; the housing remains pressurized until fully drained.", mark:"the housing remains pressurized" },
+  vibra:{ q:"Vibración al arrancar", text:"Causa probable: desbalance del rotor. Revisa el asiento de los tubos y verifica que las masas estén pareadas.", mode:"synth",
+    cite:"Guía de fallas · §3.5", page:7, spanLang:"ES",
+    span:"Vibración al arranque — verificar primero el balance del rotor; si persiste con carga, inspeccionar la holgura del acople motor-eje.", mark:"holgura del acople motor-eje" },
+  velocidad:{ q:"Velocidad máxima", value:"4,000", unit:"rpm", mode:"cache",
+    note:"Velocidad máxima del rotor de ángulo fijo. No exceder con carga desbalanceada.",
+    cite:"Hettich · cap. 2", page:9, spanLang:"ES", span:"Velocidad máxima de operación: 4,000 rpm con el rotor de ángulo fijo.", mark:"4,000 rpm" },
+  rotor:{ q:"Capacidad del rotor", value:"6 × 50", unit:"ml", mode:"cache",
+    note:"Rotor de ángulo fijo. Cargar siempre en pares para mantener el balance.",
+    cite:"Hettich · cap. 2", page:11, spanLang:"ES", span:"Rotor de ángulo fijo: 6 × 50 ml. Cargar en pares opuestos.", mark:"6 × 50 ml" },
+  exposicion:{ q:"Límite de exposición OSHA", value:"1,000", unit:"ppm", mode:"cache",
+    note:"PEL (TWA 8 h) según OSHA. El TLV de ACGIH es más estricto: 250 ppm.",
+    cite:"MSDS · Sec. 8", page:5, spanLang:"EN", span:"Exposure controls — OSHA PEL (TWA 8 hr): 1000 ppm. ACGIH TLV (TWA): 250 ppm.", mark:"OSHA PEL (TWA 8 hr): 1000 ppm" },
+  epp:{ q:"EPP requerido", text:"Gafas de seguridad con protección lateral y guantes de nitrilo. Manejar en área ventilada.", mode:"synth",
+    cite:"MSDS · Sec. 8", page:5, spanLang:"EN", span:"Safety glasses with side shields; nitrile gloves. Use only with adequate ventilation.", mark:"safety glasses with side shields; nitrile gloves" },
+};
+const DOCS = [
+  { key:"vf2", name:"Manual CNC Haas VF-2", lang:"EN", meta:"manual · 64 págs", sugs:[["gauge","¿Torque del perno B?","torque"],["wrench","¿Cómo cambio el filtro?","filtro"],["activity","Vibra al arrancar","vibra"]] },
+  { key:"hettich", name:"Hettich Rotina 380 — manual", lang:"ES", meta:"manual · 32 págs", sugs:[["gauge","¿Velocidad máxima?","velocidad"],["disc-3","¿Capacidad del rotor?","rotor"]] },
+  { key:"msds", name:"MSDS refrigerante sintético", lang:"EN", meta:"ficha de seguridad · 6 págs", sugs:[["shield","¿Límite de exposición OSHA?","exposicion"],["hand","¿EPP requerido?","epp"]] },
+];
+
+function AnswerCard({ a, saved, onSave }) {
+  const [open, setOpen] = useState(false);
+  useEffect(()=>{ const id=setTimeout(()=>setOpen(true),340); return ()=>clearTimeout(id); },[]);
+  const parts = a.mark && a.span && a.span.includes(a.mark) ? a.span.split(a.mark) : null;
+  return <div className="answer">
+    <div className={"mode"+(a.mode==="synth"?" synth":"")}><span className="pulse"/>{a.mode==="synth"?"Respuesta sintetizada":"Respuesta instantánea · caché"}</div>
+    <div className="acard"><div className="q">{a.q}</div>
+      {a.value ? <><div className="big">{a.value}<span className="u">{a.unit}</span></div><p className="note">{a.note}</p></>
+        : <p className="note" style={{fontSize:14,color:"var(--fg)"}}>{a.text}</p>}
+      <div className="citerow"><button className="cite2" onClick={()=>setOpen(o=>!o)}><span className="brk"/>{a.cite} · pág. {a.page} ↗</button>
+        <button className="openpdf"><Icon name="external-link" size={13}/>Abrir PDF</button>
+        <button className={"savebtn"+(saved?" on":"")} onClick={onSave}><Icon name={saved?"check":"bookmark"} size={14}/>{saved?"Guardada":"Guardar"}</button></div>
+      {open && a.span && <div className="src"><span className="thr"/><div className="src2">
+        <div className="s-head"><Icon name="file-text" size={12}/><span>Fragmento original</span><span className="pg">pág. {a.page}</span></div>
+        <div className="s-span">{parts?<>{parts[0]}<mark>{a.mark}</mark>{parts[1]}</>:a.span}</div>
+        {a.spanLang!=="ES" && <span className="s-orig"><Icon name="globe" size={11}/>Documento original en inglés · tú preguntaste en español</span>}
+        <div className="s-actions"><span className="s-ped"><Icon name="shield-check" size={12}/>Pedigree a span · SHA-256</span><button className="openpdf"><Icon name="external-link" size={13}/>Abrir PDF</button></div>
+      </div></div>}
+    </div>
+  </div>;
+}
+
+function Consultar(){
+  const [doc,setDoc]=useState(0);
+  const [thread,setThread]=useState([]);
+  const [userQ,setUserQ]=useState(()=>{ try{return JSON.parse(localStorage.getItem(LS+"userq"))||{};}catch(e){return {};} });
+  const [adding,setAdding]=useState(false);
+  const [addVal,setAddVal]=useState("");
+  const [text,setText]=useState("");
+  const [savedKeys,setSavedKeys]=useState([]);
+  const threadRef=useRef(null);
+  const d=DOCS[doc];
+  useEffect(()=>{ localStorage.setItem(LS+"userq",JSON.stringify(userQ)); },[userQ]);
+  useEffect(()=>{ const el=threadRef.current; if(el) el.scrollTop=el.scrollHeight; },[thread]);
+  const ans=(label,key)=>{ const a=A[key]|| {q:label,text:"En el producto real, DOCYAN clasifica la intención y responde con cita a la fuente.",mode:"synth",cite:d.name+" · §",page:"—",span:null,spanLang:"ES"}; setThread(t=>[...t,{role:"u",text:label},{role:"a",a,id:Date.now()+Math.random()}]); };
+  const addUser=()=>{ const v=addVal.trim(); if(!v)return; setUserQ(u=>({...u,[d.key]:[...(u[d.key]||[]),v]})); setAddVal(""); setAdding(false); ans(v,null); };
+  const saveFromCard=(m)=>{ if(savedKeys.includes(m.id))return; setSavedKeys(s=>[...s,m.id]); setUserQ(u=>({...u,[d.key]:[...(u[d.key]||[]), m.a.q]})); };
+  const delUser=(i)=> setUserQ(u=>({...u,[d.key]:(u[d.key]||[]).filter((_,k)=>k!==i)}));
+  const mine=userQ[d.key]||[];
+  return <>
+    <div className="ctxbar"><div className="eyebrow"><span className="dot"/>Consultando · CODO-LAB-04</div><h1>Centrífuga Hettich Rotina 380</h1></div>
+    {/* selector de documentos (estilo C), a todo el ancho, entre header y columnas */}
+    <div className="doctabs">{DOCS.map((x,i)=>
+      <button key={x.key} className={"doctab"+(i===doc?" on":"")} onClick={()=>setDoc(i)}><Icon name="file-text" size={14}/>{x.name}<span className="lt">{x.lang}</span></button>)}
+    </div>
+    <div className="cwrap">
+      <div className="col-left">
+        <div className="doc-card"><div className="dh"><span className="di"><Icon name="file-text" size={19}/></span>
+          <div style={{minWidth:0}}><div className="dn">{d.name}</div><div className="dm">{d.meta} · idioma {d.lang}</div></div></div>
+          <span className="badge-vivo"><span className="bd"/>documento vivo</span></div>
+        <div className="cb-group"><div className="cb-lab"><Icon name="sparkles" size={13}/>Sugeridas por DOCYAN</div>
+          {d.sugs.map((s,i)=><button className="sug" key={i} onClick={()=>ans(s[1],s[2])}><Icon name={s[0]} size={15}/><span className="tx">{s[1]}</span><span className="ar">→</span></button>)}
+        </div>
+        <div className="cb-group"><div className="cb-lab"><Icon name="bookmark" size={13}/>Tus consultas</div>
+          {mine.map((q,i)=><button className="sug saved" key={i} onClick={()=>ans(q,null)}><Icon name="bookmark" size={15}/><span className="tx">{q}</span><span className="del" onClick={(e)=>{e.stopPropagation();delUser(i);}}><Icon name="x" size={13}/></span></button>)}
+          {adding
+            ? <div className="add-row"><input autoFocus value={addVal} placeholder="Escribe una consulta para guardar…" onChange={e=>setAddVal(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addUser(); if(e.key==="Escape")setAdding(false);}}/><button className="ok" onClick={addUser}><Icon name="check" size={16}/></button></div>
+            : <button className="add-q" onClick={()=>setAdding(true)}><Icon name="plus" size={15}/>Agregar consulta</button>}
+        </div>
+      </div>
+      <div className="col-right">
+        <div className="threadbar"><span className="tb-l"><Icon name="messages-square" size={14}/>Conversación · {d.name}</span>{thread.length>0 && <button className="clearbtn" onClick={()=>setThread([])}><Icon name="eraser" size={14}/>Limpiar conversación</button>}</div>
+        <div className="thread" ref={threadRef}>
+          {thread.length===0 && <div className="empty"><Icon name="message-circle-question" size={26}/><p>Toca una consulta sugerida o escribe tu pregunta sobre <b>{d.name}</b>. La respuesta llega con su cita a la fuente.</p></div>}
+          {thread.map((m,i)=> m.role==="u"
+            ? <div className="bubble" key={i}>{m.text}</div>
+            : <AnswerCard key={m.id} a={m.a} saved={savedKeys.includes(m.id)} onSave={()=>saveFromCard(m)} />)}
+        </div>
+        <form className="qbar" onSubmit={e=>{e.preventDefault(); const v=text.trim(); if(v){ans(v,null);setText("");}}}>
+          <input value={text} onChange={e=>setText(e.target.value)} placeholder={"Pregunta sobre "+d.name+"…"}/>
+          <button type="button" className="send" onClick={()=>{const v=text.trim(); if(v){ans(v,null);setText("");}}}><Icon name="arrow-up" size={16}/></button>
+        </form>
+      </div>
+    </div>
+  </>;
+}
+
+function Documentos({go}){
+  return <div className="ph-head"><h2>Documentos vivos</h2><p>Tus documentos consultables. Haz clic en un documento para consultarlo.</p>
+    <div className="usage"><div><div className="ut">Plan gratuito</div><div className="um">Te queda 1 documento · 27 días</div></div><div className="track"><i style={{width:"66%"}}/></div><div className="num"><b>2</b> / 3</div></div>
+    {DOCS.slice(0,2).map((x,i)=><div className="drow" key={i} role="button" tabIndex={0} onClick={()=>go("consultar")} onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")go("consultar");}}><span className="di"><Icon name="file-text" size={19}/></span>
+      <div style={{minWidth:0}}><div className="dn">{x.name}<span style={{fontFamily:"var(--font-mono)",fontSize:9,color:"var(--success-600)"}}>● VIVO</span></div><div className="dm">{x.meta} · idioma {x.lang}</div></div>
+      <span className="hint-go"><Icon name="scan-line" size={15}/>Consultar<Icon name="arrow-right" size={14}/></span></div>)}
+  </div>;
+}
+
+function Cuenta(){
+  return <div className="acct">
+    <h2>Mi cuenta</h2><p className="lead">Tu perfil, tu organización y tu seguridad.</p>
+    <div className="acct-sec"><h3>Perfil</h3>
+      <div className="acct-prof"><div className="pav">JM</div><div><div className="pn">Jorge Medina</div><div className="pe">jorge.medina@lab-estandar.mx</div><div className="pr">ADMIN · PROPIETARIO</div></div></div>
+    </div>
+    <div className="acct-sec"><h3>Organización</h3>
+      <div className="acct-row"><span className="l">Organización</span><span className="v">Laboratorio Estándar SA de CV</span></div>
+      <div className="acct-row"><span className="l">Par lingüístico default</span><span className="v">ES-MX · EN-US</span></div>
+      <div className="acct-row"><span className="l">Plan</span><span className="v">Gratuito · 2 de 3 documentos</span></div>
+    </div>
+    <div className="acct-sec"><h3>Seguridad</h3>
+      <div className="acct-row"><span className="l">Contraseña</span><span className="v">••••••••••</span><button className="btn-sec"><Icon name="key-round" size={15}/>Cambiar</button></div>
+      <div className="acct-row"><span className="l">Sesión</span><span className="v"/><button className="btn-logout-lg"><Icon name="log-out" size={15}/>Cerrar sesión</button></div>
+    </div>
+  </div>;
+}
+
+function App(){
+  const [view,setView]=useState(()=>localStorage.getItem(LS+"view")||"consultar");
+  const go=(v)=>{ setView(v); localStorage.setItem(LS+"view",v); };
+  return <div className="app">
+    <header className="header">
+      <div className="hbrand"><Mark size={24}/><span className="w">DOCYAN</span><span className="lde">LDE</span></div>
+      <div className="hsep"/>
+      <div className="search"><Icon name="search" size={16}/><input placeholder="Busca un documento o pregunta directo…"/></div>
+      <div className="haccount"><button className={"av-user"+(view==="cuenta"?" on":"")} title="Mi cuenta" onClick={()=>go("cuenta")}>JM</button></div>
+    </header>
+    <div className="body">
+      <aside className="rail"><div className="rail-in">
+        <nav className="nav">{NAV.map(n=><a key={n[2]} className={view===n[2]?"on":""} onClick={()=>go(n[2])}><Icon name={n[0]} size={19}/><span className="label">{n[1]}</span></a>)}</nav>
+        <div className="rail-foot">
+          <button className="rail-logout"><Icon name="log-out" size={19}/><span className="label">Cerrar sesión</span></button>
+          <div className="rail-org"><div className="av">LE</div><div className="ot"><div className="otn">Laboratorio Estándar</div><div className="otm">ES-MX · EN-US</div></div></div>
+        </div>
+      </div></aside>
+      <div className="main">
+        <div className={"content"+(view==="consultar"?" consult":"")}>
+          {view==="consultar" && <Consultar/>}
+          {view==="documentos" && <Documentos go={go}/>}
+          {view==="cuenta" && <Cuenta/>}
+          {(view==="usuarios"||view==="plan") && <div className="stub">Vista «{view==="usuarios"?"Usuarios":"Plan"}» — fuera del alcance de esta exploración.</div>}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

@@ -101,6 +101,13 @@ class DocProgress(BaseModel):
     disponibleParaConsulta: bool = False
     # True ⇒ job completado PERO sin :DocumentoSource (no quedó vivo) — estado visible.
     completedSinDocumento: bool = False
+    # Pieza 6 — estados honestos:
+    #   completedSinOntologia ⇒ 0 entidades extraídas (incluso tras retry Flash→Pro).
+    #   noCobrado ⇒ la reserva se LIBERÓ por no rendir contenido consultable (no-cobro).
+    # La UI muestra el estado honesto + Retry: "sin contenido consultable, no se te
+    # cobró, reintenta".
+    completedSinOntologia: bool = False
+    noCobrado: bool = False
 
 
 def _kind_from_name(nombre: str, tipo: str | None) -> str:
@@ -157,6 +164,11 @@ def build_doc_progress(
     # grafo (None), se deriva del estado completado (comportamiento previo).
     vivo = documento_vivo if documento_vivo is not None else (status == "completado")
 
+    resultado = job.resultado or {}
+    sin_ontologia = status == "completado" and bool(resultado.get("completed_sin_ontologia"))
+    # No-cobro: la reserva se liberó por no rendir contenido consultable (dispatcher).
+    no_cobrado = job.reserva_estado == "liberado_sin_contenido"
+
     return DocProgress(
         docId=job.job_id,
         name=job.nombre_archivo,
@@ -173,4 +185,6 @@ def build_doc_progress(
         consultUrl=consult_url if vivo else None,
         disponibleParaConsulta=vivo,
         completedSinDocumento=(status == "completado" and documento_vivo is False),
+        completedSinOntologia=sin_ontologia,
+        noCobrado=no_cobrado,
     )

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
@@ -11,37 +11,53 @@ import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
 import type { components } from "@/types/api";
 
-/** Local example source for the playbook step overlay (saved-playbook view, not
- *  the consult PWA). The live citation threading lands when playbook steps carry
- *  their `Cita` from the backend. */
-const PLAYBOOK_SOURCE: SourceSpan = {
-  title: "Manual del equipo",
-  ref: "§ del paso · fuente",
-  paragraphs: [
-    {
-      text: "Fragmento citado de la fuente del paso. El resaltado al span exacto se habilita cuando el playbook aporta la cita del backend.",
-      highlight: true,
-    },
-  ],
-};
-
 type DispararPlaybook = components["schemas"]["DispararPlaybookResponse"];
 type PasoVista = components["schemas"]["PasoVistaUnificada"];
+type Cita = components["schemas"]["Cita"];
 
 /**
- * /playbook/[id] — Playbook run. Unified view where each step unfolds progressively
- * with its answer + a CitationChip per step. Recreated from playbook.jsx SavedSheet
- * run mode (the slide-up, step-by-step compose). POSTs /mo/playbooks/{id}/run and
- * reveals each step on a stagger; falls back to canned steps when offline.
+ * /playbook/[id] — Runner de Playbook. La página se compone en tiempo real, paso
+ * a paso, y CADA paso conserva su cita a la fuente (regla de integridad de cita:
+ * "citado" = el fragmento verbatim del span; sin span → honesto, sin chip falso).
+ * Portado de playbook.jsx → PlaybookRun (markup .pb-run-* · .pb-step · .pb-num).
+ *
+ * POSTea /mo/playbooks/{id}/run y revela los pasos con un stagger (como el
+ * "componiendo paso a paso" del prototipo).
  */
-const CANNED_RUN: { playbook: { nombre: string }; vista_unificada: PasoVista[] } = {
-  playbook: { nombre: "Arranque de centrífuga" },
-  vista_unificada: [
-    { orden: 1, nombre: "Torque del perno B", nota_paso: "Verifica antes de cada arranque de turno." },
-    { orden: 2, nombre: "Cambio del filtro de refrigerante", nota_paso: null },
-    { orden: 3, nombre: "Vibración al arrancar — diagnóstico", nota_paso: null },
-  ],
-};
+
+/** Primera cita real de un paso, si existe (ProcedureCard: `cita`; InfoCard: `citas[]`). */
+function citaDePaso(paso: PasoVista): Cita | null {
+  const payload = paso.resultado?.payload as
+    | { cita?: Cita | null; citas?: Cita[] | null }
+    | undefined;
+  if (!payload) return null;
+  if (payload.cita) return payload.cita;
+  if (payload.citas && payload.citas.length > 0) return payload.citas[0];
+  return null;
+}
+
+/** Etiqueta del chip de cita a partir de la Cita real (sin inventar §). */
+function etiquetaCita(cita: Cita): string {
+  const doc = cita.documento_nombre ?? "Fuente";
+  const sec = cita.seccion ?? (cita.pagina != null ? `pág. ${cita.pagina}` : null);
+  return sec ? `${doc} · ${sec}` : doc;
+}
+
+/**
+ * SourceSpan honesto desde la Cita real. El resaltado verbatim solo se promete
+ * cuando hay `fragmento` (= chunk[span_inicio:span_fin] del texto crudo). Sin
+ * fragmento, se dice explícito que no hay fragmento disponible — nunca se finge.
+ */
+function spanDeCita(cita: Cita): SourceSpan {
+  const tieneFragmento = Boolean(cita.fragmento && cita.fragmento.trim());
+  return {
+    title: cita.documento_nombre ?? "Fuente del paso",
+    ref: cita.seccion ?? (cita.pagina != null ? `pág. ${cita.pagina}` : "fuente"),
+    paragraphs: tieneFragmento
+      ? [{ text: cita.fragmento as string, highlight: true }]
+      : [{ text: "Fragmento no disponible para esta cita." }],
+  };
+}
 
 export default function PlaybookRunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -51,22 +67,25 @@ export default function PlaybookRunPage({ params }: { params: Promise<{ id: stri
 
   const { data } = useQuery({
     queryKey: ["playbook-run", id],
-    queryFn: async () => {
-      try {
-        return await api.post<DispararPlaybook>(`/mo/playbooks/${id}/run`, undefined, { token });
-      } catch {
-        return CANNED_RUN as unknown as DispararPlaybook;
-      }
-    },
+    queryFn: () => api.post<DispararPlaybook>(`/mo/playbooks/${id}/run`, undefined, { token }),
     retry: false,
   });
 
-  const steps: PasoVista[] = data?.vista_unificada ?? CANNED_RUN.vista_unificada;
-  const name = data?.playbook?.nombre ?? CANNED_RUN.playbook.nombre;
+  const steps: PasoVista[] = data?.vista_unificada ?? [];
+  const name = data?.playbook?.nombre ?? "Playbook";
 
-  // Steps unfold with a staggered slide-up (CSS), like the kit's compose-in.
+  // Revelado escalonado: cada paso aparece con un retardo (el "componiendo" del kit).
+  // El runner es per-id (ruta dinámica) → remonta al navegar, así que `shown`
+  // arranca en 0 sin necesidad de un efecto de reset.
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (shown >= steps.length) return;
+    const t = setTimeout(() => setShown((s) => s + 1), shown === 0 ? 240 : 560);
+    return () => clearTimeout(t);
+  }, [shown, steps.length]);
+
   return (
-    <div className="sheet" style={{ position: "fixed", inset: 0, maxWidth: 560, margin: "0 auto" }}>
+    <div className="sheet" style={{ position: "fixed", inset: 0, maxWidth: 720, margin: "0 auto" }}>
       <div className="sheet-head">
         <button className="x" onClick={() => router.push("/saved")} aria-label="Volver">
           <Icon name="arrow-left" size={18} />
@@ -78,40 +97,57 @@ export default function PlaybookRunPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="sheet-body">
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-muted)", margin: "0 0 4px" }}>
-          La página se compone en tiempo real, paso a paso.
-        </p>
+        <div className="playbook-run-view">
+          <p className="pb-run-sub">
+            Se compone en tiempo real, paso a paso. Cada paso conserva su cita a la fuente.
+          </p>
 
-        {steps.map((paso, i) => {
-          const stepName = paso.nombre ?? paso.tipo_intencion ?? `Paso ${paso.orden}`;
-          const note =
-            paso.nota_paso ??
-            (paso.resultado?.nota ?? "Respuesta consolidada con su cita a fuente.");
-          return (
-            <div className="acard" key={paso.consulta_guardada_id ?? i} style={{ animation: `slideup ${260 + i * 120}ms var(--ease-out)` }}>
-              <div className="q">
-                <span className="num" style={{ display: "inline-flex", verticalAlign: "middle", marginRight: 8 }}>
-                  {paso.orden ?? i + 1}
-                </span>
-                {stepName}
-              </div>
-              <p style={{ marginTop: 8, color: "var(--fg)" }}>{note}</p>
-              {paso.error ? (
-                <div className="warn">
-                  <Icon name="triangle-alert" size={16} />
-                  <div className="wt">
-                    <span className="wlab">No se pudo resolver este paso</span>
-                    {paso.error}
-                  </div>
+          {steps.slice(0, shown).map((paso, i) => {
+            const stepName = paso.nombre ?? paso.tipo_intencion ?? `Paso ${paso.orden}`;
+            const nota = paso.nota_paso ?? paso.resultado?.nota ?? "Respuesta consolidada con su cita a la fuente.";
+            const cita = citaDePaso(paso);
+            return (
+              <div className="pb-step" key={paso.consulta_guardada_id ?? i}>
+                <div className="pb-step-h">
+                  <span className="pb-num">{paso.orden ?? i + 1}</span>
+                  <span className="pb-q">{stepName}</span>
                 </div>
-              ) : null}
-              <div className="acard-foot">
-                <CitationChip label={`Manual VF-2 · §${(paso.orden ?? i + 1) + 1}.1`} onOpen={() => setSource(PLAYBOOK_SOURCE)} />
+                <div className="pb-step-body">
+                  <p style={{ fontSize: 13.5, color: "var(--fg)", lineHeight: 1.5, margin: "0 0 4px" }}>{nota}</p>
+                  {paso.error ? (
+                    <div className="warn">
+                      <Icon name="triangle-alert" size={16} />
+                      <div className="wt">
+                        <span className="wlab">No se pudo resolver este paso</span>
+                        {paso.error}
+                      </div>
+                    </div>
+                  ) : null}
+                  {cita ? (
+                    <CitationChip label={etiquetaCita(cita)} onOpen={() => setSource(spanDeCita(cita))} />
+                  ) : (
+                    <span className="cite-empty">Fragmento no disponible para este paso.</span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
+          {shown < steps.length ? (
+            <div className="pb-composing">
+              <Icon name="loader" size={15} />
+              Componiendo paso {shown + 1} de {steps.length}…
+            </div>
+          ) : null}
+
+          {shown >= steps.length && steps.length > 0 ? (
+            <div className="pb-done">
+              <Icon name="check-circle" size={16} />
+              Playbook completo · {steps.length}{" "}
+              {steps.length === 1 ? "consulta encadenada con su cita" : "consultas encadenadas con su cita"}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <ConsultaSpanOverlay open={source !== null} onOpenChange={(o) => !o && setSource(null)} source={source} />

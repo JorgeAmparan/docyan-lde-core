@@ -69,20 +69,20 @@ export default function RedeemCodePage() {
   };
 
   return (
-    <div className="onb-kit">
+    <div className="entry-view">
     <div className="auth-stage">
       <div className="auth-split">
         <ValueAside
           tag={t({ es: "Acceso piloto", en: "Pilot access" })}
           title={t({ es: "Entras con tu plan ya activo.", en: "You get in with your plan already active." })}
           sub={t({
-            es: "A diferencia del registro gratuito, un código de acceso piloto activa de inmediato tu plan con el precio especial del programa. Listo para ingerir y consultar.",
-            en: "Unlike the free signup, a pilot access code activates your plan right away at the program's special price. Ready to ingest and query.",
+            es: "A diferencia del registro gratuito, un código de acceso piloto activa de inmediato el plan Esencial con tu precio especial. Listo para ingerir y consultar.",
+            en: "Unlike the free signup, a pilot access code activates the Esencial plan right away at your special price. Ready to ingest and query.",
           })}
           points={[
             [
               "badge-check",
-              t({ es: "Plan piloto activo al entrar", en: "Pilot plan active on entry" }),
+              t({ es: "Plan Esencial-piloto activo al entrar", en: "Esencial-pilot plan active on entry" }),
               t({ es: "Sin periodo de prueba ni límite de 3 documentos.", en: "No trial period and no 3-document limit." }),
             ],
             [
@@ -119,7 +119,40 @@ export default function RedeemCodePage() {
               </p>
             </div>
 
-            <div className="field">
+            {/* Plan piloto = Esencial −30% (modelo comercial, decisión #13 / bands.ts).
+                Sin prepago: el código activa el plan Esencial al precio piloto por 60 días. */}
+            <div className="pilot-card">
+              <div className="pc-top">
+                <Icon name="badge-check" size={18} />
+                <span className="pc-t">{t({ es: "Plan Esencial-piloto", en: "Esencial-pilot plan" })}</span>
+                <span className="pc-tag">{t({ es: "−30%", en: "−30%" })}</span>
+              </div>
+              <div className="pc-body">
+                <div className="pc-row">
+                  <span className="pc-list">$250 USD/{t({ es: "mes", en: "mo" })}</span>
+                  <span className="pc-now">
+                    $175<span className="pc-per"> USD/{t({ es: "mes", en: "mo" })}</span>
+                  </span>
+                  <span className="pc-save">{t({ es: "−30% piloto", en: "−30% pilot" })}</span>
+                </div>
+                <ul className="pc-feat">
+                  <li>
+                    <Icon name="check" size={15} />
+                    {t({ es: "Plan Esencial activo al canjear", en: "Esencial plan active on redeem" })}
+                  </li>
+                  <li>
+                    <Icon name="check" size={15} />
+                    {t({ es: "Precio piloto bloqueado durante 60 días", en: "Pilot price locked for 60 days" })}
+                  </li>
+                  <li>
+                    <Icon name="check" size={15} />
+                    {t({ es: "Colaboradores con QR ilimitados", en: "Unlimited QR collaborators" })}
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="field" style={{ marginTop: 16 }}>
               <label>{t({ es: "Código de acceso", en: "Access code" })}</label>
               <input
                 type="text"

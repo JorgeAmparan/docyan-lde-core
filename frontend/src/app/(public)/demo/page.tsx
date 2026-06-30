@@ -1,71 +1,173 @@
 "use client";
 
-/* DOCYAN sitio público v2 — HUB DE DEMOS SIN REGISTRO (CoDos).
-   Lista los 5 Conjuntos de Documentos por vertical como tarjetas que enlazan
-   al flujo de consulta en /demo/[vertical] (lab/maq/pharma/min/agri).
-   NO reimplementa el reproductor del CoDo — ese vive en /demo/[vertical].
-   Escalón intermedio del embudo: el CTA primario sigue siendo el freemium.
-   Derivado de `commercial-v2/codos.jsx` + `codo-data.jsx`. */
+/* DOCYAN — Demo pública sin registro · superficie del prototipo (`app/demo-showcase.jsx`).
+   Porta `DemoShowcase` PIXEL-PERFECT: `.demo-show` → `.ds-head` → `.ds-stage` con los
+   marcos de dispositivo (`.ds-bezel.phone` / `.ds-bezel.tablet`, toggle) → `.ds-banner`
+   con sus dos CTAs. DENTRO del marco va la consulta REAL (`ConsultView`), enrutada al
+   backend demo real vía `demoQuery` — cero respuestas enlatadas (HARD CONSTRAINT #2).
 
-import Link from "next/link";
+   Demo = mezcladora MAXI-10ND (3 PDFs reales). El tenant demo `maxi` (graph `demo-maxi`)
+   se siembra con `scripts/seed_demo_tenants.py --manifest docs/demo/manifest_maxi.json`
+   en el backend DOCYAN (Supabase + worker de ingesta). Hasta que el grafo esté sembrado,
+   `demoQuery` devuelve su fallback honesto (jamás respuestas enlatadas — HARD CONSTRAINT #2).
+   Atribución real: las respuestas citan los 3 documentos de la MAXI-10ND del grafo. */
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
 import { Icon } from "@/components/icon";
 import { useT } from "@/lib/site-i18n";
-import { Doors } from "@/components/commercial/site-chrome";
-import { VERTICALS } from "@/lib/demo-data";
+import {
+  ConsultView,
+  type ConsultContext,
+  type QueryFn,
+} from "@/app/(app)/consult/consult-view";
+import {
+  errorAnswer,
+  mapResueltaToAnswer,
+  type ConsultaResuelta,
+} from "@/app/(app)/consult/consult-data";
+import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
 
-/* Fuente única de los CoDos: `VERTICALS` (demo-data.ts), reconciliado con los
-   tenants demo REALES sembrados en prod. El hub solo lista y enlaza. */
-const CODOS = VERTICALS;
+/* CoDo demo REAL contra el que corre la consulta libre. `codo` = clave de tenant demo
+   sembrado (`maxi`). Los documentos y sugeridas son los reales del grafo `demo-maxi`
+   (3 PDFs de la mezcladora MAXI-10ND). Nada enlatado: el clic/escrito va a `demoQuery`.
+   El tenant `demo-maxi` se siembra con `scripts/seed_demo_tenants.py --manifest
+   docs/demo/manifest_maxi.json` en el backend DOCYAN (Supabase + worker). */
+const DEMO_CODO = "maxi";
 
-export default function DemosPage() {
+const DEMO_DOCS: NonNullable<ConsultContext["documentos"]> = [
+  {
+    id: "demo-maxi-operacion",
+    nombre: "Manual de operación — MAXI-10ND",
+    tipo: "manual_tecnico",
+    sugerencias: [
+      "¿A cuántas RPM debe girar la olla?",
+      "¿Cómo arranco la mezcladora de forma segura?",
+      "¿Qué EPP requiere la operación?",
+    ],
+  },
+  {
+    id: "demo-maxi-ficha",
+    nombre: "Ficha técnica — MAXI-10ND",
+    tipo: "ficha_tecnica",
+    sugerencias: [
+      "¿Cuál es la capacidad de la mezcladora?",
+      "¿Qué motor usa y a qué potencia?",
+    ],
+  },
+  {
+    id: "demo-maxi-partes",
+    nombre: "Lista de partes — MAXI-10ND",
+    tipo: "especificacion",
+    sugerencias: [
+      "¿Qué número de parte tiene el acople motor-eje?",
+      "¿Qué refacciones lleva el sistema de transmisión?",
+    ],
+  },
+];
+
+/* El contexto del CoDo demo (real, sembrado). `codo` legible (no SHA) → la cabecera
+   lo muestra. Documentos reales del grafo `demo-maxi` (mezcladora MAXI-10ND). */
+const DEMO_CONTEXT: ConsultContext = {
+  codo: "MAXI-10ND",
+  entityName: "Mezcladora de concreto MAXI-10ND",
+  entityTitle: "CoDo demo · 3 documentos vivos",
+  entityMeta: "demo-maxi · solo lectura",
+  documentos: DEMO_DOCS,
+};
+
+/* Función de consulta inyectada: TODA consulta (sugerida o libre) va al backend demo
+   REAL (`demoQuery`, sin token, rate-limited por IP). El resultado servido se mapea con
+   el MISMO `mapResueltaToAnswer` de la consulta autenticada → mismos renderers, mismas
+   citas (verbatim, cinnabar, integridad de cita). Sin respuesta sostenida → error
+   honesto con el fallback del backend (jamás se fabrica una respuesta). */
+const demoQueryFn: QueryFn = async (label) => {
+  const res = await demoQuery(label, DEMO_CODO);
+  if (res.servido && res.resultado) {
+    return mapResueltaToAnswer(res.resultado as unknown as ConsultaResuelta, label);
+  }
+  return errorAnswer(label, res.fallback || DEMO_FALLBACK);
+};
+
+type Dev = "phone" | "tablet";
+
+export default function DemoPage() {
   const t = useT();
+  const router = useRouter();
+  const [dev, setDev] = useState<Dev>("phone");
+
   return (
-    <main data-screen-label="Demos sin registro">
-      <header className="page-hero">
-        <div className="wrap">
-          <span className="eyebrow">{t({ es: "Demos sin registro · CoDos", en: "No-signup demos · CoDos" })}</span>
-          <h1>{t({ es: "Pruébalo ahora, con documentos reales de tu sector", en: "Try it now, with real documents from your industry" })}</h1>
-          <p className="sec-lead">{t({
-            es: "Cinco Conjuntos de Documentos (CoDos) ya analizados en vivo. Sin registro, sin tarjeta: elige tu sector y pregunta. Los documentos de muestra están en su idioma original.",
-            en: "Five Document Sets (CoDos) already analyzed live. No signup, no card: pick your industry and ask. Sample documents are in their original language.",
-          })}</p>
-        </div>
-      </header>
-
-      <section className="band" style={{ paddingTop: 20 }} data-screen-label="Demos — Hub de CoDos">
-        <div className="wrap">
-          <div className="sec-grid2">
-            {CODOS.map((c) => (
-              <Link key={c.key} href={`/demo/${c.key}`} className="sec-item2 codo-link">
-                <span className="ic"><Icon name={c.icon} size={20} /></span>
-                <div>
-                  <h3>{t(c.label)}</h3>
-                  <div className="mono" style={{ fontSize: 12, color: "var(--fg-subtle)", margin: "2px 0 6px" }}>{c.codo} · {t(c.entity)}</div>
-                  <p>{t(c.blurb)}</p>
-                  <div className="dc2-docs" style={{ marginTop: 10 }}>
-                    {c.docs.map((d, i) => (
-                      <span key={i} className="dc2-doc on" style={{ cursor: "default" }}><Icon name="file-text" size={13} />{d.name}</span>
-                    ))}
-                  </div>
-                  <span className="codo-cta" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12, fontWeight: 600 }}>
-                    {t({ es: "Probar este CoDo", en: "Try this CoDo" })}<Icon name="arrow-right" size={15} />
-                  </span>
-                </div>
-              </Link>
-            ))}
+    <main data-screen-label="Demo sin registro">
+      <div className="demo-show">
+        <div className="ds-head">
+          <span className="ds-eyebrow">
+            {t({ es: "Demo sin registro", en: "No-signup demo" })}
+          </span>
+          <h1 className="ds-title">
+            {t({ es: "Pruébalo con documentos reales", en: "Try it with real documents" })}
+          </h1>
+          <p className="ds-lead">
+            {t({
+              es: "Mezcladora de concreto MAXI-10ND · 3 documentos vivos. Pregunta lo que preguntarías frente al equipo — la respuesta llega citada a la fuente, en tu idioma.",
+              en: "MAXI-10ND concrete mixer · 3 live documents. Ask what you'd ask at the machine — the answer arrives cited to its source, in your language.",
+            })}
+          </p>
+          <div className="ds-devtoggle" role="tablist" aria-label={t({ es: "Dispositivo", en: "Device" })}>
+            <button
+              className={"ds-dev" + (dev === "phone" ? " on" : "")}
+              role="tab"
+              aria-selected={dev === "phone"}
+              onClick={() => setDev("phone")}
+            >
+              <Icon name="smartphone" size={15} />
+              {t({ es: "Teléfono", en: "Phone" })}
+            </button>
+            <button
+              className={"ds-dev" + (dev === "tablet" ? " on" : "")}
+              role="tab"
+              aria-selected={dev === "tablet"}
+              onClick={() => setDev("tablet")}
+            >
+              <Icon name="tablet" size={15} />
+              {t({ es: "Tablet", en: "Tablet" })}
+            </button>
           </div>
         </div>
-      </section>
 
-      <section className="band paper" data-screen-label="Demos — CTA">
-        <div className="wrap">
-          <div className="cta-band">
-            <span className="eyebrow">{t({ es: "El siguiente escalón", en: "The next step" })}</span>
-            <h2 className="sec-title">{t({ es: "Lo mismo, con tus propios documentos", en: "The same, with your own documents" })}</h2>
+        <div className="ds-stage">
+          <div className={"ds-bezel " + dev}>
+            <div className="ds-screen">
+              {/* La consulta REAL del producto, embebida en el marco. El mismo
+                  ConsultView de /consult, pero con la consulta enrutada al backend
+                  demo (demoQuery) — sin token, sin sesión autenticada. El marco
+                  `phone`/`tablet` cambia el ancho; ConsultView responde (CSS). */}
+              <ConsultView context={DEMO_CONTEXT} queryFn={demoQueryFn} />
+            </div>
           </div>
-          <Doors compact />
         </div>
-      </section>
+
+        <div className="ds-banner">
+          <span className="dsb-dot">
+            <span />
+          </span>
+          <div className="dsb-txt">
+            <b>{t({ es: "Estás en un CoDo demo.", en: "You're in a demo CoDo." })}</b>{" "}
+            {t({
+              es: "Las respuestas vienen de los documentos reales del CoDo. Cuando quieras, hazlo con los tuyos.",
+              en: "Answers come from the CoDo's real documents. When you're ready, do it with yours.",
+            })}
+          </div>
+          <div className="dsb-cta">
+            <button className="dsb-btn primary" onClick={() => router.push("/signup")}>
+              {t({ es: "Ahora con tus documentos", en: "Now with your documents" })}
+            </button>
+            <button className="dsb-btn ghost" onClick={() => router.push("/codigo")}>
+              {t({ es: "Agendar demo", en: "Book a demo" })}
+            </button>
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

@@ -37,6 +37,9 @@ logger = logging.getLogger("docyan.api.demo")
 # Los 5 CoDos del handoff (lab/maq/pharma/min/agri) + el hero (consulta multilingüe).
 # Cada uno es un tenant demo REAL, poblado una vez por el pipeline (script de siembra).
 DEMO_TENANTS: dict[str, str] = {
+    # Demo principal del sitio público (/demo): mezcladora MAXI-10ND, 3 PDFs reales.
+    # Sembrar: scripts/seed_demo_tenants.py --manifest docs/demo/manifest_maxi.json
+    "maxi": os.getenv("DEMO_TENANT_MAXI", "demo-maxi"),
     "hero": os.getenv("DEMO_TENANT_HERO", "demo-hero"),
     "lab": os.getenv("DEMO_TENANT_LAB", "demo-lab"),
     "maq": os.getenv("DEMO_TENANT_MAQ", "demo-maq"),

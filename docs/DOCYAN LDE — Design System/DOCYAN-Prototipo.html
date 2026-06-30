@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOCYAN LDE — Prototipo web unificado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link href="colors_and_type.css" rel="stylesheet">
+<link href="app/app.css" rel="stylesheet">
+<link href="app/views.css" rel="stylesheet">
+<link href="app/mobile.css" rel="stylesheet">
+<link href="app/answer-types.css" rel="stylesheet">
+<link href="app/playbook.css" rel="stylesheet">
+<link href="app/expediente.css" rel="stylesheet">
+<link href="app/ui-kit.css" rel="stylesheet">
+<link href="app/cotizador.css" rel="stylesheet">
+<link href="app/entry.css" rel="stylesheet">
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="app/parts.jsx"></script>
+<script type="text/babel" src="app/i18n.jsx"></script>
+<script type="text/babel" src="app/data.jsx"></script>
+<script type="text/babel" src="app/schemas.jsx"></script>
+<script type="text/babel" src="app/answers.jsx"></script>
+<script type="text/babel" src="app/playbook.jsx"></script>
+<script type="text/babel" src="app/consult.jsx"></script>
+<script type="text/babel" src="app/wizard.jsx"></script>
+<script type="text/babel" src="app/org.jsx"></script>
+<script type="text/babel" src="app/resumen.jsx"></script>
+<script type="text/babel" src="app/org-views.jsx"></script>
+<script type="text/babel" src="app/entry.jsx"></script>
+<script type="text/babel" src="app/demo-showcase.jsx"></script>
+<script type="text/babel" src="app/colab.jsx"></script>
+<script type="text/babel" src="app/colab-mobile.jsx"></script>
+<script type="text/babel" src="app/admin-mobile.jsx"></script>
+<script type="text/babel" src="app/expediente.jsx"></script>
+<script type="text/babel" src="app/source-viewer.jsx"></script>
+<script type="text/babel" src="app/ui-kit.jsx"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const LS = "docyan_proto_";
+const BREAKPOINT = 768;
+
+/* mide el ancho real del marco — el swap obedece al viewport, no a un toggle */
+function useWidth(ref) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const ro = new ResizeObserver(es => { for (const e of es) setW(e.contentRect.width); });
+    ro.observe(el); setW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  return w;
+}
+
+/* ---------- Organización shell (adaptable al plan) ---------- */
+function OrgShell({ plan, setPlan, saved, toggleSave }) {
+  const [view, setView] = useState("codos");      // ruta del menú
+  const [crear, setCrear] = useState(false);       // sub-ruta dentro de CoDos
+  const [account, setAccount] = useState(false);   // Mi cuenta (desde el avatar)
+  const [consultCodo, setConsultCodo] = useState(CODOS[0]);
+  const nav = NAV_ORG[plan];
+  const activeNav = account ? null : (crear ? "codos" : (view === "expediente" ? "codos" : view));
+  const go = (v) => { setCrear(false); setAccount(false); setView(v); };
+  const openCodo = (c) => { setConsultCodo(c); setCrear(false); setAccount(false); setView("expediente"); };
+  const openSearch = () => dcSearch({ placeholder: t({ es: "Busca un documento, un CoDo, o pregunta directo\u2026", en: "Search a document, a CoDo, or ask directly\u2026" }),
+    onDoc: (c) => { setConsultCodo(c); setCrear(false); setAccount(false); setView("consultar"); },
+    onCodo: (c) => openCodo(c),
+    onAsk: () => { setConsultCodo(CODOS[0]); setCrear(false); setAccount(false); setView("consultar"); } });
+  const backToCodos = () => { setCrear(false); setAccount(false); setView("codos"); };
+  const codosLabel = plan === "free" ? "Documentos" : "CoDos";
+
+  let content;
+  if (account) content = <CuentaOrg plan={plan} setPlan={setPlan} />;
+  else if (crear) content = <><div className="wrap"><div className="crumb"><span className="link" onClick={backToCodos}><Icon name="folder-tree" size={15} />{codosLabel}</span><Icon name="chevron-right" size={14} /><b>Crear CoDo</b></div></div><CrearCoDo prefill onExit={backToCodos} /></>;
+  else if (view === "codos") content = <CodosList plan={plan} openCodo={openCodo} onNew={() => setCrear(true)} />;
+  else if (view === "expediente") content = <ExpedienteView codo={consultCodo} onConsult={() => { setCrear(false); setAccount(false); setView("consultar"); }} onBack={backToCodos} />;
+  else if (view === "consultar") content = <div className="wrap" style={{ height: "100%" }}><ConsultView codo={consultCodo} saved={saved} toggleSave={toggleSave} /></div>;
+  else if (view === "resumen") content = <ResumenView go={go} openCodo={openCodo} />;
+  else if (view === "inteligencia") content = <InteligenciaView />;
+  else if (view === "ingesta") content = <IngestaView />;
+  else if (view === "documentos") content = <DocumentosView />;
+  else if (view === "schemas") content = <SchemasView />;
+  else if (view === "glosario") content = <GlosarioView />;
+  else if (view === "qrs") content = <QRsView />;
+  else if (view === "usuarios") content = <UsuariosView />;
+  else if (view === "alertas") content = <AlertasView />;
+  else if (view === "gobernanza") content = <GobernanzaView />;
+  else if (view === "plan") content = <PlanView plan={plan} setPlan={setPlan} />;
+  else content = <Placeholder {...ORG_PLACEHOLDERS[view]} />;
+
+  const isConsult = !account && !crear && (view === "consultar" || view === "expediente");
+  return <div className="app">
+    <header className="header">
+      <div className="hbrand"><Mark size={24} /><span className="w">DOCYAN</span><span className="lde">LDE</span><span className="role-tag">Org</span></div>
+      <div className="hsep" />
+      <div className="search"><Icon name="search" size={16} /><input readOnly onClick={openSearch} placeholder="Busca un documento o pregunta directo…" /></div>
+      <div className="haccount"><button className={"av-user" + (account ? " on" : "")} title="Mi cuenta" onClick={() => { setAccount(true); setCrear(false); }}>JM</button></div>
+    </header>
+    <div className="body">
+      <aside className="rail"><div className="rail-in">
+        <nav className="nav">
+          {nav.map((n, i) => n[0] === "grp"
+            ? <div className="grp" key={i}>{n[1]}</div>
+            : <a key={i} className={activeNav === n[2] ? "on" : ""} onClick={() => go(n[2])}><Icon name={n[0]} size={19} /><span className="label">{n[1]}</span></a>)}
+        </nav>
+        <div className="rail-foot">
+          <button className="rail-logout"><Icon name="log-out" size={19} /><span className="label">Cerrar sesión</span></button>
+          <div className="rail-org"><div className="av">LE</div><div className="ot"><div className="otn">Laboratorio Estándar</div><div className="otm">{plan === "free" ? "ES-MX · gratuito" : "ES-MX · Profesional"}</div></div></div>
+        </div>
+      </div></aside>
+      <div className="main"><div className={"content" + (isConsult ? " consult" : "")}>{content}</div></div>
+    </div>
+  </div>;
+}
+
+/* ---------- Colaborador shell (web, read-only) ---------- */
+const NAV_COLAB_EN = { inicio: "Home", consultar: "Consult", guardadas: "Saved", perfil: "Profile" };
+function ColabShell({ saved, toggleSave }) {
+  const [view, setView] = useState("inicio");
+  const [consult, setConsult] = useState(null);   // {codo, initialKey}
+  const openCodo = (codo, initialKey) => { setConsult({ codo, initialKey, n: Date.now() }); setView("consultar"); };
+  const openSearch = () => dcSearch({ onDoc: (c) => openCodo(c), onCodo: (c) => openCodo(c), onAsk: () => openCodo(CODOS[0]) });
+  const goNav = (v) => { setView(v); if (v === "consultar" && !consult) setConsult({ codo: CODOS[0], n: Date.now() }); if (v !== "consultar") {} };
+
+  const TITLES = { inicio: "Inicio", consultar: "Consultar", guardadas: "Guardadas", perfil: "Perfil" };
+  let content;
+  if (view === "inicio") content = <ColabInicio openCodo={openCodo} saved={saved} goConsult={(c) => openCodo(c)} />;
+  else if (view === "consultar") { const c = (consult && consult.codo) || CODOS[0]; content = <div className="wrap" style={{ height: "100%" }}><ConsultView key={consult ? consult.n : 0} codo={c} initialKey={consult && consult.initialKey} saved={saved} toggleSave={toggleSave} /></div>; }
+  else if (view === "guardadas") content = <ColabGuardadas saved={saved} openCodo={openCodo} />;
+  else content = <ColabPerfil />;
+
+  return <div className="app">
+    <header className="header">
+      <div className="hbrand"><Mark size={24} /><span className="w">DOCYAN</span><span className="lde">LDE</span><span className="role-tag">{t({ es: "Colaborador", en: "Collaborator" })}</span></div>
+      <div className="hsep" />
+      <div className="search"><Icon name="search" size={16} /><input readOnly onClick={openSearch} placeholder={t({ es: "Busca un equipo o pregunta directo\u2026", en: "Search equipment or ask directly\u2026" })} /></div>
+      <div className="haccount"><button className={"av-user" + (view === "perfil" ? " on" : "")} title="Mi perfil" onClick={() => setView("perfil")}>AR</button></div>
+    </header>
+    <div className="body">
+      <aside className="rail"><div className="rail-in">
+        <nav className="nav">
+          {NAV_COLAB.map((n, i) => <a key={i} className={view === n[2] ? "on" : ""} onClick={() => goNav(n[2])}><Icon name={n[0]} size={19} /><span className="label">{t({ es: n[1], en: NAV_COLAB_EN[n[2]] })}</span></a>)}
+        </nav>
+        <div className="rail-foot">
+          <button className="rail-logout"><Icon name="log-out" size={19} /><span className="label">{t({ es: "Cerrar sesi\u00f3n", en: "Sign out" })}</span></button>
+          <div className="rail-org"><div className="av cin">AR</div><div className="ot"><div className="otn">Andrés Ríos</div><div className="otm">{t({ es: "Colaborador · por QR", en: "Collaborator · by QR" })}</div></div></div>
+        </div>
+      </div></aside>
+      <div className="main"><div className={"content" + (view === "consultar" ? " consult" : "")}>{content}</div></div>
+    </div>
+  </div>;
+}
+
+/* ---------- Prototype harness ---------- */
+const DEVICES = [["desktop", "Escritorio", "monitor"], ["tablet", "Tablet", "tablet"], ["mobile", "Móvil", "smartphone"]];
+
+function App() {
+  const [surface, setSurface] = useState("app"); // "entry" (pre-login) | "app" (logged-in)
+  const [role, setRole] = useState("org");
+  const [plan, setPlan] = useState("pro");
+  const [device, setDevice] = useState("desktop");
+  const [lang, setLang] = useState("es");
+  window.__LANG = lang;
+  const [saved, setSaved] = useState(() => { try { return JSON.parse(localStorage.getItem(LS + "saved")) || []; } catch (e) { return []; } });
+  useEffect(() => { localStorage.setItem(LS + "saved", JSON.stringify(saved)); }, [saved]);
+  const toggleSave = (a, codo) => setSaved(s => s.some(x => x.q === a.q)
+    ? s.filter(x => x.q !== a.q)
+    : [{ q: a.q, key: Object.keys(ANSWERS).find(k => ANSWERS[k].q === a.q), codoKey: codo.key, codoId: codo.id, cite: a.cite }, ...s]);
+
+  const frameRef = useRef(null);
+  const w = useWidth(frameRef);
+  // el colaborador hace swap web<->móvil por breakpoint; la organización solo hace swap en sus funciones móviles (admin de bolsillo).
+  // el ancho efectivo es determinista por preset (móvil/tablet) y medido en escritorio (narrowing real del viewport).
+  const effW = device === "mobile" ? 382 : device === "tablet" ? 834 : (w || 9999);
+  const isMobile = effW < BREAKPOINT;
+
+  let content;
+  if (surface === "entry") content = <EntryFlow mobile={isMobile} onEnter={() => { setSurface("app"); setRole("org"); }} />;
+  else if (surface === "demo") content = <DemoShowcase saved={saved} toggleSave={toggleSave} />;
+  else if (role === "org") content = isMobile
+    ? <AdminMobile saved={saved} toggleSave={toggleSave} plan={plan} setPlan={setPlan} />
+    : <OrgShell plan={plan} setPlan={setPlan} saved={saved} toggleSave={toggleSave} />;
+  else content = isMobile
+    ? <ColabMobile saved={saved} toggleSave={toggleSave} />
+    : <ColabShell saved={saved} toggleSave={toggleSave} />;
+
+  const note = surface === "entry"
+    ? <>Entrada · pre-login — registro, login, código y onboarding (la fuente del flujo de entrada)</>
+    : surface === "demo"
+    ? <>Demo pública sin registro · la consulta del producto (MAXI-10ND) en marcos de dispositivo — fuente de la sección /demo del sitio público</>
+    : role === "org"
+    ? (isMobile
+      ? <>Admin de bolsillo · <b>{plan === "free" ? "Freemium" : "Profesional"}</b> — el menú móvil se adapta al plan</>
+      : <>Organización · escritorio · el menú se adapta al plan</>)
+    : (isMobile
+      ? <>Colaborador · layout <b>móvil</b> (ancho &lt; {BREAKPOINT}px)</>
+      : <>Colaborador · layout <b>web</b> (ancho ≥ {BREAKPOINT}px)</>);
+
+  return <div className="proto">
+    <div className="switchbar">
+      <span className="pb"><Icon name="layers" size={15} />Prototipo</span>
+      <div className="sw surf">
+        <button className={surface === "entry" ? "on" : ""} onClick={() => setSurface("entry")}><Icon name="log-in" size={14} />Entrada</button>
+        <button className={surface === "app" ? "on" : ""} onClick={() => setSurface("app")}><Icon name="app-window" size={14} />Producto</button>
+        <button className={surface === "demo" ? "on" : ""} onClick={() => setSurface("demo")}><Icon name="presentation" size={14} />Demo</button>
+      </div>
+      {surface === "app" && <div className="sw">
+        <button className={role === "org" ? "on" : ""} onClick={() => setRole("org")}><Icon name="building-2" size={14} />Organización</button>
+        <button className={role === "colab" ? "on" : ""} onClick={() => setRole("colab")}><Icon name="hard-hat" size={14} />Colaborador</button>
+      </div>}
+      {surface === "app" && role === "org" && <div className="sw plan">
+        <button className={plan === "free" ? "on" : ""} onClick={() => setPlan("free")}>Freemium</button>
+        <button className={plan === "pro" ? "on" : ""} onClick={() => setPlan("pro")}>Profesional</button>
+      </div>}
+      <div className="sw dev">
+        {DEVICES.map(d => <button key={d[0]} className={device === d[0] ? "on" : ""} title={d[1]} onClick={() => setDevice(d[0])}><Icon name={d[2]} size={14} />{d[1]}</button>)}
+      </div>
+      {surface === "app" && role === "colab" && <div className="sw lang" title="Idioma del colaborador">
+        <button className={lang === "es" ? "on" : ""} onClick={() => setLang("es")}>ES</button>
+        <button className={lang === "en" ? "on" : ""} onClick={() => setLang("en")}>EN</button>
+      </div>}
+      <div className="grow" />
+      <span className="note">{note}</span>
+    </div>
+    <div className={"stage dev-" + device}>
+      <div className="devframe" ref={frameRef}>{content}</div>
+    </div>
+    <SourceViewer />
+    <DCModalHost />
+    <DCSearchHost />
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
