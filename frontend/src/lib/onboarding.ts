@@ -121,6 +121,44 @@ export function getCodoContexto(codoId: string, token: string): Promise<CodoCont
   return api.get<CodoContextoOut>(`/mo/codos/${encodeURIComponent(codoId)}`, { token });
 }
 
+/** Relaciones inmediatas del CoDo (P1) — del grafo real, no canned. */
+export interface RelacionInmediata {
+  id: string;
+  tipo: string;
+  icono: string;
+  titulo: string;
+  tag: string;
+  severidad: "ok" | "warn" | "caution" | "muted" | string;
+  nota?: string | null;
+  meta?: string | null;
+}
+export interface ConsultaSugerida {
+  icono: string;
+  texto: string;
+  tipo_intencion: string;
+}
+export interface RecursoApoyo {
+  id: string;
+  tipo: string;
+  titulo: string;
+  meta?: string | null;
+}
+export interface CodoRelacionesOut {
+  codo_id: string;
+  tipo_codo: string;
+  relaciones: RelacionInmediata[];
+  consultas_sugeridas: ConsultaSugerida[];
+  recursos: RecursoApoyo[];
+}
+
+/** Relaciones inmediatas + sugerencias + recursos de un CoDo (Expediente, P1). */
+export function getCodoRelaciones(codoId: string, token: string): Promise<CodoRelacionesOut> {
+  return api.get<CodoRelacionesOut>(
+    `/mo/codos/${encodeURIComponent(codoId)}/relaciones`,
+    { token },
+  );
+}
+
 // ── Gestión de documentos vivos ──────────────────────────────────────────────
 
 export function listDocumentos(token: string): Promise<DocumentosResponse> {

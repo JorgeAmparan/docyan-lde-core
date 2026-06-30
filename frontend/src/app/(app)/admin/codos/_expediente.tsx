@@ -1,55 +1,59 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icon";
 import { useAuth } from "@/lib/auth";
-import { ApiError } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
 import {
   getCodoContexto,
+  getCodoRelaciones,
   type CodoContextoOut,
   type DocumentoRefOut,
+  type RelacionInmediata,
+  type ConsultaSugerida,
+  type RecursoApoyo,
 } from "@/lib/onboarding";
 
 /**
  * Expediente esquemático del CoDo — superficie de inmersión del experto.
- * Portado pixel-perfect del prototipo `docs/DOCYAN LDE — Design System/app/
- * expediente.jsx` (`ExpedienteView`). Cuatro condiciones del prototipo:
- *  (1) META CLARA = goal strip siempre visible · (2) FEEDBACK INSTANTÁNEO =
- *  seleccionar un nodo revela su detalle sin espera · (3) RETO AJUSTABLE =
- *  densidad compacto/detallado · (4) AGENCIA TOTAL = sugerencias EDB a demanda.
+ * Portado 1:1 del prototipo `app/expediente.jsx` (`ExpedienteView`). Cuatro
+ * condiciones: META CLARA (goal strip) · FEEDBACK INSTANTÁNEO (nodo→detalle) ·
+ * RETO AJUSTABLE (densidad) · AGENCIA TOTAL (EDB a demanda).
  *
- * Cableado a datos reales: `GET /mo/codos/{id}` (CodoContextoOut: id, tipo,
- * entidad_id, nombre, titulo, meta, documentos: DocumentoRefOut[]). El árbol y el
- * detalle del documento salen de `documentos`. «Consultar» fija el CoDo activo
- * (`useAuth.setDoco`) y entra a /consult, igual que /select-codo.
- *
- * Honestidad de datos (sin fabricar): el backend no expone «relaciones
- * inmediatas» (calibración, MSDS, versiones…), ni sugerencias EDB, ni stats de
- * consultas/colaboradores por CoDo. Esas secciones se rinden con un estado vacío
- * explícito en vez de inventar nodos. Cuando un documento no trae `tipo`/`id`
- * mostrable se rinde «—».
+ * Datos REALES del grafo (P1, Matriz de Cierre):
+ *  · `GET /mo/codos/{id}` → entidad/documentos (árbol + DocDetail).
+ *  · `GET /mo/codos/{id}/relaciones` → relaciones inmediatas (rama del árbol +
+ *    `RelDetail` + tarjeta "Relaciones"), consultas sugeridas por doc (`ed-sug`) y
+ *    recursos de apoyo (`rec-item`). NADA canned: si el grafo no tiene relaciones,
+ *    el estado vacío es REAL (no un placeholder de backend faltante).
  */
 
+const SEV_COLOR: Record<string, string> = {
+  ok: "var(--success-600)",
+  warn: "var(--warning-600)",
+  caution: "#C0820F",
+  muted: "var(--fg-subtle)",
+};
+
 function entityIcon(ctx: CodoContextoOut): string {
-  const t = (ctx.tipo ?? "").toLowerCase();
   const meta = (ctx.meta ?? "").toLowerCase();
   if (meta.includes("centrif") || meta.includes("rotor")) return "disc-3";
   if (meta.includes("cnc") || meta.includes("maquin")) return "cog";
   if (meta.includes("mezcl") || meta.includes("concret")) return "blend";
-  if (t === "documento") return "file-text";
+  if ((ctx.tipo ?? "").toLowerCase() === "documento") return "file-text";
   return "folder";
 }
 
-type Sel = { type: "entity" } | { type: "doc"; doc: DocumentoRefOut };
-
-function docKey(d: DocumentoRefOut): string {
-  return d.id;
-}
+type Sel =
+  | { type: "entity" }
+  | { type: "doc"; doc: DocumentoRefOut }
+  | { type: "rel"; rel: RelacionInmediata };
 
 export function Expediente({ codoId }: { codoId?: string }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const token = useAuth((s) => s.token);
   const setDoco = useAuth((s) => s.setDoco);
 
@@ -65,6 +69,17 @@ export function Expediente({ codoId }: { codoId?: string }) {
     retry: false,
   });
 
+  // Relaciones inmediatas + sugerencias + recursos — del grafo real (P1).
+  const { data: rel } = useQuery({
+    queryKey: ["codo-relaciones", codoId],
+    queryFn: () => getCodoRelaciones(codoId as string, token as string),
+    enabled: !!token && !!codoId,
+    retry: false,
+  });
+  const relaciones: RelacionInmediata[] = rel?.relaciones ?? [];
+  const sugeridas: ConsultaSugerida[] = rel?.consultas_sugeridas ?? [];
+  const recursos: RecursoApoyo[] = rel?.recursos ?? [];
+
   const onBack = () => router.push("/admin/codos");
   const onConsult = () => {
     if (!ctx) return;
@@ -72,7 +87,20 @@ export function Expediente({ codoId }: { codoId?: string }) {
     router.push("/consult");
   };
 
-  // Sin id de CoDo (no debería ocurrir vía /admin/codos/[id]) → volver a la lista.
+  // Adjuntar video de apoyo — POST real a /recursos/video (no se finge).
+  async function attachVideo(docId: string) {
+    const titulo = window.prompt("Título del video de apoyo:");
+    if (!titulo) return;
+    const video_url = window.prompt("URL del video:");
+    if (!video_url) return;
+    try {
+      await api.post("/recursos/video", { titulo, video_url, doc_id: docId }, { token });
+      qc.invalidateQueries({ queryKey: ["codo-relaciones", codoId] });
+    } catch {
+      // El refetch reflejará el estado real del grafo.
+    }
+  }
+
   if (!codoId) {
     return (
       <div className="expediente-view">
@@ -117,6 +145,7 @@ export function Expediente({ codoId }: { codoId?: string }) {
   const docs = ctx.documentos ?? [];
   const icon = entityIcon(ctx);
   const isDoc = (d: DocumentoRefOut) => sel.type === "doc" && sel.doc.id === d.id;
+  const isRel = (r: RelacionInmediata) => sel.type === "rel" && sel.rel.id === r.id;
 
   return (
     <div className="expediente-view">
@@ -164,7 +193,7 @@ export function Expediente({ codoId }: { codoId?: string }) {
             <div className="exp-tg">Acervo · {docs.length} docs</div>
             {docs.map((d) => (
               <button
-                key={docKey(d)}
+                key={d.id}
                 className={"exp-node" + (isDoc(d) ? " on" : "")}
                 onClick={() => setSel({ type: "doc", doc: d })}
               >
@@ -177,6 +206,29 @@ export function Expediente({ codoId }: { codoId?: string }) {
                 </span>
               </button>
             ))}
+
+            {relaciones.length > 0 && (
+              <>
+                <div className="exp-tg">Relaciones inmediatas</div>
+                {relaciones.map((r) => (
+                  <button
+                    key={r.id}
+                    className={"exp-node" + (isRel(r) ? " on" : "")}
+                    onClick={() => setSel({ type: "rel", rel: r })}
+                  >
+                    <span className="en-ic">
+                      <Icon name={r.icono} size={16} />
+                    </span>
+                    <span className="en-t">
+                      {r.titulo}
+                      <span className="en-tag" style={{ color: SEV_COLOR[r.severidad] ?? SEV_COLOR.muted }}>
+                        {r.tag}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </>
+            )}
           </aside>
 
           {/* FEEDBACK INSTANTÁNEO — el detalle del nodo seleccionado */}
@@ -191,7 +243,7 @@ export function Expediente({ codoId }: { codoId?: string }) {
                     <div className="ee-id">{ctx.id}</div>
                     <h2>{ctx.nombre}</h2>
                     <div className="ee-meta">
-                      {ctx.meta} · {docs.length} docs vivos · — colaboradores · — consultas
+                      {ctx.meta} · {docs.length} docs vivos
                     </div>
                   </div>
                 </div>
@@ -217,11 +269,7 @@ export function Expediente({ codoId }: { codoId?: string }) {
                     {docs.length > 0 ? (
                       <div className="ee-chips">
                         {docs.map((d) => (
-                          <span
-                            className="ee-chip"
-                            key={docKey(d)}
-                            onClick={() => setSel({ type: "doc", doc: d })}
-                          >
+                          <span className="ee-chip" key={d.id} onClick={() => setSel({ type: "doc", doc: d })}>
                             <Icon name="file-text" size={13} />
                             {d.nombre ?? d.id}
                           </span>
@@ -236,7 +284,19 @@ export function Expediente({ codoId }: { codoId?: string }) {
                       <Icon name="git-branch" size={14} />
                       Relaciones
                     </div>
-                    <div className="ee-empty">Sin relaciones inmediatas registradas para este CoDo.</div>
+                    {relaciones.length > 0 ? (
+                      <div className="ee-rels">
+                        {relaciones.map((r) => (
+                          <button className="ee-rel" key={r.id} onClick={() => setSel({ type: "rel", rel: r })}>
+                            <span className="rd" style={{ background: SEV_COLOR[r.severidad] ?? SEV_COLOR.muted }} />
+                            <span className="rt">{r.titulo}</span>
+                            <span className="rtag">{r.tag}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="ee-empty">Sin relaciones inmediatas registradas para este CoDo.</div>
+                    )}
                   </div>
                 </div>
 
@@ -248,9 +308,7 @@ export function Expediente({ codoId }: { codoId?: string }) {
                     <div className="ee-qrl">QR PERSISTENTE</div>
                     <div className="ee-qrn">La puerta del colaborador a este CoDo</div>
                     {!compact && (
-                      <div className="ee-qrm">
-                        Pegado en el equipo · escanear abre la consulta de esta entidad
-                      </div>
+                      <div className="ee-qrm">Pegado en el equipo · escanear abre la consulta de esta entidad</div>
                     )}
                   </div>
                 </div>
@@ -258,12 +316,22 @@ export function Expediente({ codoId }: { codoId?: string }) {
             )}
 
             {sel.type === "doc" && (
-              <DocDetail doc={sel.doc} entityName={ctx.nombre} compact={compact} onConsult={onConsult} />
+              <DocDetail
+                doc={sel.doc}
+                entityName={ctx.nombre}
+                compact={compact}
+                onConsult={onConsult}
+                sugeridas={sugeridas}
+                recursos={recursos}
+                onAttach={() => attachVideo(sel.doc.id)}
+              />
             )}
+
+            {sel.type === "rel" && <RelDetail rel={sel.rel} compact={compact} />}
           </main>
         </div>
 
-        {/* AGENCIA TOTAL — EDB a demanda, visible pero nunca empujado */}
+        {/* AGENCIA TOTAL — EDB a demanda (observaciones; fuera de P1) */}
         <div className={"exp-edb" + (edb ? " open" : "")}>
           <button className="edb-toggle" onClick={() => setEdb((e) => !e)}>
             <Icon name="sparkles" size={15} />
@@ -291,11 +359,17 @@ function DocDetail({
   entityName,
   compact,
   onConsult,
+  sugeridas,
+  recursos,
+  onAttach,
 }: {
   doc: DocumentoRefOut;
   entityName: string;
   compact: boolean;
   onConsult: () => void;
+  sugeridas: ConsultaSugerida[];
+  recursos: RecursoApoyo[];
+  onAttach: () => void;
 }) {
   return (
     <div className="exp-doc">
@@ -318,10 +392,84 @@ function DocDetail({
           <span className="ed-seg">Acervo de {entityName}</span>
         </div>
       )}
+
+      {sugeridas.length > 0 && (
+        <div className="ed-block">
+          <div className="ed-bl">
+            <Icon name="sparkles" size={13} className="lic" />
+            Consultas sugeridas sobre este documento
+          </div>
+          {sugeridas.map((s, i) => (
+            <button key={i} className="ed-sug" onClick={onConsult}>
+              <Icon name={s.icono} size={15} className="lic" />
+              <span>{s.texto}</span>
+              <Icon name="arrow-right" size={14} className="lic" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="ed-block">
+        <div className="ed-bl">
+          <Icon name="video" size={13} className="lic" />
+          Recursos de apoyo
+          <span className="ed-bl-note">no se analizan · se sirven junto al documento</span>
+        </div>
+        {recursos.map((rc) => (
+          <div className="rec-item" key={rc.id}>
+            <span className="rec-ic">
+              <Icon name="play" size={14} />
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="rec-t">{rc.titulo}</div>
+              <div className="rec-m">{rc.meta ?? "video de apoyo"}</div>
+            </div>
+            <Icon name="external-link" size={14} color="var(--fg-subtle)" />
+          </div>
+        ))}
+        <button className="add-q" onClick={onAttach}>
+          <Icon name="plus" size={15} />
+          Adjuntar video
+        </button>
+      </div>
+
       <button className="btn btn-primary ed-cta" onClick={onConsult}>
         <Icon name="messages-square" size={15} />
         Consultar este documento
       </button>
+    </div>
+  );
+}
+
+function RelDetail({ rel, compact }: { rel: RelacionInmediata; compact: boolean }) {
+  const color = SEV_COLOR[rel.severidad] ?? SEV_COLOR.muted;
+  return (
+    <div className="exp-rel">
+      <div className="er-head">
+        <span className="er-ic" style={{ color }}>
+          <Icon name={rel.icono} size={24} />
+        </span>
+        <div>
+          <div className="er-eyebrow">RELACIÓN · {rel.meta ?? rel.id}</div>
+          <h2>{rel.titulo}</h2>
+          <span className="er-tag" style={{ color, borderColor: "currentColor" }}>
+            {rel.tag}
+          </span>
+        </div>
+      </div>
+      {!compact && rel.nota && <p className="er-note">{rel.nota}</p>}
+      {rel.severidad === "warn" && (
+        <div className="er-banner">
+          <Icon name="info" size={14} />
+          Recordatorio administrativo — no es una instrucción operativa.
+        </div>
+      )}
+      {rel.meta && (
+        <div className="er-cite">
+          <span className="brk" />
+          {rel.meta} ↗
+        </div>
+      )}
     </div>
   );
 }

@@ -154,6 +154,46 @@ class CodoContextoOut(BaseModel):
     documentos: list[DocumentoRefOut] = []
 
 
+class RelacionInmediata(BaseModel):
+    """Una relación inmediata de un CoDo en el grafo (alimenta `RelDetail`)."""
+
+    id: str
+    tipo: str
+    icono: str
+    titulo: str
+    tag: str
+    severidad: str = "muted"  # ok | warn | caution | muted
+    nota: str | None = None
+    meta: str | None = None
+
+
+class ConsultaSugerida(BaseModel):
+    """Consulta sugerida sobre un documento, derivada de su contenido en el grafo."""
+
+    icono: str
+    texto: str
+    tipo_intencion: str
+
+
+class RecursoApoyo(BaseModel):
+    """Recurso de apoyo adjunto a un documento (video, etc.)."""
+
+    id: str
+    tipo: str
+    titulo: str
+    meta: str | None = None
+
+
+class CodoRelacionesOut(BaseModel):
+    """Relaciones inmediatas + sugerencias por doc + recursos de un CoDo (P1)."""
+
+    codo_id: str
+    tipo_codo: str
+    relaciones: list[RelacionInmediata] = []
+    consultas_sugeridas: list[ConsultaSugerida] = []
+    recursos: list[RecursoApoyo] = []
+
+
 # ── Sesiones ────────────────────────────────────────────────────────────────────
 
 
@@ -295,6 +335,54 @@ async def contexto_codo(
         id=ctxd["id"], tipo=ctxd["tipo"], entidad_id=ctxd.get("entidad_id"),
         nombre=ctxd["nombre"], titulo=ctxd["titulo"], meta=ctxd["meta"],
         documentos=[DocumentoRefOut(**d) for d in ctxd.get("documentos", [])],
+    )
+
+
+@router.get("/codos/{codo_id}/relaciones", response_model=CodoRelacionesOut)
+async def relaciones_codo(
+    codo_id: str,
+    ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
+) -> CodoRelacionesOut:
+    """
+    Relaciones inmediatas de un CoDo (del grafo real) + consultas sugeridas por
+    documento + recursos de apoyo. 404 si el CoDo no existe en el grafo del tenant.
+    Alimenta el Expediente (P1): rama "Relaciones inmediatas", RelDetail, sugerencias.
+    """
+    from app.graph import dkg_codos, dkg_relaciones, dkg_sugerencias_doc
+    from app.onboarding import providers as onb
+
+    tenant_id = ctx["org_id"]
+    dkg = onb.get_dkg()
+    ctxd = dkg_codos.contexto_codo(dkg, tenant_id, codo_id)
+    if ctxd is None:
+        raise HTTPException(status_code=404, detail="CoDo no encontrado.")
+
+    relaciones = dkg_relaciones.relaciones_de_codo(dkg, tenant_id, codo_id, ctxd["tipo"])
+
+    # Sugerencias + recursos sobre el documento principal del CoDo (el primero del acervo).
+    sugeridas: list[dict] = []
+    recursos: list[dict] = []
+    docs = ctxd.get("documentos") or []
+    if docs:
+        doc_id = docs[0]["id"]
+        sugeridas = dkg_sugerencias_doc.sugerencias_por_documento(dkg, tenant_id, doc_id)
+        recursos = [
+            r for r in dkg_relaciones.relaciones_de_documento(dkg, tenant_id, doc_id)
+            if r.get("tipo") == "video"
+        ]
+
+    return CodoRelacionesOut(
+        codo_id=codo_id,
+        tipo_codo=ctxd["tipo"],
+        relaciones=[RelacionInmediata(**r) for r in relaciones],
+        consultas_sugeridas=[ConsultaSugerida(**s) for s in sugeridas],
+        recursos=[
+            RecursoApoyo(
+                id=r["id"], tipo=r.get("tipo", "video"),
+                titulo=r.get("titulo") or "Video de apoyo", meta=r.get("meta"),
+            )
+            for r in recursos
+        ],
     )
 
 
