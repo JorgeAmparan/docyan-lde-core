@@ -22,6 +22,7 @@ from app.api.routers import (
     observations,
     onboarding,
     platform,
+    platform_ingesta,
     platform_tenant,
     qr,
     recursos,
@@ -79,6 +80,7 @@ app.include_router(admin.router)
 app.include_router(qr.router)
 app.include_router(mo.router)
 app.include_router(platform.router)
+app.include_router(platform_ingesta.router)
 app.include_router(platform_tenant.router)
 app.include_router(recursos.router)
 app.include_router(onboarding.router)
