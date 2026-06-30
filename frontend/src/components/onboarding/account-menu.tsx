@@ -80,7 +80,7 @@ export function AccountMenu({ initials }: { initials: string }) {
             <Icon name="user" size={15} />
             Mi cuenta
           </button>
-          <button type="button" className="acct-item" role="menuitem" onClick={() => go("/cuenta/seguridad")}>
+          <button type="button" className="acct-item" role="menuitem" onClick={() => go("/cuenta")}>
             <Icon name="lock" size={15} />
             Cambiar contraseña
           </button>

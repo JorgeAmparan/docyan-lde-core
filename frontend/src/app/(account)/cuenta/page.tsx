@@ -1,172 +1,200 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
+import { ApiError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
-import { getCuenta } from "@/lib/onboarding";
+import { getCuenta, changePassword, logout as apiLogout } from "@/lib/onboarding";
 
 /**
- * /cuenta — resumen REAL de la cuenta (B13/D4). Antes mostraba un FALLBACK enlatado
- * ("Plan Profesional · MXN 10,191" para un freemium = dato falso). Ahora consume
- * `GET /onboarding/cuenta`: plan, cupo de documentos (contado del grafo) y saldo de
- * ingesta reales del tenant. Sin storage/facturación inventados: lo que el backend
- * aún no expone no se finge.
+ * /cuenta — `CuentaOrg` del prototipo (app/org.jsx) portado 1:1: las tres
+ * secciones Perfil / Organización / Seguridad con las clases `.acct-*`. Es UNA
+ * sola página (P4, Matriz de Cierre): se eliminaron las subrutas (facturación,
+ * usuarios, seguridad, notificaciones).
+ *
+ * Datos REALES: el perfil sale del usuario autenticado; la organización y el plan
+ * de `GET /onboarding/cuenta`. La Seguridad cablea acciones reales — cambiar
+ * contraseña (`POST /auth/change-password`) y cerrar sesión (`POST /auth/logout`).
  */
-function pct(used: number, limit: number): number {
-  if (limit <= 0) return 0;
-  return Math.min(100, Math.round((used / limit) * 100));
-}
+const PAR_LINGUISTICO_DEFAULT = "ES-MX · EN-US"; // par bilingüe día 1 (DTM, Pista B)
 
-function fmtDate(iso?: string | null): string | null {
-  if (!iso) return null;
-  try {
-    return new Date(iso).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" });
-  } catch {
-    return null;
-  }
-}
-
-export default function ResumenPage() {
+export default function CuentaPage() {
+  const router = useRouter();
   const token = useAuth((s) => s.token);
+  const refreshToken = useAuth((s) => s.refreshToken);
+  const user = useAuth((s) => s.user);
+  const clear = useAuth((s) => s.clear);
 
-  const { data, isLoading, error } = useQuery({
+  const { data } = useQuery({
     queryKey: ["cuenta"],
     queryFn: () => getCuenta(token as string),
     enabled: !!token,
     retry: false,
   });
 
-  if (isLoading) {
-    return (
-      <>
-        <h1>Resumen de cuenta</h1>
-        <p style={{ color: "var(--fg-muted)" }}>Cargando tu cuenta…</p>
-      </>
-    );
-  }
+  const [pwdOpen, setPwdOpen] = useState(false);
+  const [pwd, setPwd] = useState({ current: "", next: "", confirm: "" });
+  const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pwdBusy, setPwdBusy] = useState(false);
+  const [outBusy, setOutBusy] = useState(false);
 
-  if (error || !data) {
-    return (
-      <>
-        <h1>Resumen de cuenta</h1>
-        <div className="card" style={{ padding: 16, display: "flex", gap: 12, alignItems: "center" }}>
-          <Icon name="triangle-alert" size={20} color="var(--danger-600)" />
-          <span style={{ fontSize: 13.5, color: "var(--fg-muted)" }}>
-            No pudimos cargar tu cuenta. Reintenta en unos segundos.
-          </span>
-        </div>
-      </>
-    );
-  }
+  const pwdValid = pwd.next.length >= 8 && pwd.next === pwd.confirm && pwd.current.length > 0;
 
-  const s = data;
-  const isFreemium = s.plan === "freemium";
-  const docLimit = s.doc_limit ?? 0;
-  const docsPct = s.doc_limit ? pct(s.docs_usados, docLimit) : 0;
-  const expira = fmtDate(s.freemium_expira);
-  const nearLimit = !!s.doc_limit && docsPct >= 85;
+  const nombre = user?.name ?? user?.email ?? "—";
+  const email = user?.email ?? "—";
+  const rol = (user?.role ?? "").toUpperCase();
+  const orgNombre = data?.nombre ?? user?.org_name ?? "—";
+  const planNombre = data?.plan_nombre ?? "—";
+  const initials =
+    (user?.name ?? user?.email ?? "MC")
+      .split(/[ @.]/)
+      .slice(0, 2)
+      .map((p) => p.charAt(0).toUpperCase())
+      .join("") || "MC";
+
+  const savePassword = async () => {
+    if (!token || !pwdValid || pwdBusy) return;
+    setPwdBusy(true);
+    setPwdMsg(null);
+    try {
+      await changePassword({ current_password: pwd.current, new_password: pwd.next }, token);
+      setPwd({ current: "", next: "", confirm: "" });
+      setPwdOpen(false);
+      setPwdMsg({ ok: true, text: "Contraseña actualizada. Las demás sesiones se cerraron." });
+    } catch (e) {
+      setPwdMsg({
+        ok: false,
+        text:
+          e instanceof ApiError && e.status === 401
+            ? "La contraseña actual no es correcta."
+            : e instanceof ApiError
+              ? e.message
+              : "No pudimos actualizar la contraseña.",
+      });
+    } finally {
+      setPwdBusy(false);
+    }
+  };
+
+  const logout = async () => {
+    setOutBusy(true);
+    try {
+      await apiLogout(refreshToken, token, true);
+    } catch {
+      /* descarte local de todos modos */
+    }
+    clear();
+    router.replace("/login");
+  };
 
   return (
-    <>
-      <h1>Resumen de cuenta</h1>
+    <div className="wrap">
+      <div className="acct">
+        <h2>Mi cuenta</h2>
+        <p className="lead">Tu perfil, tu organización y tu seguridad.</p>
 
-      {nearLimit && (
-        <div
-          className="card"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 22,
-            padding: 16,
-            borderColor: "var(--warning-300, var(--border-strong))",
-            background: "var(--warning-50, var(--amate-100))",
-          }}
-        >
-          <Icon name="triangle-alert" size={20} color="var(--warning-600, var(--cinnabar-600))" />
-          <div style={{ fontSize: 13.5, color: "var(--fg-muted)" }}>
-            Estás cerca del límite de documentos de tu plan. Elige un plan para cargar más.
-          </div>
-          <Link href="/plan" className="btn sec" style={{ marginLeft: "auto" }}>
-            Ver planes
-          </Link>
-        </div>
-      )}
-
-      <div className="card" style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 22, padding: 18 }}>
-        <div
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: "var(--radius-md)",
-            background: "var(--cinnabar-50)",
-            color: "var(--cinnabar-600)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Icon name="badge-check" size={22} />
-        </div>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 15 }}>{s.plan_nombre}</div>
-          <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-            {isFreemium
-              ? expira
-                ? `Cuenta gratuita · vigente hasta el ${expira}`
-                : "Cuenta gratuita"
-              : s.criticidad_segmento
-                ? `Criticidad del segmento: ${s.criticidad_segmento}`
-                : "Plan activo"}
+        <div className="acct-sec">
+          <h3>Perfil</h3>
+          <div className="acct-prof">
+            <div className="pav">{initials}</div>
+            <div>
+              <div className="pn">{nombre}</div>
+              <div className="pe">{email}</div>
+              {rol && <div className="pr">{rol}</div>}
+            </div>
           </div>
         </div>
-        <Link href="/plan" className="btn sec" style={{ marginLeft: "auto" }}>
-          {isFreemium ? "Elegir plan" : "Cambiar plan"}
-        </Link>
+
+        <div className="acct-sec">
+          <h3>Organización</h3>
+          <div className="acct-row">
+            <span className="l">Organización</span>
+            <span className="v">{orgNombre}</span>
+          </div>
+          <div className="acct-row">
+            <span className="l">Par lingüístico default</span>
+            <span className="v">{PAR_LINGUISTICO_DEFAULT}</span>
+          </div>
+          <div className="acct-row">
+            <span className="l">Plan</span>
+            <span className="v">{planNombre}</span>
+            <Link href="/plan" className="btn-sec">
+              <Icon name="gem" size={15} />
+              Gestionar en módulo Plan
+            </Link>
+          </div>
+        </div>
+
+        <div className="acct-sec">
+          <h3>Seguridad</h3>
+          <div className="acct-row">
+            <span className="l">Contraseña</span>
+            <span className="v">••••••••••</span>
+            <button type="button" className="btn-sec" onClick={() => setPwdOpen((o) => !o)}>
+              <Icon name="key-round" size={15} />
+              Cambiar
+            </button>
+          </div>
+
+          {pwdOpen && (
+            <div style={{ padding: "4px 0 12px", display: "grid", gap: 10 }}>
+              <div className="field">
+                <label>Contraseña actual</label>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={pwd.current}
+                  onChange={(e) => setPwd((p) => ({ ...p, current: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label>Nueva contraseña</label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={pwd.next}
+                  onChange={(e) => setPwd((p) => ({ ...p, next: e.target.value }))}
+                />
+              </div>
+              <div className="field">
+                <label>Confirmar</label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={pwd.confirm}
+                  onChange={(e) => setPwd((p) => ({ ...p, confirm: e.target.value }))}
+                />
+              </div>
+              <div>
+                <button type="button" className="btn-sec" disabled={!pwdValid || pwdBusy} onClick={savePassword}>
+                  {pwdBusy ? "Actualizando…" : "Actualizar contraseña"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {pwdMsg && (
+            <p
+              role={pwdMsg.ok ? undefined : "alert"}
+              style={{ fontSize: 13, margin: "0 0 8px", color: pwdMsg.ok ? "var(--success-600)" : "var(--danger-600)" }}
+            >
+              {pwdMsg.text}
+            </p>
+          )}
+
+          <div className="acct-row">
+            <span className="l">Sesión</span>
+            <span className="v" />
+            <button type="button" className="btn-logout-lg" disabled={outBusy} onClick={logout}>
+              <Icon name="log-out" size={15} />
+              {outBusy ? "Cerrando…" : "Cerrar sesión"}
+            </button>
+          </div>
+        </div>
       </div>
-
-      <div className="usage">
-        <div className="ucard">
-          <div className="ul">Documentos vivos</div>
-          <div className="uv">
-            {s.docs_usados}
-            {s.doc_limit != null ? ` / ${s.doc_limit}` : ""}
-          </div>
-          <div className="bar">
-            <i style={{ width: `${docsPct}%` }} />
-          </div>
-          <div className="ud">
-            {s.doc_limit != null
-              ? `${docsPct}% del plan usado`
-              : `${s.docs_usados} documento${s.docs_usados === 1 ? "" : "s"} · sin límite`}
-          </div>
-        </div>
-        <div className="ucard">
-          <div className="ul">Cupo de ingestas</div>
-          <div className="uv" style={{ fontSize: 15, fontWeight: 600 }}>Incluido en tu plan</div>
-          <div className="ud" style={{ marginTop: 8 }}>
-            {isFreemium
-              ? "Tu cuenta gratuita ingiere sin costo dentro del límite; sin saldo prepagado."
-              : "Tu plan incluye ingestas sin costo cada mes; los adicionales se cotizan desde $15 antes de cobrar. Sin saldo prepagado."}
-          </div>
-        </div>
-      </div>
-
-      {/* Modelo comercial vigente (cotizador.md): cupo + excedente cotizado + método
-          de pago. NADA de saldo prepagado / "recargar" — eso se eliminó. */}
-      <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <Icon name="credit-card" size={20} color="var(--cinnabar-600)" />
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Plan y método de pago</div>
-          <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-            Gestiona tu plan, tu cupo de ingestas y tu método de pago (tarjeta / SPEI).
-          </div>
-        </div>
-        <Link href="/plan" className="btn primary" style={{ marginLeft: "auto" }}>
-          Ir a Plan
-        </Link>
-      </div>
-    </>
+    </div>
   );
 }
