@@ -36,9 +36,9 @@ TIKTOKEN_ENCODING = "o200k_base"
 
 
 class DecisionCotizacion(str, Enum):
+    # v2.1 (sin saldo prepagado ni hard caps): la cotización siempre procede a
+    # confirmación explícita. No hay decisiones de rechazo por saldo/cap.
     aprobado_requiere_confirmacion = "aprobado_requiere_confirmacion"
-    rechazado_presupuesto = "rechazado_presupuesto"
-    rechazado_hard_cap = "rechazado_hard_cap"
 
 
 @dataclass
@@ -196,10 +196,9 @@ class Cotizador:
         costo de VISIÓN entra al gate (Pieza 3), capado al tope por documento. El worker
         re-mide las figuras reales (Docling) y aplica el MISMO tope al extraer.
 
-        Devuelve una Cotizacion con la decisión:
-          - rechazado_hard_cap   → excede cap por documento o por sesión.
-          - rechazado_presupuesto → saldo prepagado insuficiente.
-          - aprobado_requiere_confirmacion → procede SOLO con confirmación explícita.
+        Devuelve una Cotizacion con la decisión (v2.1: siempre la misma):
+          - aprobado_requiere_confirmacion → procede SOLO con confirmación explícita
+            (dentro de cupo: setup $0; sobre cupo: fórmula). Sin rechazo por saldo/cap.
         """
         tokens = contar_tokens(texto_documento)
         # Cap de figuras por documento: solo se cotiza (y se extraerá) hasta el tope.

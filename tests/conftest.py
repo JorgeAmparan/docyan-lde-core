@@ -100,14 +100,13 @@ def make_inmemory_pcl(state_hasher=None):
     return pcl, fat
 
 
-def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None):
+def make_inmemory_mo(tenant: str = "test-org", reader=None):
     """Construye un MasterOrchestrator 100% en memoria (B8): clasificador real
     (heurística pura, sin LLM), pipelines sobre un reader sintético, sesiones y
     FAT en memoria. La consulta pasa por la fachada PCL en memoria (B8.5: caché +
     modo + instrumentación). Devuelve (mo, audit_sink)."""
     import hashlib
 
-    from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
     from app.ingesta.cotizador import Cotizador
     from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
     from app.orchestrator.audit_logger import AuditLogger, InMemoryAuditSink
@@ -119,8 +118,6 @@ def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None
         SessionManager,
     )
 
-    budget_store = InMemoryBudgetStore()
-    BudgetManager(store=budget_store).ensure_budget(tenant, saldo_inicial_usd=saldo)
     the_reader = reader or EmptyPipelineReader()
 
     # State hasher derivado del estado mutable del reader: garantiza la "consulta
@@ -134,7 +131,7 @@ def make_inmemory_mo(saldo: float = 100.0, tenant: str = "test-org", reader=None
 
     pcl, _ = make_inmemory_pcl(state_hasher=_reader_state)
     coord = PipelineCoordinator(
-        cotizador=Cotizador(budget_manager=BudgetManager(store=budget_store)),
+        cotizador=Cotizador(),
         dispatcher=JobDispatcher(backend=InMemoryQueueBackend()),
         graph_reader=the_reader,
         pcl=pcl,

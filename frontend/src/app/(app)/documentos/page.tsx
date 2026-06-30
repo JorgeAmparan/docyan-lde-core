@@ -44,7 +44,6 @@ interface PendingQuote {
   costUsd: number;
   setupLocal: number | null;
   aprobado: boolean;
-  saldo: number;
   dentroCupo: boolean;
   cupoRestante: number | null;
   tipoNoCubierto: boolean;
@@ -142,7 +141,6 @@ export default function DocumentsPage() {
         costUsd: c.costo_estimado_usd,
         setupLocal: res.cotizacion_local?.moneda === "MXN" ? res.cotizacion_local.precio_setup : null,
         aprobado: c.aprobado,
-        saldo: c.saldo_disponible_usd,
         dentroCupo: c.dentro_de_cupo ?? false,
         cupoRestante: c.cupo_restante ?? null,
         tipoNoCubierto: res.tipo_resuelto_por === "worker_generara" || !res.tipo_documento,
@@ -454,7 +452,6 @@ export default function DocumentsPage() {
                 valueUsd={quoteCurrency === "MXN" ? (pendingQuote.setupLocal ?? pendingQuote.setupUsd) : pendingQuote.setupUsd}
                 totalUsd={quoteCurrency === "MXN" ? (pendingQuote.setupLocal ?? pendingQuote.costUsd) : pendingQuote.costUsd}
                 currency={quoteCurrency}
-                saldoUsd={quoteCurrency === "USD" ? pendingQuote.saldo : null}
                 dentroCupo={pendingQuote.dentroCupo}
                 cupoRestante={pendingQuote.cupoRestante}
                 tipoNoCubierto={pendingQuote.tipoNoCubierto}

@@ -19,7 +19,6 @@ import io
 import pytest
 
 from app.ingesta import providers
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.ingesta.document_store import LocalDocumentStore
 from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
@@ -99,10 +98,9 @@ def test_build_doc_progress_procesando_calcula_pct_y_eta():
 @pytest.fixture
 def wired(monkeypatch, tmp_path):
     """Endpoints cableados a backends EN MEMORIA compartidos (cotizador real)."""
-    budget_store = InMemoryBudgetStore()
     queue_backend = InMemoryQueueBackend()
     doc_store = LocalDocumentStore(base_dir=str(tmp_path))
-    cotizador = Cotizador(budget_manager=BudgetManager(store=budget_store))
+    cotizador = Cotizador()
     dispatcher = JobDispatcher(backend=queue_backend)
     status_reader = JobStatusReader(backend=queue_backend)
 
@@ -121,7 +119,6 @@ def wired(monkeypatch, tmp_path):
 
     from app.api.main import app
     client = TestClient(app)
-    BudgetManager(store=budget_store).ensure_budget(TENANT, saldo_inicial_usd=10.0)
     return client, queue_backend, dispatcher
 
 
@@ -356,33 +353,3 @@ def test_retry_manual_rechaza_job_no_en_error(wired):
     assert r.status_code == 409
 
 
-def test_cotizacion_lote_cuantos_caben_bajo_hard_cap_sesion():
-    """Building block de la cotización de lote en cliente: el cotizador mide cada
-    doc y el cliente acumula; el hard cap de sesión define cuántos caben."""
-    store = InMemoryBudgetStore()
-    bm = BudgetManager(store=store)
-    # Hard cap de sesión pequeño para forzar el desglose.
-    from app.ingesta.budget_manager import TenantBudget
-
-    store.upsert(TenantBudget(
-        tenant_id=TENANT, saldo_actual_usd=100.0,
-        hard_cap_por_documento=100.0, hard_cap_por_sesion=0.10,
-    ))
-    cotizador = Cotizador(budget_manager=bm)
-
-    acumulado = 0.0
-    caben = 0
-    for _ in range(10):
-        c = cotizador.cotizar(
-            tenant_id=TENANT, texto_documento=DOC_BYTES.decode(),
-            costo_sesion_acumulado_usd=acumulado,
-        )
-        if c.aprobado:
-            caben += 1
-            acumulado += c.costo_estimado_usd
-        else:
-            # Rechazo CON explicación (no silencioso): hard cap de sesión.
-            assert "hard cap" in c.to_dict()["decision"] or c.decision.value.startswith("rechazado")
-            break
-    # Al menos uno cabe y NO caben los 10 (el cap obliga al desglose en cliente).
-    assert 1 <= caben < 10

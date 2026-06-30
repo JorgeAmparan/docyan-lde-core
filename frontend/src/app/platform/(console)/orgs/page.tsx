@@ -125,11 +125,6 @@ function OrgDetail({ orgId, onBack }: { orgId: string; onBack: () => void }) {
   const b = billing.data;
   const estado = deriveEstado({ lifecycle_status: b?.lifecycle_status ?? "active", plan: b?.plan });
   const bytes = fmtBytes(m.almacenamiento_bytes);
-  const cur = m.presupuesto?.moneda ?? "USD";
-  const disponible = m.presupuesto?.saldo_actual_usd ?? null;
-  const retenido = m.presupuesto?.retenido_usd ?? 0;
-  const totalVivo = (disponible ?? 0) + (retenido ?? 0);
-  const retPct = totalVivo > 0 ? Math.min(100, (retenido / totalVivo) * 100) : 0;
 
   return (
     <>
@@ -180,16 +175,6 @@ function OrgDetail({ orgId, onBack }: { orgId: string; onBack: () => void }) {
       </div>
 
       <div className="split-bal" style={{ marginTop: 14 }}>
-        <div className="panel">
-          <div className="psec" style={{ margin: "0 0 10px" }}><h2>Saldo y consumo</h2></div>
-          {disponible !== null ? (
-            <>
-              <div className="bal-row"><span className="bal-v">{fmtMoney(disponible, cur)}</span><span className="t-sub">disponibles</span></div>
-              <div className="bar"><i className={retPct >= 75 ? "danger" : retPct >= 40 ? "warn" : ""} style={{ width: `${retPct}%` }} /></div>
-              <div className="t-sub" style={{ marginTop: 8 }}>{fmtMoney(retenido, cur)} retenidos (reservas vivas) · {retPct.toFixed(0)}% del saldo vivo</div>
-            </>
-          ) : <div className="pstate">Sin presupuesto configurado para esta organización.</div>}
-        </div>
         <div className="panel">
           <div className="psec" style={{ margin: "0 0 10px" }}><h2>Suscripción</h2></div>
           <div className="acct-row"><span className="al">Plan</span><span className="av">{b?.plan ?? "—"}</span></div>

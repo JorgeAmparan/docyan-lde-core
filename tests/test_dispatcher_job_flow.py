@@ -53,8 +53,8 @@ def test_job_rechazado_no_es_confirmable():
     backend = InMemoryQueueBackend()
     dispatcher = JobDispatcher(backend=backend)
     job = _job_aprobado(job_id="jr")
-    job.cotizacion.aprobado = False  # cotizador rechazó
-    job.cotizacion.decision = "rechazado_presupuesto"
+    job.cotizacion.aprobado = False  # job no aprobado (defensa del dispatcher)
+    job.cotizacion.decision = "rechazado"
     creado = dispatcher.crear_job(job)
     assert creado.status == JobStatus.rejected
 

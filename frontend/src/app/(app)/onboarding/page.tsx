@@ -37,7 +37,6 @@ interface PendingQuote {
   costUsd: number;
   setupLocal: number | null;
   aprobado: boolean;
-  saldo: number;
   dentroCupo: boolean;
   cupoRestante: number | null;
   tipoNoCubierto: boolean;
@@ -107,7 +106,6 @@ export default function OnboardingFase1Page() {
         costUsd: c.costo_estimado_usd,
         setupLocal: res.cotizacion_local?.moneda === "MXN" ? res.cotizacion_local.precio_setup : null,
         aprobado: c.aprobado,
-        saldo: c.saldo_disponible_usd,
         dentroCupo: c.dentro_de_cupo ?? false,
         cupoRestante: c.cupo_restante ?? null,
         tipoNoCubierto: res.tipo_resuelto_por === "worker_generara" || !res.tipo_documento,

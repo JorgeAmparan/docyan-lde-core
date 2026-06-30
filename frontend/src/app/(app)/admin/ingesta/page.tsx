@@ -53,7 +53,6 @@ interface QuotedDoc {
   timeSec: number;
   aprobado: boolean;
   decision: string;
-  saldo: number;
   tipo?: string | null;
   /** Quién resolvió el tipo (heurística / usuario / worker generará). */
   resolvedBy?: "heuristica" | "usuario" | "worker_generara" | null;
@@ -165,8 +164,7 @@ export default function IngestaPage() {
   }, [token]);
 
   // ── Cotización de lote agregada (cap de sesión, gate de gasto) ──────────────
-  const saldo = quotes.length > 0 ? quotes[0].saldo : null;
-  const budget = Math.min(saldo ?? Infinity, SESSION_HARD_CAP_USD);
+  const budget = SESSION_HARD_CAP_USD;
 
   const localCurrency: "USD" | "MXN" = quotes.some((q) => q.setupLocal != null) ? "MXN" : "USD";
 
@@ -244,7 +242,6 @@ export default function IngestaPage() {
       timeSec: c.tiempo_estimado_seg,
       aprobado: c.aprobado,
       decision: c.decision,
-      saldo: c.saldo_disponible_usd,
       tipo: r.tipo_documento ?? null,
       resolvedBy: (r.tipo_resuelto_por as QuotedDoc["resolvedBy"]) ?? null,
       tipoForzado: prevTipoForzado ?? null,
@@ -363,7 +360,6 @@ export default function IngestaPage() {
     skip(doc.docId);
   }
 
-  const insufficient = saldo != null && quotes.some((q) => !q.aprobado);
   const overCap = overflowIds.length > 0 && quotes.every((q) => q.aprobado);
 
   // ── Vista de progreso activa (no minimizada) ────────────────────────────────
@@ -541,7 +537,6 @@ export default function IngestaPage() {
                     valueUsd={localCurrency === "MXN" ? (q.setupLocal ?? q.setupUsd) : q.setupUsd}
                     totalUsd={localCurrency === "MXN" ? (q.setupLocal ?? q.costUsd) : q.costUsd}
                     currency={localCurrency}
-                    saldoUsd={localCurrency === "USD" ? q.saldo : null}
                     dentroCupo={q.dentroCupo}
                     cupoRestante={q.cupoRestante}
                     tipoNoCubierto={q.tipoNoCubierto}
@@ -611,17 +606,15 @@ export default function IngestaPage() {
                   </button>
                 </div>
 
-                {/* Manejo explícito del cap de sesión / rechazo → CONVERSIÓN, no recarga. */}
-                {(overCap || insufficient) && (
+                {/* Manejo explícito del cap de sesión → CONVERSIÓN, no recarga. */}
+                {overCap && (
                   <div className="manual-note" style={{ marginBottom: 12 }}>
                     <Icon name="info" size={15} />
-                    {insufficient
-                      ? "Alcanzaste el tope de tu plan. "
-                      : t("ingesta.page.capExceeded", {
-                          fit: fitIds.length,
-                          total: quotes.length,
-                          cap: SESSION_HARD_CAP_USD,
-                        }) + " "}
+                    {t("ingesta.page.capExceeded", {
+                      fit: fitIds.length,
+                      total: quotes.length,
+                      cap: SESSION_HARD_CAP_USD,
+                    }) + " "}
                     Sube de plan para ingerir más{" "}
                     {STRIPE_ENABLED ? (
                       <a href="/plan">Ver planes</a>

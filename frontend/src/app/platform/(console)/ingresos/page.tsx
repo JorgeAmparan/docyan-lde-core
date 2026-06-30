@@ -11,10 +11,11 @@ import {
   type PaymentOut, type OrgSummary, type BillingStatus,
 } from "@/lib/platform";
 
+// v2.1 (sin saldo prepagado): los ingresos son suscripción (plan) + setup del
+// excedente de ingesta. No hay "recarga de saldo".
 const CONCEPTOS = [
   { v: "suscripcion", label: "Suscripción" },
   { v: "setup", label: "Setup" },
-  { v: "recarga", label: "Recarga de saldo" },
 ];
 
 export default function IngresosPage() {
@@ -156,7 +157,7 @@ export default function IngresosPage() {
         </div>
       )}
 
-      <PrivacyNote>Pagos, conceptos y estado de cuenta son datos administrativos. MRR y saldo vencido quedan en “no disponible” hasta que existan precios de plan (Stripe, F4) — no se inventa el número.</PrivacyNote>
+      <PrivacyNote>Pagos, conceptos y estado de cuenta son datos administrativos. MRR queda en “no disponible” hasta que existan precios de plan (Stripe, F4) — no se inventa el número.</PrivacyNote>
     </>
   );
 }

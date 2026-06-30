@@ -4,9 +4,6 @@ Tests end-to-end del Master Orchestrator (B4 §1).
 Ejercita el MO con dependencias en memoria: ruteo, Governance Gate, cotizador
 integrado (gate sin bypass), sesiones con transición de canal y FAT logging.
 """
-import pytest
-
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
 from app.orchestrator.audit_logger import AuditLogger, InMemoryAuditSink
@@ -50,10 +47,8 @@ class _EmptyReader:
         return {"izquierda": {}, "derecha": {}}
 
 
-def build_mo(saldo: float = 100.0):
-    budget_store = InMemoryBudgetStore()
-    BudgetManager(store=budget_store).ensure_budget("t1", saldo_inicial_usd=saldo)
-    cotizador = Cotizador(budget_manager=BudgetManager(store=budget_store))
+def build_mo():
+    cotizador = Cotizador()
     queue = InMemoryQueueBackend()
     dispatcher = JobDispatcher(backend=queue)
     coord = PipelineCoordinator(
@@ -85,8 +80,8 @@ def test_fat_logging_cada_request_deja_entrada():
     assert any(e["action"] == "request_received" for e in sink.entries)
 
 
-def test_ingesta_saldo_suficiente_aprueba_y_confirma_encola():
-    mo, sink, queue = build_mo(saldo=100.0)
+def test_ingesta_aprueba_y_confirma_encola():
+    mo, sink, queue = build_mo()
     resp = mo.handle_request(
         MORequest(
             auth=AUTH_ADMIN, accion="ingesta",
@@ -106,26 +101,6 @@ def test_ingesta_saldo_suficiente_aprueba_y_confirma_encola():
     out = mo.confirmar_ingesta(resp.data["job_id"], "t1", "u1")
     assert out["status"] == "queued"
     assert queue.queue_length() == 1
-
-
-def test_ingesta_saldo_insuficiente_rechaza_sin_encolar():
-    mo, sink, queue = build_mo(saldo=0.0)
-    resp = mo.handle_request(
-        MORequest(
-            auth=AUTH_ADMIN, accion="ingesta",
-            payload={"texto_documento": "Documento de prueba " * 50,
-                     "nombre_archivo": "x.pdf"},
-        )
-    )
-    cot = resp.data["cotizacion"]
-    assert cot["aprobado"] is False
-    assert "insuficiente" in cot["motivo"].lower()
-    assert resp.data["requiere_confirmacion"] is False
-    assert queue.queue_length() == 0
-    # Confirmar un job rechazado debe fallar (no hay bypass).
-    with pytest.raises((ValueError, KeyError)):
-        mo.confirmar_ingesta(resp.data["job_id"], "t1", "u1")
-    assert queue.queue_length() == 0
 
 
 def test_permiso_viewer_no_puede_ingerir():

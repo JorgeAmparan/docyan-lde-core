@@ -136,8 +136,6 @@ def test_signup_freemium_credenciales_minimas(ctx):
     assert org["banda_mercado"] == "A" and org["idioma"] == "es"
     # orgs formalizada SIN perder el registro de billing (ambos consistentes).
     assert store.get_org_billing(body["org_id"])["plan"] == "freemium"
-    # Saldo de cortesía freemium provisionado (para vivir el producto).
-    assert store.get_budget(body["org_id"])["saldo_actual_usd"] > 0
 
 
 def test_signup_email_duplicado_rechaza(ctx):
@@ -183,7 +181,6 @@ def test_signup_con_codigo_piloto_activa_plan(ctx):
     assert body["doc_limit"] == 50
     org = store.get_org(body["org_id"])
     assert org["plan"] == "piloto" and org["lifecycle_status"] == "active"
-    assert store.get_budget(body["org_id"])["saldo_actual_usd"] == 25.0
     assert store.get_access_code(code)["status"] == "used"
 
 

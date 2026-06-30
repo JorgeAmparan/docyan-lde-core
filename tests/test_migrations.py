@@ -67,8 +67,6 @@ NEW_TABLES = {
     "quarantine": ["id", "org_id", "entity_id", "rule_id", "reason", "resolved"],
     "api_keys": ["id", "org_id", "api_key", "email", "org_name", "plan",
                  "stripe_customer_id", "is_active"],
-    "tenant_budget": ["id", "tenant_id", "saldo_actual_usd", "retenido_usd",
-                      "hard_cap_por_documento", "hard_cap_por_sesion"],
     "tenant_schemas": ["id", "tenant_id", "tipo_documento", "schema_def",
                        "es_generado_dinamicamente", "uso_contador"],
     "dtm_projects": ["id", "tenant_id", "nombre", "par_linguistico", "estado",
@@ -205,14 +203,6 @@ def test_match_entities_function_exists(clean_db):
             "SELECT 1 FROM pg_proc WHERE proname = 'match_entities';"
         )
         assert cur.fetchone() is not None, "función match_entities ausente"
-
-
-@pytest.mark.parametrize("fn", ["budget_reservar", "budget_liquidar", "budget_liberar"])
-def test_budget_rpc_functions_exist(clean_db, fn):
-    """Las RPC atómicas de débito (018) que invoca SupabaseBudgetStore deben existir."""
-    with clean_db.cursor() as cur:
-        cur.execute("SELECT 1 FROM pg_proc WHERE proname = %s;", (fn,))
-        assert cur.fetchone() is not None, f"función {fn} ausente"
 
 
 def test_entities_embedding_is_vector(clean_db):

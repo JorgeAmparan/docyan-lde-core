@@ -3,7 +3,7 @@ B13 — Gate de tamaño freemium (tope de páginas por documento) con rechazo
 orientado a CONVERSIÓN.
 
 Verifica:
-  · freemium con doc ≤100 pág → procede (cotiza; aprobado si hay saldo).
+  · freemium con doc ≤100 pág → procede (cotiza; aprobado).
   · freemium con doc >100 pág → 402 con payload de conversión (no "saldo seco").
   · plan pagado con doc grande → sin tope de páginas (pasa al gate financiero).
   · El gate solo aplica a freemium; orgs sin formalizar no se topan.
@@ -15,7 +15,6 @@ import io
 import pytest
 
 from app.api.auth import _create_access_token
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.ingesta.document_store import LocalDocumentStore
 from app.ingesta.text_extract import CHARS_POR_PAGINA, contar_paginas
@@ -77,14 +76,8 @@ class _FakeDkgCount:
 
 @pytest.fixture
 def wired(monkeypatch, tmp_path):
-    budget_store = InMemoryBudgetStore()
-    # Saldo holgado para que el doc chico de freemium se apruebe (gate financiero ok).
-    bm = BudgetManager(store=budget_store)
-    bm.ensure_budget("free-org", saldo_inicial_usd=50.0)
-    bm.ensure_budget("paid-org", saldo_inicial_usd=50.0)
-
     queue_backend = InMemoryQueueBackend()
-    cotizador = Cotizador(budget_manager=BudgetManager(store=budget_store))
+    cotizador = Cotizador()
     dispatcher = JobDispatcher(backend=queue_backend)
     status_reader = JobStatusReader(backend=queue_backend)
 
@@ -130,7 +123,7 @@ def test_freemium_doc_pequeno_procede(wired):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["paginas_estimadas"] == 1
-    assert body["cotizacion"]["aprobado"] is True  # hay saldo
+    assert body["cotizacion"]["aprobado"] is True  # v2.1: el cotizador siempre aprueba
 
 
 def test_freemium_doc_grande_rechazo_conversion(wired):

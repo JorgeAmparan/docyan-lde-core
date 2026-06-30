@@ -14,7 +14,6 @@ Cubre (política balanceada del contrato F3):
 from __future__ import annotations
 
 from app.ingesta import pricing_table as pt
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.ingesta.quota_manager import (
     CUPOS_POR_PLAN,
@@ -30,12 +29,6 @@ DOC = "Documento técnico de prueba. " * 50  # doc chico → cómputo de centavo
 
 def _qm() -> QuotaManager:
     return QuotaManager(store=InMemoryQuotaStore())
-
-
-def _bm(saldo: float, tenant: str = "t") -> BudgetManager:
-    bm = BudgetManager(store=InMemoryBudgetStore())
-    bm.ensure_budget(tenant, saldo_inicial_usd=saldo)
-    return bm
 
 
 # ── Mapeo y siembra ───────────────────────────────────────────────────────────
@@ -96,7 +89,7 @@ def test_ensure_quota_idempotente_no_reinicia_gastado():
 def test_cotizador_dentro_de_cupo_setup_cero():
     qm = _qm()
     qm.ensure_quota("t", "esencial")
-    cot = Cotizador(budget_manager=_bm(100.0), quota_manager=qm).cotizar("t", DOC)
+    cot = Cotizador(quota_manager=qm).cotizar("t", DOC)
     assert cot.dentro_de_cupo is True
     assert cot.precio_setup_usd == 0.0
     assert cot.cupo_restante == 10  # cotizar no descuenta; solo confirmar
@@ -108,7 +101,7 @@ def test_cotizador_excedente_cobra_piso_15():
     q = qm.ensure_quota("t", "esencial")
     q.cupo_restante = 0  # cupo agotado
     qm.store.upsert(q)
-    cot = Cotizador(budget_manager=_bm(100.0), quota_manager=qm).cotizar("t", DOC)
+    cot = Cotizador(quota_manager=qm).cotizar("t", DOC)
     assert cot.dentro_de_cupo is False
     assert cot.precio_setup_usd == 15.0  # doc chico → gana el piso $15 (v1.1)
     assert cot.cupo_restante == 0
@@ -117,7 +110,7 @@ def test_cotizador_excedente_cobra_piso_15():
 def test_cotizador_freemium_sin_cupo_usa_formula():
     # Sin fila de cupo (freemium) → comportamiento previo: setup por fórmula.
     qm = _qm()  # sin ensure_quota para "t"
-    cot = Cotizador(budget_manager=_bm(100.0), quota_manager=qm).cotizar("t", DOC)
+    cot = Cotizador(quota_manager=qm).cotizar("t", DOC)
     assert cot.dentro_de_cupo is False
     assert cot.cupo_restante is None  # no aplica cupo
     assert cot.precio_setup_usd == 15.0
@@ -125,7 +118,7 @@ def test_cotizador_freemium_sin_cupo_usa_formula():
 
 def test_cotizador_sin_quota_manager_compat():
     # Sin quota_manager inyectado → comportamiento idéntico al previo (fórmula).
-    cot = Cotizador(budget_manager=_bm(100.0)).cotizar("t", DOC)
+    cot = Cotizador().cotizar("t", DOC)
     assert cot.dentro_de_cupo is False
     assert cot.cupo_restante is None
     assert cot.precio_setup_usd == 15.0
@@ -148,7 +141,7 @@ def test_escenario_cierre_10_incluidas_11a_cobra_15():
     """Contrato F3 salida verificable: Esencial → 10 ingestas incluidas, 11ª cotiza $15."""
     qm = _qm()
     qm.ensure_quota("t", "esencial")
-    cz = Cotizador(budget_manager=_bm(100.0), quota_manager=qm)
+    cz = Cotizador(quota_manager=qm)
 
     for i in range(10):
         cot = cz.cotizar("t", DOC)
@@ -211,7 +204,7 @@ def test_dispatcher_confirmar_descuenta_cupo():
     qm = _qm()
     qm.ensure_quota("t", "esencial")
     disp = JobDispatcher(
-        backend=InMemoryQueueBackend(), budget_manager=_bm(100.0), quota_manager=qm
+        backend=InMemoryQueueBackend(), quota_manager=qm
     )
     job = _job_dentro_de_cupo()
     disp.crear_job(job)
@@ -223,7 +216,7 @@ def test_dispatcher_confirmar_idempotente_no_doble_descuenta():
     qm = _qm()
     qm.ensure_quota("t", "esencial")
     disp = JobDispatcher(
-        backend=InMemoryQueueBackend(), budget_manager=_bm(100.0), quota_manager=qm
+        backend=InMemoryQueueBackend(), quota_manager=qm
     )
     job = _job_dentro_de_cupo(job_id="jr")
     disp.crear_job(job)

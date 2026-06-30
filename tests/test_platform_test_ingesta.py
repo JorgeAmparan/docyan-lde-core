@@ -5,8 +5,8 @@ Verifica el endpoint `/platform/test-ingesta/*` (super-admin):
   · Scope: sin auth → 401; token de tenant → 403 (no entra a /platform/*).
   · Aislamiento defensivo: el tenant destino DEBE ser de prueba (demo-/test-); un
     nombre de tenant de cliente se rechaza (400).
-  · Flujo canónico: cotiza (provisiona saldo de prueba) → pending_confirmation →
-    confirma → queued (encolado hacia el worker real). Sin bypass del cotizador.
+  · Flujo canónico: cotiza → pending_confirmation → confirma → queued (encolado
+    hacia el worker real). Sin bypass del cotizador.
   · metadata SÍ / contenido NO: ninguna respuesta filtra el texto del documento.
   · FAT: las acciones quedan auditadas.
 """
@@ -15,7 +15,6 @@ import io
 import pytest
 
 from app.ingesta import providers as iproviders
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.ingesta.document_store import LocalDocumentStore
 from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
@@ -45,15 +44,12 @@ def pwired(monkeypatch, tmp_path):
     monkeypatch.setattr(pproviders, "get_store", lambda: pstore)
     monkeypatch.setattr(pproviders, "get_audit", lambda: paudit)
 
-    # Ingesta: budget compartido entre ensure_budget (endpoint) y el cotizador.
-    budget_store = InMemoryBudgetStore()
-    budget_manager = BudgetManager(store=budget_store)
+    # Ingesta: cotizador real (gate vigente v2.1: cupo + cotización, sin saldo).
     queue_backend = InMemoryQueueBackend()
-    cotizador = Cotizador(budget_manager=budget_manager)
-    dispatcher = JobDispatcher(backend=queue_backend, budget_manager=budget_manager)
+    cotizador = Cotizador()
+    dispatcher = JobDispatcher(backend=queue_backend)
     doc_store = LocalDocumentStore(base_dir=str(tmp_path))
 
-    monkeypatch.setattr(iproviders, "get_budget_manager", lambda: budget_manager)
     monkeypatch.setattr(iproviders, "get_cotizador", lambda: cotizador)
     monkeypatch.setattr(iproviders, "get_dispatcher", lambda: dispatcher)
     monkeypatch.setattr(iproviders, "get_document_store", lambda: doc_store)
@@ -122,7 +118,7 @@ def test_cotiza_y_confirma_a_tenant_demo(pwired):
     client, paudit, queue_backend = pwired
     token = _login(client)
 
-    # 1) Cotiza (alias "maxi" → graph demo-maxi). Saldo de prueba provisionado.
+    # 1) Cotiza (alias "maxi" → graph demo-maxi).
     r = client.post(
         "/platform/test-ingesta/documents",
         headers=_ph(token), files=_file(), data={"tenant": "maxi"},

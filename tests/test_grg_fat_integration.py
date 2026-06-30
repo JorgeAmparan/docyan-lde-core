@@ -8,7 +8,6 @@ Ejercita un flujo de consulta desde el Master Orchestrator de B4 y verifica:
 """
 from app.audit.fat_extendido import FATExtendido, InMemoryFATStore
 from app.audit.integrity_checker import verificar_tenant
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
 from app.orchestrator.audit_logger import AuditLogger, FATAuditSink
@@ -25,10 +24,8 @@ AUTH_ADMIN = {"org_id": "t1", "user_id": "u1", "role": "admin", "email": "a@t1.c
 
 
 def _build_mo_con_fat():
-    budget_store = InMemoryBudgetStore()
-    BudgetManager(store=budget_store).ensure_budget("t1", saldo_inicial_usd=100.0)
     coord = PipelineCoordinator(
-        cotizador=Cotizador(budget_manager=BudgetManager(store=budget_store)),
+        cotizador=Cotizador(),
         dispatcher=JobDispatcher(backend=InMemoryQueueBackend()),
     )
     fat = FATExtendido(InMemoryFATStore())

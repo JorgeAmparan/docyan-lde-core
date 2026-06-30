@@ -7,7 +7,6 @@ MO (cotizador-gate). MO con backends en memoria vía dependency_overrides.
 import pytest
 
 from app.api.routers import mo as mo_router
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
 from app.orchestrator.audit_logger import AuditLogger, InMemoryAuditSink
@@ -23,11 +22,9 @@ from app.orchestrator.session_manager import (
 HEADERS = {"X-API-Key": "test-api-key-for-pytest"}  # → org=test-org, role=admin
 
 
-def _build_mo(saldo=100.0):
-    budget_store = InMemoryBudgetStore()
-    BudgetManager(store=budget_store).ensure_budget("test-org", saldo_inicial_usd=saldo)
+def _build_mo():
     coord = PipelineCoordinator(
-        cotizador=Cotizador(budget_manager=BudgetManager(store=budget_store)),
+        cotizador=Cotizador(),
         dispatcher=JobDispatcher(backend=InMemoryQueueBackend()),
     )
     return MasterOrchestrator(

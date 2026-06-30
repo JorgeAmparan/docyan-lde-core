@@ -103,9 +103,6 @@ def platform(monkeypatch):
 
     store.users.append({"id": "u1", "org_id": "alpha", "email": "a@alpha.com",
                         "created_at": "2026-01-01T00:00:00Z", "role": "admin"})
-    store.budgets["alpha"] = {"tenant_id": "alpha", "saldo_actual_usd": 8.0,
-                              "retenido_usd": 2.0, "hard_cap_por_documento": 5.0,
-                              "hard_cap_por_sesion": 20.0, "moneda": "USD"}
     backend.save_job(_job("J1", "alpha", bytes_orig=1000, bytes_res=2000, dur=30.0,
                           started="2026-06-06T00:00:00+00:00",
                           completed="2026-06-06T00:00:30+00:00"))
@@ -140,9 +137,6 @@ def test_org_metrics_devuelve_peso_y_tiempos_reales_sin_contenido(platform):
     assert body["almacenamiento_bytes"] == 2000
     assert body["ingesta_tiempo_total_seg"] == pytest.approx(30.0)
     assert body["ingesta_tiempo_promedio_seg"] == pytest.approx(30.0)
-    # Saldo + retenido (F1.5) expuestos como metadata.
-    assert body["presupuesto"]["saldo_actual_usd"] == 8.0
-    assert body["presupuesto"]["retenido_usd"] == 2.0
     # Aislamiento F2: el contenido del resultado NUNCA sale.
     assert SECRET not in r.text
 

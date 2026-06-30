@@ -47,15 +47,12 @@ def platform(monkeypatch):
 
     jobs_backend = InMemoryQueueBackend()
 
-    # Seed: una org "alpha" con users/documentos/budget/consultas + contenido secreto
+    # Seed: una org "alpha" con users/documentos/consultas + contenido secreto
     # que NUNCA debe salir por /platform/*.
     store.users.append({"id": "u1", "org_id": "alpha", "email": "a@alpha.com",
                         "created_at": "2026-01-01T00:00:00Z", "role": "admin"})
     store.documents.append({"id": "d1", "org_id": "alpha", "name": "NOM-052.pdf",
                             "text": SECRET_DOC_TEXT})
-    store.budgets["alpha"] = {"tenant_id": "alpha", "saldo_actual_usd": 7.5,
-                              "hard_cap_por_documento": 5.0, "hard_cap_por_sesion": 20.0,
-                              "moneda": "USD"}
     store.consultas["alpha"] = 12
     store.upsert_org_billing("alpha", display_name="Alpha Lab", plan="piloto")
 
@@ -143,7 +140,6 @@ def test_metrics_solo_metadata_sin_contenido(platform):
     assert body["documentos_ingeridos"] == 1
     assert body["consultas_total"] == 12
     assert body["grafo"]["nodes"] == 42 and body["grafo"]["relationships"] == 100
-    assert body["presupuesto"]["saldo_actual_usd"] == 7.5
     # NUNCA contenido: el texto secreto del documento no aparece en ningún lado.
     assert SECRET_DOC_TEXT not in r.text
 
@@ -206,7 +202,6 @@ def test_generar_y_canjear_codigo_provisiona_org(platform):
     assert prov["cuota_documentos"] == 50 and prov["cuota_saldo_usd"] == 25.0
     org_id = prov["org_id"]
     assert store.org_has_users(org_id)
-    assert store.get_budget(org_id)["saldo_actual_usd"] == 25.0
     assert store.get_org_billing(org_id)["plan"] == "piloto"
 
     # No se re-canjea.

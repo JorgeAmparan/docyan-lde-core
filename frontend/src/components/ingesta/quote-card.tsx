@@ -40,14 +40,12 @@ export interface QuoteCardProps {
   totalUsd: number;
   /** "USD" (internacional) | "MXN" (México, banda A). Etiqueta de moneda. */
   currency: string;
-  /** Saldo disponible (solo se muestra en planes pagos). */
-  saldoUsd?: number | null;
   /** Incluida en el cupo del plan (setup $0 sin ser freemium). */
   dentroCupo?: boolean;
   cupoRestante?: number | null;
   /** Tipo sin schema optimizado (worker_generara) → aviso honesto. */
   tipoNoCubierto?: boolean;
-  /** Rechazada por saldo / hard cap, o fuera del cap de sesión. */
+  /** Rechazada por hard cap, o fuera del cap de sesión. */
   rejected?: boolean;
   overCap?: boolean;
   /** Estimación poco confiable (p.ej. PDF escaneado) → el costo real puede variar. */

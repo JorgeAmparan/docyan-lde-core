@@ -5,16 +5,16 @@ DOCYAN LDE™ by XCID.
 
 Opera la tabla `org_ingest_quota` (migración 021): las "ingestas incluidas" que el
 plan promete (Esencial 10 + 3/mes · Profesional 30 + 10/mes · Enterprise negociado).
-Es una dimensión DISTINTA de:
-  · `orgs.doc_limit` (mig 020)              — tope de DOCUMENTOS VIVOS del grafo.
-  · `tenant_budget.saldo_actual_usd` (008)  — USD prepagado de CÓMPUTO.
+Es una dimensión DISTINTA de `orgs.doc_limit` (mig 020), que es el tope de
+DOCUMENTOS VIVOS del grafo. Modelo comercial v2.1: cupo + excedente, SIN saldo
+prepagado (el wallet `tenant_budget` fue retirado, migración 022).
 
 El cupo gobierna el PRECIO DE SETUP comercial: dentro de cupo el setup es $0
 ("incluido en tu plan"); agotado, el cotizador cobra con la fórmula canónica.
 
-Diseño testeable idéntico al BudgetManager: el acceso al almacén se abstrae en
-`QuotaStore`. Producción usa Supabase (RPC atómicas idempotentes); tests inyectan
-`InMemoryQuotaStore`. Freemium NO tiene fila de cupo (opera con su saldo de cortesía).
+El acceso al almacén se abstrae en `QuotaStore`. Producción usa Supabase (RPC
+atómicas idempotentes); tests inyectan `InMemoryQuotaStore`. Freemium NO tiene fila
+de cupo: opera por su límite de documentos vivos (doc_limit), sin ingestas incluidas.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ CUPOS_POR_PLAN: dict[str, tuple[int, int] | None] = {
     # Piloto es Esencial con −30%: comercialmente es el tier Esencial, hereda su cupo.
     "piloto": (10, 3),
 }
-# Planes sin cupo de setup (operan con saldo de cortesía / sin ingestas incluidas).
+# Planes sin cupo de setup (freemium opera por doc_limit, sin ingestas incluidas).
 PLANES_SIN_CUPO = frozenset({"freemium"})
 
 

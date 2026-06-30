@@ -6,7 +6,6 @@ Un consumidor (loop del worker) solo procesa jobs que están ENCOLADOS. Como
 crear_job NO encola (queda pending_confirmation), el pipeline no se llama hasta
 que se confirma. El gate no tiene bypass (CLAUDE.md §14).
 """
-from app.ingesta.budget_manager import BudgetManager, InMemoryBudgetStore
 from app.ingesta.cotizador import Cotizador
 from app.jobs.dispatcher import InMemoryQueueBackend, JobDispatcher
 from app.jobs.job_models import CotizacionSnapshot, IngestJob, JobStatus
@@ -35,10 +34,7 @@ def _drenar_cola(backend, dispatcher, pipeline):
 
 
 def _crear_job_cotizado(tenant, dispatcher):
-    store = InMemoryBudgetStore()
-    bm = BudgetManager(store=store)
-    bm.ensure_budget(tenant, saldo_inicial_usd=10.0)
-    cz = Cotizador(budget_manager=bm)
+    cz = Cotizador()
     c = cz.cotizar(tenant, TEXTO, tipo_documento="manual_tecnico")
     job = IngestJob(
         job_id="j1", tenant_id=tenant, documento_ref=f"{tenant}/d.pdf",
