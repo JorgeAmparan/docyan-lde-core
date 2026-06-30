@@ -8,15 +8,17 @@ GATE financiero inviolable: antes de invocar a GraphRAG-SDK, este módulo
   1. mide los tokens del documento con tiktoken,
   2. estima costo (extracción Gemini 2.5 Flash + QA gpt-4o-mini + embeddings BGE-M3),
   3. estima tiempo de procesamiento,
-  4. verifica saldo prepagado del tenant y hard caps (por documento y por sesión),
-  5. decide: RECHAZADO (saldo o hard cap) o APROBADO_REQUIERE_CONFIRMACION,
+  4. resuelve el cupo del plan (dentro de cupo → setup $0; sobre cupo → fórmula),
+  5. decide: siempre APROBADO_REQUIERE_CONFIRMACION (con el precio a la vista),
   6. nunca ingiere por su cuenta: la ingesta solo procede con confirmación explícita.
 
-No hay bypass (CLAUDE.md §12 / §14). Para tests que necesiten saltar el costo
-real se mockea el ALMACÉN de presupuesto (InMemoryBudgetStore), nunca la decisión.
+Modelo comercial v2.1 (cotizador.md): **NO hay saldo prepagado ni hard caps**. El
+gate es cupo + cotización + confirmación; no se rechaza por saldo. El cobro del
+excedente es al método de pago al confirmar (manual hasta B9.1), sin prepago.
 
-Justificación operativa: incidente PoC 28-may-2026 ($5,000 en Gemini por una
-ingesta sin control de costo, timeout 600s, escritura parcial).
+No hay bypass (CLAUDE.md §14): toda ingesta pasa por la cotización y la
+confirmación explícita del usuario. Justificación operativa: incidente PoC
+28-may-2026 ($5,000 en Gemini por una ingesta sin cotización ni confirmación).
 """
 from __future__ import annotations
 
@@ -24,7 +26,6 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 
 from app.ingesta import pricing_table as pt
-from app.ingesta.budget_manager import BudgetManager
 from app.ingesta.quota_manager import QuotaManager
 
 # Encoding de tiktoken para medir. o200k_base es el de gpt-4o/gpt-4o-mini; se usa
@@ -174,10 +175,8 @@ class Cotizador:
 
     def __init__(
         self,
-        budget_manager: BudgetManager | None = None,
         quota_manager: QuotaManager | None = None,
     ):
-        self.budget = budget_manager or BudgetManager()
         # Cupo de ingestas (F3 §C). Opcional: si no se inyecta, NO se aplica cupo y
         # el setup se cobra con la fórmula como antes (comportamiento previo intacto).
         self.quota = quota_manager
@@ -226,30 +225,23 @@ class Cotizador:
                     dentro_de_cupo = True
                     precio_setup = 0.0
 
-        verdict = self.budget.verificar(
-            tenant_id, costo, costo_sesion_acumulado_usd
-        )
-
-        if verdict.aprobado:
-            decision = DecisionCotizacion.aprobado_requiere_confirmacion
-            if dentro_de_cupo:
-                motivo = (
-                    f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s). "
-                    f"Setup incluido en tu plan ({cupo_restante} ingesta(s) restantes). "
-                    "Requiere confirmación explícita para ingerir."
-                )
-            else:
-                motivo = (
-                    f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s); "
-                    f"setup ${precio_setup:.2f} USD. "
-                    "Presupuesto suficiente. Requiere confirmación explícita para ingerir."
-                )
-        elif "hard cap" in verdict.motivo.lower():
-            decision = DecisionCotizacion.rechazado_hard_cap
-            motivo = verdict.motivo
+        # Modelo comercial v2.1 (cotizador.md): NO hay saldo prepagado ni hard caps.
+        # El gate es cupo + cotización + confirmación explícita. La cotización SIEMPRE
+        # procede a confirmación (el usuario decide con el precio a la vista); dentro de
+        # cupo el setup es $0, sobre cupo rige la fórmula. Sin rechazo por saldo.
+        decision = DecisionCotizacion.aprobado_requiere_confirmacion
+        if dentro_de_cupo:
+            motivo = (
+                f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s). "
+                f"Setup incluido en tu plan ({cupo_restante} ingesta(s) restantes). "
+                "Requiere confirmación explícita para ingerir."
+            )
         else:
-            decision = DecisionCotizacion.rechazado_presupuesto
-            motivo = verdict.motivo
+            motivo = (
+                f"Estimación ${costo:.4f} USD de cómputo (~{tiempo:.0f}s); "
+                f"setup ${precio_setup:.2f} USD. "
+                "Requiere confirmación explícita para ingerir."
+            )
 
         return Cotizacion(
             tenant_id=tenant_id,
@@ -260,8 +252,8 @@ class Cotizador:
             tiempo_estimado_seg=tiempo,
             decision=decision,
             motivo=motivo,
-            saldo_disponible_usd=verdict.saldo_disponible,
-            falta_usd=verdict.falta_usd,
+            saldo_disponible_usd=0.0,  # deprecado (v2.1 sin saldo prepagado)
+            falta_usd=0.0,
             precio_setup_usd=precio_setup,
             factor_complejidad=pt.FACTOR_COMPLEJIDAD,
             detalle_tokens=detalle,

@@ -30,14 +30,15 @@ def get_quota_manager() -> QuotaManager:
 def get_cotizador() -> Cotizador:
     # F3 §C: el cotizador consulta el cupo de ingestas del plan (setup $0 dentro de
     # cupo; fórmula al agotarlo). Sin fila de cupo (freemium) → fórmula como antes.
-    return Cotizador(budget_manager=BudgetManager(), quota_manager=QuotaManager())
+    # v2.1: sin saldo prepagado — el gate es cupo + cotización + confirmación.
+    return Cotizador(quota_manager=QuotaManager())
 
 
 def get_dispatcher() -> JobDispatcher:
-    # F1.5: el dispatcher de producción reserva/liquida/libera saldo en cada
-    # transición del gate, por eso siempre lleva un BudgetManager real.
-    # F3 §C: además descuenta cupo al confirmar una ingesta cotizada dentro de cupo.
-    return JobDispatcher(budget_manager=BudgetManager(), quota_manager=QuotaManager())
+    # F3 §C: descuenta cupo al confirmar una ingesta cotizada dentro de cupo.
+    # v2.1: SIN BudgetManager — no hay saldo prepagado que reservar/liquidar/liberar;
+    # los guards `if self.budget is not None` del dispatcher quedan inertes.
+    return JobDispatcher(budget_manager=None, quota_manager=QuotaManager())
 
 
 def get_status_reader() -> JobStatusReader:
