@@ -19,7 +19,9 @@ export function Icon({
   name,
   size = 18,
   className,
-  strokeWidth = 1.75,
+  // Trazo por defecto = 2 (el default de lucide que usa el prototipo). 1.75 hacía
+  // los íconos del rail/tarjetas más delgados/tenues que en el prototipo.
+  strokeWidth = 2,
   ...rest
 }: { name: string; size?: number } & LucideProps) {
   const key = toPascal(name) as keyof typeof icons;

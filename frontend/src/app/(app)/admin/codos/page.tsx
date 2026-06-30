@@ -42,6 +42,13 @@ function codoIcon(c: CodoOut): string {
   return "folder";
 }
 
+/** DEF-4: un id "tipo hash" (SHA-256 de un documento suelto) NUNCA se muestra como
+ *  código del CoDo. El prototipo muestra un código legible (CODO-OBR-07); para un
+ *  doc suelto sin código no se pinta `.cid` (mejor vacío que fugar el hash). */
+function isHashLike(id: string): boolean {
+  return /[0-9a-f]{16,}/i.test(id.replace(/[^0-9a-z]/gi, ""));
+}
+
 function CodosEmpty({ isFree, onNew }: { isFree: boolean; onNew: () => void }) {
   const steps: [string, string, string][] = [
     ["pencil", "Nombra la entidad", "El equipo, lugar o proceso: una mezcladora, una celda CNC, una centrífuga."],
@@ -183,7 +190,7 @@ export default function CodosPage() {
                 <Icon name={codoIcon(c)} size={21} />
               </span>
               <div style={{ minWidth: 0 }}>
-                <div className="cid">{c.id}</div>
+                {!isHashLike(c.id) && <div className="cid">{c.id}</div>}
                 <div className="cn">{c.nombre}</div>
               </div>
               {c.estado === "warn" ? (
