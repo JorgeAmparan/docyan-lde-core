@@ -82,5 +82,4 @@
 
   /* account dashboard usage meters stack */
   .usage { grid-template-columns: 1fr; }
-  .acct-main { padding: 20px; }
 }
