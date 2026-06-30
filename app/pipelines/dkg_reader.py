@@ -180,6 +180,10 @@ class PipelineGraphReader(Protocol):
     def comparar(
         self, tenant_id: str, estrategia: str, ref_izquierda: str, ref_derecha: str
     ) -> dict: ...
+    def bilingue(
+        self, tenant_id: str, termino: str, source_lang: str = "en-US",
+        target_lang: str = "es-MX",
+    ) -> dict: ...
 
 
 # ── DEF-1 — Ontología legible por la InfoCard (más allá de :Especificacion) ─────
@@ -946,4 +950,118 @@ class DKGReader:
         return {
             "izquierda": izq[0] if izq else {},
             "derecha": der[0] if der else {},
+        }
+
+    # ── Tipo 9 — Bilingüe (memoria_traduccion · DTM, par segregado) ─────────────
+
+    def _get_dtm(self):
+        """Cliente DTM perezoso (reutiliza el driver del DKG). Inyectable en tests."""
+        dtm = getattr(self, "_dtm", None)
+        if dtm is None:
+            from app.graph.dtm_client import DTMClient
+
+            dtm = DTMClient()
+            self._dtm = dtm
+        return dtm
+
+    def bilingue(
+        self, tenant_id: str, termino: str, source_lang: str = "en-US",
+        target_lang: str = "es-MX",
+    ) -> dict:
+        """
+        Lee segmentos alineados del DTM (`:SegmentoTraduccion`) del par direccional,
+        casando léxicamente la consulta contra el texto ORIGEN o DESTINO. Adjunta los
+        términos del glosario (lock terminológico) presentes en cada segmento.
+
+        Devuelve SIEMPRE estructura plana. Si el par no tiene memoria (grafo vacío o
+        DTM no disponible) → `{"segmentos": [], "desde_memoria": False}` (honesto: el
+        pipeline declara "sin memoria para el par", no inventa traducción).
+        """
+        par = f"{source_lang} → {target_lang}"
+        vacio = {"par_linguistico": par, "segmentos": [], "desde_memoria": False,
+                 "lock_activo": False}
+        dtm = self._get_dtm()
+        toks = tokenizar_busqueda(termino)
+
+        try:
+            # Glosario del par: términos fijados (lock terminológico). Se leen una vez
+            # y se cruzan contra cada segmento por contención en el texto origen.
+            glos = dtm.query(
+                tenant_id, source_lang, target_lang,
+                """
+                MATCH (g:Glosario)-[:CONTIENE_TERMINO]->(t:TerminoGlosario)
+                RETURN t.texto_origen AS origen, t.texto_destino AS destino,
+                       coalesce(g.lock_terminologico, false) AS lock
+                """,
+            )
+            # Segmentos del par. CONTAINS por CUALQUIER token (origen o destino); sin
+            # tokens (consulta vacía) trae los primeros N para poblar la vista.
+            if toks:
+                conds = " OR ".join(
+                    f"toLower(s.texto_origen) CONTAINS $t{i} "
+                    f"OR toLower(coalesce(s.texto_destino,'')) CONTAINS $t{i}"
+                    for i in range(len(toks))
+                )
+                where = f"WHERE {conds}"
+                params = {f"t{i}": tok.lower() for i, tok in enumerate(toks)}
+            else:
+                where, params = "", {}
+            rows = dtm.query(
+                tenant_id, source_lang, target_lang,
+                f"""
+                MATCH (s:SegmentoTraduccion)
+                {where}
+                RETURN s.texto_origen AS texto_origen, s.texto_destino AS texto_destino,
+                       s.idioma_origen AS idioma_origen, s.idioma_destino AS idioma_destino,
+                       s.tipo_segmento AS tipo_segmento, s.contexto AS contexto,
+                       s.dominio AS dominio
+                LIMIT 12
+                """,
+                params,
+            )
+        except Exception:  # noqa: BLE001 — sin DTM/par se degrada honesto (no se finge).
+            return vacio
+
+        locks = [
+            {"termino_origen": g.get("origen"), "termino_destino": g.get("destino"),
+             "lock": bool(g.get("lock"))}
+            for g in glos
+            if g.get("origen") and g.get("destino")
+        ]
+        lock_activo = any(g["lock"] for g in locks)
+
+        segmentos: list[dict] = []
+        for r in rows:
+            origen = r.get("texto_origen")
+            if not origen:
+                continue
+            origen_low = origen.lower()
+            seg_locks = [
+                {"termino_origen": lk["termino_origen"], "termino_destino": lk["termino_destino"]}
+                for lk in locks
+                if lk["termino_origen"] and lk["termino_origen"].lower() in origen_low
+            ]
+            dominio = r.get("dominio") or r.get("contexto")
+            segmentos.append({
+                "texto_origen": origen,
+                "texto_destino": r.get("texto_destino"),
+                "idioma_origen": r.get("idioma_origen") or source_lang,
+                "idioma_destino": r.get("idioma_destino") or target_lang,
+                "tipo_segmento": r.get("tipo_segmento"),
+                "lock": seg_locks,
+                # Cita: el segmento origen ES verbatim de la memoria. El "documento"
+                # es la memoria de traducción del par; la sección es el dominio/contexto.
+                "documento_nombre": "Memoria de traducción",
+                "documento_tipo": "memoria_traduccion",
+                "seccion": dominio,
+                "fragmento": origen,
+            })
+
+        if not segmentos:
+            return vacio
+        return {
+            "par_linguistico": par,
+            "segmentos": segmentos,
+            "desde_memoria": True,
+            "lock_activo": lock_activo,
         }

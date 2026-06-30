@@ -33,6 +33,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
     rm -rf /wheels
 
 COPY app/ ./app/
+# Scripts operativos (migraciones, seeds idempotentes) — ejecutables vía `fly ssh
+# console -C "python scripts/<x>.py"` con acceso al FalkorDB privado (.internal).
+COPY scripts/ ./scripts/
 
 ENV PYTHONPATH=/app
 ENV DATA_DIR=/app/data

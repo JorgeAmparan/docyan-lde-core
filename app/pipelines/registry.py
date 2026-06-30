@@ -20,6 +20,7 @@ from app.pipelines import (
     tipo6_historial,
     tipo7_alertas,
     tipo8_comparativa,
+    tipo9_bilingue,
 )
 from app.pipelines.base import ContextoPipeline, ResultadoPipeline
 from app.pipelines.dkg_reader import PipelineGraphReader
@@ -35,6 +36,7 @@ RESOLVERS: dict[TipoIntencion, Resolver] = {
     TipoIntencion.HISTORIAL: tipo6_historial.resolver,
     TipoIntencion.ALERTAS: tipo7_alertas.resolver,
     TipoIntencion.COMPARATIVA: tipo8_comparativa.resolver,
+    TipoIntencion.BILINGUE: tipo9_bilingue.resolver,
 }
 
 
@@ -66,6 +68,9 @@ def payload_vacio(tipo: TipoIntencion, titulo: str):
         return pp.TimelinePayload(titulo=titulo)
     if tipo == TipoIntencion.ALERTAS:
         return pp.AlertsDashboardPayload(titulo=titulo)
+    if tipo == TipoIntencion.BILINGUE:
+        # Sin memoria para el par → vista bilingüe vacía honesta (desde_memoria=False).
+        return pp.BilingualAlignmentPayload(titulo=titulo, desde_memoria=False)
     return pp.ComparativeViewPayload(
         titulo=titulo, estrategia="entidades_mismo_tipo",
         referencia_izquierda="", referencia_derecha="",

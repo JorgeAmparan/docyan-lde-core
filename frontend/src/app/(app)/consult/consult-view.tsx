@@ -17,6 +17,7 @@ import {
   type Answer,
   type AnswerMode,
   type AlertsDashboardPayload,
+  type BilingualAlignmentPayload,
   type ComparativeViewPayload,
   type ConsultaResuelta,
   type DiagnosticTreePayload,
@@ -34,6 +35,7 @@ import { TroubleshootingTree } from "./renderers/troubleshooting-tree";
 import { HistorialTimeline } from "./renderers/historial-timeline";
 import { AlertasDashboard } from "./renderers/alertas-dashboard";
 import { ComparativaView } from "./renderers/comparativa-view";
+import { BilingualAlignment } from "./renderers/bilingual-alignment";
 
 export interface ConsultContext {
   codo: string;
@@ -139,6 +141,8 @@ function AnswerBody({
       return <AlertasDashboard payload={a.payload as AlertsDashboardPayload} saved={saved} onSave={onSave} onCite={() => {}} />;
     case "compare":
       return <ComparativaView payload={a.payload as ComparativeViewPayload} saved={saved} onSave={onSave} onCite={onCite} />;
+    case "bilingual":
+      return <BilingualAlignment payload={a.payload as BilingualAlignmentPayload} saved={saved} onSave={onSave} onCite={onCite} />;
     case "error":
       return <ErrorCard msg={a.errorMsg ?? "Error desconocido."} />;
     default:
@@ -158,6 +162,7 @@ const KIND_SCHEMA: Record<string, string> = {
   history: "registro_historico",
   alerts: "certificado_calibracion",
   compare: "manual_operacion",
+  bilingual: "memoria_traduccion",
 };
 const SCHEMA_LABEL: Record<string, string> = {
   ficha_tecnica: "Ficha técnica",

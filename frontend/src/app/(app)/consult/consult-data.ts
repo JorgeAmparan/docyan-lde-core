@@ -22,6 +22,7 @@ export type DiagnosticTreePayload = components["schemas"]["DiagnosticTreePayload
 export type TimelinePayload = components["schemas"]["TimelinePayload"];
 export type AlertsDashboardPayload = components["schemas"]["AlertsDashboardPayload"];
 export type ComparativeViewPayload = components["schemas"]["ComparativeViewPayload"];
+export type BilingualAlignmentPayload = components["schemas"]["BilingualAlignmentPayload"];
 
 export type AnswerKind =
   | "info"
@@ -32,6 +33,7 @@ export type AnswerKind =
   | "history"
   | "alerts"
   | "compare"
+  | "bilingual"
   | "error";
 
 /** "cache" = instant cache hit (jade pulse). "synth" = synthesized (amber blink). */
@@ -57,6 +59,7 @@ const KIND_BY_PAYLOAD: Record<string, AnswerKind> = {
   timeline: "history",
   alerts_dashboard: "alerts",
   comparative_view: "compare",
+  bilingual_alignment: "bilingual",
 };
 
 /** Wrap a live MO `ConsultaResuelta` into the renderer `Answer` (kind from the

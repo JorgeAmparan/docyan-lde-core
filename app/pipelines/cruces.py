@@ -54,6 +54,10 @@ _MATRIZ: dict[TipoIntencion, list[tuple[TipoIntencion, str, str]]] = {
         (TipoIntencion.INFORMATIVA, "Ver especificación",
          "Detalle de cada lado comparado"),
     ],
+    TipoIntencion.BILINGUE: [
+        (TipoIntencion.INFORMATIVA, "Ver especificación",
+         "Especificación del término en el documento origen"),
+    ],
 }
 
 

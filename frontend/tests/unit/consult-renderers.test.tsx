@@ -9,8 +9,10 @@ import { TroubleshootingTree } from "@/app/(app)/consult/renderers/troubleshooti
 import { HistorialTimeline } from "@/app/(app)/consult/renderers/historial-timeline";
 import { AlertasDashboard } from "@/app/(app)/consult/renderers/alertas-dashboard";
 import { ComparativaView } from "@/app/(app)/consult/renderers/comparativa-view";
+import { BilingualAlignment } from "@/app/(app)/consult/renderers/bilingual-alignment";
 import type {
   AlertsDashboardPayload,
+  BilingualAlignmentPayload,
   ComparativeViewPayload,
   DiagnosticTreePayload,
   DiagramViewerPayload,
@@ -189,5 +191,52 @@ describe("Tipo 8 · ComparativaView", () => {
     render(<ComparativaView payload={payload} saved={false} onSave={noop} onCite={noop} />);
     expect(screen.getByText(/Torque/)).toBeInTheDocument();
     expect(screen.getByText(/relevantes para seguridad/)).toBeInTheDocument();
+  });
+});
+
+describe("Tipo 9 · BilingualAlignment — memoria_traduccion (Pista B)", () => {
+  it("renders aligned source↔target segments and the terminology lock", () => {
+    const payload: BilingualAlignmentPayload = {
+      kind: "bilingual_alignment",
+      titulo: "Memoria de traducción · en-US → es-MX",
+      par_linguistico: "en-US → es-MX",
+      desde_memoria: true,
+      lock_terminologico_activo: true,
+      segmentos: [
+        {
+          texto_origen: "Stop the machine and apply lock-out/tag-out before service.",
+          texto_destino: "Detén la máquina y aplica bloqueo/etiquetado (LOTO) antes del servicio.",
+          idioma_origen: "en-US",
+          idioma_destino: "es-MX",
+          tipo_segmento: "advertencia",
+          lock: [{ termino_origen: "lock-out/tag-out", termino_destino: "bloqueo/etiquetado (LOTO)" }],
+          cita: { documento_nombre: "Memoria de traducción", fragmento: "Stop the machine and apply lock-out/tag-out before service." },
+        },
+      ],
+      citas: [{ documento_nombre: "Memoria de traducción", fragmento: "Stop the machine and apply lock-out/tag-out before service." }],
+    };
+    render(<BilingualAlignment payload={payload} saved={false} onSave={noop} onCite={noop} />);
+    expect(screen.getByText(/Stop the machine and apply lock-out\/tag-out/)).toBeInTheDocument();
+    expect(screen.getByText(/Detén la máquina y aplica bloqueo\/etiquetado/)).toBeInTheDocument();
+    expect(screen.getByText("EN-US")).toBeInTheDocument();
+    expect(screen.getByText("ES-MX")).toBeInTheDocument();
+    // Lock terminológico (candado) — equivalencia fijada.
+    expect(screen.getByText("bloqueo/etiquetado (LOTO)")).toBeInTheDocument();
+    expect(screen.getByText(/equivalencias fijadas/)).toBeInTheDocument();
+  });
+
+  it("is honest when there is no memory for the pair (no invented equivalences)", () => {
+    const payload: BilingualAlignmentPayload = {
+      kind: "bilingual_alignment",
+      titulo: "Memoria de traducción · en-US → es-MX",
+      par_linguistico: "en-US → es-MX",
+      desde_memoria: false,
+      lock_terminologico_activo: false,
+      segmentos: [],
+      citas: [],
+    };
+    render(<BilingualAlignment payload={payload} saved={false} onSave={noop} onCite={noop} />);
+    expect(screen.getByText(/No hay memoria de traducción para el par/)).toBeInTheDocument();
+    expect(screen.queryByText("EN-US")).not.toBeInTheDocument();
   });
 });

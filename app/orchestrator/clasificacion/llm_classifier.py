@@ -34,6 +34,11 @@ _DESCRIPCIONES = {
     TipoIntencion.HISTORIAL: "pide el historial, registro, bitácora o eventos pasados de algo",
     TipoIntencion.ALERTAS: "pregunta por vencimientos, caducidades o alertas administrativas",
     TipoIntencion.COMPARATIVA: "pide comparar dos versiones o entidades / detectar diferencias",
+    TipoIntencion.BILINGUE: (
+        "pide la versión bilingüe / la equivalencia o traducción de un texto entre "
+        "idiomas (p. ej. inglés↔español), el segmento original en otro idioma, o el "
+        "término fijado del glosario (memoria de traducción)"
+    ),
 }
 
 
@@ -49,13 +54,14 @@ def _build_prompt(pregunta: str, contexto: dict | None) -> str:
         },
         ensure_ascii=False,
     )
+    n_tipos = len(_DESCRIPCIONES)
     return (
         "Eres un clasificador de intención de consultas sobre documentos técnicos "
         "industriales. Clasifica la PREGUNTA del operador en EXACTAMENTE UNO de "
-        "estos 8 tipos:\n"
+        f"estos {n_tipos} tipos:\n"
         f"{opciones}\n\n"
         "Devuelve EXCLUSIVAMENTE un objeto JSON con la forma:\n"
-        '{"tipo": "<UNO_DE_LOS_8>", "score": <0.0-1.0>, "razon": "<breve>"}\n'
+        '{"tipo": "<UNO_DE_LOS_TIPOS>", "score": <0.0-1.0>, "razon": "<breve>"}\n'
         "El 'score' es tu confianza. Si la pregunta es ambigua, elige el tipo más "
         "probable y baja el score en consecuencia.\n\n"
         f"CONTEXTO: {ctx_str}\n\n"

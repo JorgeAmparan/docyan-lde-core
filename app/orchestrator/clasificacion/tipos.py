@@ -3,9 +3,9 @@ Tipos del clasificador de intención (B8 §A1).
 
 DOCYAN LDE™ by XCID.
 
-Los 8 tipos de intención CONFIRMADOS para el MVP (doc 03; los tipos 9-11 quedan
-fuera del alcance B8). Cada tipo mapea a un pipeline de resolución
-(`app/pipelines/tipoN_*.py`) vía `RUTA_POR_TIPO`.
+Los tipos de intención del MVP (doc 03): 1-8 confirmados en B8 + Tipo 9 BILINGUE
+(memoria_traduccion · Pista B, P7). Los tipos 10-11 siguen fuera de alcance. Cada
+tipo mapea a un pipeline de resolución (`app/pipelines/tipoN_*.py`) vía `RUTA_POR_TIPO`.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from enum import Enum
 
 
 class TipoIntencion(str, Enum):
-    """Los 8 tipos de intención de consulta del MVP (doc 03)."""
+    """Tipos de intención de consulta. 1-8 (B8) + Tipo 9 BILINGUE (memoria_traduccion)."""
 
     INFORMATIVA = "INFORMATIVA"
     GUIA_PASO_A_PASO = "GUIA_PASO_A_PASO"
@@ -24,6 +24,7 @@ class TipoIntencion(str, Enum):
     HISTORIAL = "HISTORIAL"
     ALERTAS = "ALERTAS"
     COMPARATIVA = "COMPARATIVA"
+    BILINGUE = "BILINGUE"
 
 
 #: Ruta (módulo de pipeline) que resuelve cada tipo de intención. Es la "ruta"
@@ -37,6 +38,7 @@ RUTA_POR_TIPO: dict[TipoIntencion, str] = {
     TipoIntencion.HISTORIAL: "tipo6_historial",
     TipoIntencion.ALERTAS: "tipo7_alertas",
     TipoIntencion.COMPARATIVA: "tipo8_comparativa",
+    TipoIntencion.BILINGUE: "tipo9_bilingue",
 }
 
 

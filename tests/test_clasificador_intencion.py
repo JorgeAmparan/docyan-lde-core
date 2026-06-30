@@ -59,6 +59,15 @@ EJEMPLOS = {
         "diferencias entre dos equipos",
         "qué cambió entre versiones del manual",
     ],
+    # Tipo 9 — Bilingüe (memoria_traduccion · Pista B, P7). Paráfrasis reales que
+    # piden la versión/equivalencia bilingüe, no un dato puntual ni un procedimiento.
+    TipoIntencion.BILINGUE: [
+        "muéstrame la memoria de traducción del manual",
+        "cuál es la equivalencia en inglés de bloqueo",
+        "versión bilingüe del procedimiento",
+        "segmentos alineados origen y destino",
+        "cómo se dice lock-out en español",
+    ],
 }
 
 
