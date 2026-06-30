@@ -198,3 +198,17 @@
 .dc-answer .diff b{color:var(--accent-fg);}
 .dc-answer .cmp-sum{margin-top:12px;font-size:13.5px;line-height:1.5;color:var(--fg);}
 .dc-answer .cmp-sum .cs-lab{display:block;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:4px;}
+
+/* ── Tipo 9 · Vista bilingüe alineada (memoria_traduccion · Pista B) ──────────
+   Portado 1:1 del prototipo (app/cotizador.css .tm-*): segmentos origen↔destino
+   con lock terminológico (candado). */
+.dc-answer .tm-list{list-style:none;margin:14px 0 0;padding:0;}
+.dc-answer .tm-seg{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;background:var(--surface);}
+.dc-answer .tm-side{display:flex;gap:10px;padding:11px 14px;}
+.dc-answer .tm-side.src{background:var(--amate-50);border-bottom:1px solid var(--border);}
+.dc-answer .tm-lang{font-family:var(--font-mono);font-size:9px;letter-spacing:.06em;color:var(--fg-subtle);border:1px solid var(--border);border-radius:4px;padding:2px 5px;height:fit-content;flex:none;margin-top:1px;}
+.dc-answer .tm-txt{font-size:13.5px;line-height:1.5;color:var(--fg);}
+.dc-answer .tm-side.tgt .tm-txt{font-weight:500;}
+.dc-answer .tm-lock{display:flex;align-items:center;gap:7px;padding:8px 14px;border-top:1px dashed var(--border);background:var(--cinnabar-50);font-size:11px;color:var(--accent-fg);}
+.dc-answer .tm-lock svg{color:var(--cinnabar-600);flex:none;}
+.dc-answer .tm-term{font-family:var(--font-mono);font-weight:600;}

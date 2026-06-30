@@ -1971,6 +1971,35 @@ export interface components {
             /** Citas */
             citas?: components["schemas"]["Cita"][];
         };
+        /** BilingualAlignmentPayload */
+        BilingualAlignmentPayload: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "bilingual_alignment";
+            /** Titulo */
+            titulo: string;
+            /**
+             * Par Linguistico
+             * @default en-US → es-MX
+             */
+            par_linguistico: string;
+            /**
+             * Desde Memoria
+             * @default true
+             */
+            desde_memoria: boolean;
+            /**
+             * Lock Terminologico Activo
+             * @default false
+             */
+            lock_terminologico_activo: boolean;
+            /** Segmentos */
+            segmentos?: components["schemas"]["SegmentoBilingue"][];
+            /** Citas */
+            citas?: components["schemas"]["Cita"][];
+        };
         /** BillingStatus */
         BillingStatus: {
             /** Org Id */
@@ -2323,7 +2352,7 @@ export interface components {
             /** Cruces */
             cruces?: components["schemas"]["CruceSugerido"][];
             /** Payload */
-            payload: components["schemas"]["InfoCardPayload"] | components["schemas"]["ProcedureCardPayload"] | components["schemas"]["DiagramViewerPayload"] | components["schemas"]["VideoPlayerPayload"] | components["schemas"]["DiagnosticTreePayload"] | components["schemas"]["TimelinePayload"] | components["schemas"]["AlertsDashboardPayload"] | components["schemas"]["ComparativeViewPayload"];
+            payload: components["schemas"]["InfoCardPayload"] | components["schemas"]["ProcedureCardPayload"] | components["schemas"]["DiagramViewerPayload"] | components["schemas"]["VideoPlayerPayload"] | components["schemas"]["DiagnosticTreePayload"] | components["schemas"]["TimelinePayload"] | components["schemas"]["AlertsDashboardPayload"] | components["schemas"]["ComparativeViewPayload"] | components["schemas"]["BilingualAlignmentPayload"];
             /**
              * Degradado
              * @default false
@@ -3310,6 +3339,19 @@ export interface components {
              */
             users: number;
         };
+        /**
+         * ParLock
+         * @description Equivalencia terminológica FIJADA (lock terminológico, doc 02 / DTM §4).
+         *
+         *     Es el diferenciador defendible vs CAT tools (CLAUDE.md §11): el término origen
+         *     SOLO puede traducirse por su destino fijado en el glosario del par activo.
+         */
+        ParLock: {
+            /** Termino Origen */
+            termino_origen: string;
+            /** Termino Destino */
+            termino_destino: string;
+        };
         /** PasoPlaybookIn */
         PasoPlaybookIn: {
             /** Consulta Guardada Id */
@@ -3700,6 +3742,36 @@ export interface components {
             creados?: components["schemas"]["PlaybookOut"][];
             /** Nota */
             nota?: string | null;
+        };
+        /**
+         * SegmentoBilingue
+         * @description Par alineado origen↔destino del DTM (`:SegmentoTraduccion`, doc 02 / §1).
+         *
+         *     `texto_origen` es el segmento VERBATIM del documento fuente (idioma origen) y
+         *     `texto_destino` su equivalencia aprobada en el par lingüístico activo. No es
+         *     traducción generada al vuelo: viene de la memoria (DTM). Los `lock` son las
+         *     equivalencias terminológicas fijadas presentes en el segmento.
+         */
+        SegmentoBilingue: {
+            /** Texto Origen */
+            texto_origen: string;
+            /** Texto Destino */
+            texto_destino?: string | null;
+            /**
+             * Idioma Origen
+             * @default en-US
+             */
+            idioma_origen: string;
+            /**
+             * Idioma Destino
+             * @default es-MX
+             */
+            idioma_destino: string;
+            /** Tipo Segmento */
+            tipo_segmento?: string | null;
+            /** Lock */
+            lock?: components["schemas"]["ParLock"][];
+            cita?: components["schemas"]["Cita"] | null;
         };
         /**
          * SessionType

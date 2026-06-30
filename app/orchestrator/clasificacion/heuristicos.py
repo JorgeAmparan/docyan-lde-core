@@ -117,6 +117,23 @@ _PATRONES: dict[TipoIntencion, list[tuple[str, float]]] = {
         (r"\bcomparad[oa] con\b", 2.5),
         (r"\bcontra (la|el) (version|norma|especificacion)\b", 2.2),
     ],
+    # Tipo 9 — Bilingüe (memoria_traduccion · Pista B). Señales: pide la versión
+    # original/traducida, la equivalencia EN↔ES, el segmento bilingüe, el término
+    # fijado del glosario, o el par lingüístico. Stems cubren traduc*/equivalen*.
+    TipoIntencion.BILINGUE: [
+        (r"\bmemoria de traduccion\b", 3.0),
+        (r"\b(segmento|version|texto)s? biling(ue|ues)\b", 3.0),
+        (r"\bbiling(ue|ues)\b", 2.6),
+        (r"\bequivalen(te|cia)s?\b", 2.4),
+        (r"\btraduc(cion|cciones|e|ido|ida|ir|ela|elo)\w*\b", 2.2),
+        (r"\bcomo se dice\b", 2.4),
+        (r"\b(en|al) ingles\b", 2.2),
+        (r"\b(version|texto) original (en )?ingles\b", 2.8),
+        (r"\b(par|pares) linguistico(s)?\b", 2.6),
+        (r"\b(glosario|termino fijado|lock terminologico)\b", 2.0),
+        (r"\b(en-us|es-mx|en ?->? ?es|ingles ?->? ?espanol)\b", 2.5),
+        (r"\bsegmentos alineados\b", 3.0),
+    ],
 }
 
 # Señal de contexto: el tipo de documento al que apunta el QR sesga ligeramente
@@ -130,6 +147,7 @@ _BONO_DOC_TIPO: dict[str, dict[TipoIntencion, float]] = {
     "ficha_tecnica": {TipoIntencion.INFORMATIVA: 0.8},
     "especificacion": {TipoIntencion.INFORMATIVA: 0.8},
     "msds": {TipoIntencion.INFORMATIVA: 0.5, TipoIntencion.TROUBLESHOOTING: 0.4},
+    "memoria_traduccion": {TipoIntencion.BILINGUE: 0.9},
 }
 
 # Evidencia (peso acumulado) a partir de la cual la heurística puede alcanzar

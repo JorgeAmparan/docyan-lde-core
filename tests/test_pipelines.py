@@ -65,6 +65,31 @@ class FakeReader:
         return {"izquierda": {"version": "1", "hash": "aaa"},
                 "derecha": {"version": "2", "hash": "bbb"}}
 
+    def bilingue(self, t, term, src="en-US", tgt="es-MX"):
+        return {
+            "par_linguistico": "en-US → es-MX",
+            "desde_memoria": True,
+            "lock_activo": True,
+            "segmentos": [
+                {"texto_origen": "Stop the machine and apply lock-out/tag-out before service.",
+                 "texto_destino": "Detén la máquina y aplica bloqueo/etiquetado (LOTO) antes del servicio.",
+                 "idioma_origen": "en-US", "idioma_destino": "es-MX",
+                 "tipo_segmento": "advertencia",
+                 "lock": [{"termino_origen": "lock-out/tag-out", "termino_destino": "bloqueo/etiquetado (LOTO)"}],
+                 "documento_nombre": "Memoria de traducción", "documento_tipo": "memoria_traduccion",
+                 "seccion": "seguridad", "fragmento": "Stop the machine and apply lock-out/tag-out before service."},
+                {"texto_origen": "The housing remains pressurized until fully drained.",
+                 "texto_destino": "El alojamiento permanece presurizado hasta drenarse por completo.",
+                 "idioma_origen": "en-US", "idioma_destino": "es-MX",
+                 "tipo_segmento": "narrativa", "lock": [],
+                 "documento_nombre": "Memoria de traducción", "documento_tipo": "memoria_traduccion",
+                 "seccion": "operacion", "fragmento": "The housing remains pressurized until fully drained."},
+            ],
+        }
+
+    def bilingue_vacia(self):
+        return {"par_linguistico": "en-US → es-MX", "segmentos": [], "desde_memoria": False, "lock_activo": False}
+
 
 def _ctx(**kw):
     base = dict(tenant_id="t1", pregunta="q", entidad_id="e1",
@@ -150,3 +175,38 @@ def test_tipo8_comparativa_detecta_diferencias_de_seguridad():
     campos = {d.campo for d in p.diferencias}
     assert "version" in campos and "hash" in campos
     assert any(d.es_cambio_seguridad for d in p.diferencias)
+
+
+def test_tipo9_bilingue_segmentos_alineados_y_lock_y_cita():
+    res = resolver_para(TipoIntencion.BILINGUE)(_ctx(), FakeReader())
+    p = res.payload
+    assert p.kind == "bilingual_alignment"
+    assert p.desde_memoria is True
+    assert p.par_linguistico == "en-US → es-MX"
+    assert len(p.segmentos) == 2
+    # Segmento origen verbatim (EN) ↔ destino (ES) + lock terminológico fijado.
+    seg = p.segmentos[0]
+    assert seg.idioma_origen == "en-US" and seg.idioma_destino == "es-MX"
+    assert "lock-out/tag-out" in seg.texto_origen
+    assert seg.lock[0].termino_destino == "bloqueo/etiquetado (LOTO)"
+    assert p.lock_terminologico_activo is True
+    # Cita = fragmento verbatim del segmento origen (integridad de cita).
+    assert seg.cita is not None and seg.cita.fragmento == seg.texto_origen
+    assert len(p.citas) >= 1
+    # Cruce estructural T9 → T1.
+    assert any(c.tipo_intencion == "INFORMATIVA" for c in res.cruces)
+    p.model_validate(p.model_dump())
+
+
+def test_tipo9_bilingue_sin_memoria_es_honesto():
+    """Sin memoria para el par → payload vacío VÁLIDO + desde_memoria=False (no finge)."""
+    class SinMemoria(FakeReader):
+        def bilingue(self, t, term, src="en-US", tgt="es-MX"):
+            return self.bilingue_vacia()
+
+    res = resolver_para(TipoIntencion.BILINGUE)(_ctx(), SinMemoria())
+    p = res.payload
+    assert p.kind == "bilingual_alignment"
+    assert p.desde_memoria is False
+    assert p.segmentos == []
+    assert p.citas == []

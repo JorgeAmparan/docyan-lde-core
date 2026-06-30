@@ -264,6 +264,52 @@ class ComparativeViewPayload(_Base):
     citas: list[Cita] = Field(default_factory=list)
 
 
+# ── Tipo 9 — Bilingüe → BilingualAlignment (memoria_traduccion · Pista B) ──────
+
+
+class ParLock(_Base):
+    """Equivalencia terminológica FIJADA (lock terminológico, doc 02 / DTM §4).
+
+    Es el diferenciador defendible vs CAT tools (CLAUDE.md §11): el término origen
+    SOLO puede traducirse por su destino fijado en el glosario del par activo.
+    """
+
+    termino_origen: str
+    termino_destino: str
+
+
+class SegmentoBilingue(_Base):
+    """Par alineado origen↔destino del DTM (`:SegmentoTraduccion`, doc 02 / §1).
+
+    `texto_origen` es el segmento VERBATIM del documento fuente (idioma origen) y
+    `texto_destino` su equivalencia aprobada en el par lingüístico activo. No es
+    traducción generada al vuelo: viene de la memoria (DTM). Los `lock` son las
+    equivalencias terminológicas fijadas presentes en el segmento.
+    """
+
+    texto_origen: str
+    texto_destino: str | None = None
+    idioma_origen: str = "en-US"  # BCP-47
+    idioma_destino: str = "es-MX"  # BCP-47
+    tipo_segmento: str | None = None
+    lock: list[ParLock] = Field(default_factory=list)
+    cita: Cita | None = None
+
+
+class BilingualAlignmentPayload(_Base):
+    kind: Literal["bilingual_alignment"] = "bilingual_alignment"
+    titulo: str
+    # Par DIRECCIONAL legible (origen → destino). El grafo DTM está segregado por par.
+    par_linguistico: str = "en-US → es-MX"
+    # HONESTO: True ⇒ los segmentos vienen de la memoria de traducción (DTM). False
+    # ⇒ no hay memoria para el par/consulta y el payload va vacío + nota (no se finge).
+    desde_memoria: bool = True
+    # True si algún segmento trae equivalencia fijada (candado del glosario del par).
+    lock_terminologico_activo: bool = False
+    segmentos: list[SegmentoBilingue] = Field(default_factory=list)
+    citas: list[Cita] = Field(default_factory=list)
+
+
 # ── Unión discriminada + envelope de respuesta del MO ─────────────────────────
 
 PipelinePayload = Annotated[
@@ -276,6 +322,7 @@ PipelinePayload = Annotated[
         TimelinePayload,
         AlertsDashboardPayload,
         ComparativeViewPayload,
+        BilingualAlignmentPayload,
     ],
     Field(discriminator="kind"),
 ]
