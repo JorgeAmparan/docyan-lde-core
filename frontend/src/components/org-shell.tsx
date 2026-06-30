@@ -29,6 +29,7 @@ const NAV: NavEntry[] = [
   { icon: "layout-dashboard", label: "Resumen", href: "/admin" },
   { icon: "sparkles", label: "Inteligencia", href: "/saved" },
   { icon: "folder-tree", label: "CoDos", href: "/admin/codos" },
+  { icon: "scan-line", label: "Consultar", href: "/consult" },
   { icon: "files", label: "Documentos", href: "/documentos" },
   { icon: "bell", label: "Alertas", href: "/admin/alertas" },
   { group: "Administración" },
@@ -43,6 +44,8 @@ const NAV: NavEntry[] = [
 
 const TITLES: Record<string, string> = {
   "/admin": "Resumen general",
+  "/consult": "Consultar",
+  "/select-codo": "Consultar",
   "/saved": "Inteligencia",
   "/admin/codos": "CoDos",
   "/documentos": "Documentos vivos",
@@ -59,6 +62,10 @@ const TITLES: Record<string, string> = {
 function isActive(pathname: string, href: string): boolean {
   if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+function isConsultRoute(pathname: string): boolean {
+  return pathname === "/consult" || pathname === "/select-codo";
 }
 
 function titleFor(pathname: string): string {
@@ -129,7 +136,7 @@ export function OrgShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="content">{children}</div>
+        <div className={"content" + (isConsultRoute(pathname) ? " consult" : "")}>{children}</div>
       </div>
     </div>
   );

@@ -19,7 +19,6 @@ export function InformativaCard({
   const especs = payload.especificaciones ?? [];
   const primary = especs[0];
   const cita = primary?.cita ?? (payload.citas ?? [])[0] ?? null;
-  const extras = especs.slice(1);
 
   const hasBig = !!primary && (!!primary.valor || !!primary.unidad);
 
@@ -48,19 +47,6 @@ export function InformativaCard({
             </span>
           ))}
         </div>
-      )}
-
-      {extras.length > 0 && (
-        <ol className="steps">
-          {extras.map((e, i) => (
-            <li key={i}>
-              <span className="st">
-                {e.nombre}
-                {e.valor ? `: ${e.valor}${e.unidad ? " " + e.unidad : ""}` : ""}
-              </span>
-            </li>
-          ))}
-        </ol>
       )}
 
       <CitedFragment
