@@ -102,12 +102,7 @@ async def cotizar_documento_prueba(
     tipo_heuristico, _conf = selector.clasificar_heuristica(texto[:8000], file.filename)
     tipo_documento = tipo_forzado or tipo_heuristico
 
-    # Saldo de prueba: asegura cómputo para el tenant de demo (sin auto-recharge en
-    # prod; aquí se provisiona explícitamente, como el seed).
-    ingesta_providers.get_budget_manager().ensure_budget(
-        tenant_id, saldo_inicial_usd=TEST_SALDO_USD
-    )
-
+    # v2.1: sin saldo prepagado — el cotizador resuelve por cupo + confirmación.
     cot = ingesta_providers.get_cotizador().cotizar(
         tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_documento
     )

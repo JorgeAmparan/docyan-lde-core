@@ -52,14 +52,6 @@ class GraphMetrics(BaseModel):
     reachable: bool = True
 
 
-class BudgetMetrics(BaseModel):
-    saldo_actual_usd: float | None = None
-    retenido_usd: float | None = None  # comprometido por reservas vivas (F1.5)
-    hard_cap_por_documento: float | None = None
-    hard_cap_por_sesion: float | None = None
-    moneda: str = "USD"
-
-
 class OrgMetrics(BaseModel):
     """Métricas por org — SOLO metadata agregada (sin contenido)."""
 
@@ -71,7 +63,6 @@ class OrgMetrics(BaseModel):
     ingesta_tiempo_promedio_seg: float | None = None
     consultas_total: int = 0
     grafo: GraphMetrics = Field(default_factory=GraphMetrics)
-    presupuesto: BudgetMetrics = Field(default_factory=BudgetMetrics)
 
 
 class JobSummary(BaseModel):

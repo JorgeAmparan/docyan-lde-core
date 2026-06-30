@@ -35,7 +35,6 @@ class PlatformStore(Protocol):
     def count_documents(self, org_id: str) -> int: ...
     def sum_storage_bytes(self, org_id: str) -> int: ...
     def total_storage_bytes(self) -> int: ...
-    def get_budget(self, org_id: str) -> dict | None: ...
     def sum_consultas(self, org_id: str) -> int: ...
     def list_consultas_daily(self) -> list[dict]: ...  # {fecha, consultas_totales} cross-org
     def get_org_billing(self, org_id: str) -> dict | None: ...
@@ -49,7 +48,6 @@ class PlatformStore(Protocol):
     def create_user(self, org_id: str, email: str, password_hash: str, name: str, role: str) -> dict: ...
     def get_user_by_email(self, email: str) -> dict | None: ...
     def list_org_users(self, org_id: str) -> list[dict]: ...
-    def ensure_budget(self, org_id: str, saldo_usd: float) -> dict: ...
 
     # ── orgs (entidad de primer nivel, B13) ───────────────────────────────────
     def create_org(self, org_id: str, **fields: Any) -> dict: ...
@@ -103,7 +101,6 @@ class InMemoryPlatformStore:
         # Datos de tenant para derivar métricas (sembrados por el test).
         self.users: list[dict] = []        # {id, org_id, email, created_at, role}
         self.documents: list[dict] = []    # {id, org_id}
-        self.budgets: dict[str, dict] = {}  # org_id -> budget dict
         self.consultas: dict[str, int] = {}  # org_id -> total consultas
         self.pcl_daily: list[dict] = []  # {tenant_id, fecha, consultas_totales} (series)
         self.orgs: dict[str, dict] = {}      # org_id -> org dict (B13)
@@ -155,9 +152,6 @@ class InMemoryPlatformStore:
     def total_storage_bytes(self) -> int:
         return sum(int(d.get("size_bytes") or 0) for d in self.documents)
 
-    def get_budget(self, org_id: str) -> dict | None:
-        return self.budgets.get(org_id)
-
     def sum_consultas(self, org_id: str) -> int:
         return int(self.consultas.get(org_id, 0))
 
@@ -206,12 +200,6 @@ class InMemoryPlatformStore:
 
     def list_org_users(self, org_id: str) -> list[dict]:
         return [u for u in self.users if u["org_id"] == org_id]
-
-    def ensure_budget(self, org_id: str, saldo_usd: float) -> dict:
-        b = {"tenant_id": org_id, "saldo_actual_usd": float(saldo_usd),
-             "hard_cap_por_documento": 5.0, "hard_cap_por_sesion": 20.0, "moneda": "USD"}
-        self.budgets[org_id] = b
-        return b
 
     # orgs (B13)
     def create_org(self, org_id: str, **fields: Any) -> dict:
@@ -404,12 +392,6 @@ class SupabasePlatformStore:
         r = self.sb().table("documents").select("size_bytes").execute()
         return sum(int(x.get("size_bytes") or 0) for x in (r.data or []))
 
-    def get_budget(self, org_id: str) -> dict | None:
-        r = self.sb().table("tenant_budget").select(
-            "saldo_actual_usd, retenido_usd, hard_cap_por_documento, hard_cap_por_sesion, moneda"
-        ).eq("tenant_id", org_id).execute()
-        return r.data[0] if r.data else None
-
     def sum_consultas(self, org_id: str) -> int:
         r = self.sb().table("pcl_metrics_daily").select(
             "consultas_totales"
@@ -466,12 +448,6 @@ class SupabasePlatformStore:
             "id, email, name, role, is_active, created_at"
         ).eq("org_id", org_id).order("created_at").execute()
         return r.data or []
-
-    def ensure_budget(self, org_id: str, saldo_usd: float) -> dict:
-        r = self.sb().table("tenant_budget").upsert(
-            {"tenant_id": org_id, "saldo_actual_usd": saldo_usd}, on_conflict="tenant_id"
-        ).execute()
-        return r.data[0] if r.data else {"tenant_id": org_id, "saldo_actual_usd": saldo_usd}
 
     # orgs (B13)
     def create_org(self, org_id: str, **fields: Any) -> dict:

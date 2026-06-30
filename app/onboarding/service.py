@@ -91,7 +91,7 @@ def canjear_codigo(
         org_id=org_id, email=email, password_hash=hash_password(password),
         name=name, role="admin",
     )
-    store.ensure_budget(org_id, float(row["cuota_saldo_usd"]))
+    # v2.1: sin saldo prepagado — el plan opera por cupo de documentos.
     store.upsert_org_billing(
         org_id, display_name=org_name, plan=row["tipo"], lifecycle_status="active",
     )
@@ -174,7 +174,7 @@ def signup(store: Any, audit: Any, token_issuer: Any, req: Any, quota: Any = Non
         org_id=org_id, email=str(req.email), password_hash=hash_password(req.password),
         name=req.name, role="admin",
     )
-    store.ensure_budget(org_id, FREEMIUM_SALDO_USD)
+    # v2.1: sin saldo prepagado — freemium opera por límite de documentos.
     store.upsert_org_billing(
         org_id, display_name=req.org_name, plan="freemium", lifecycle_status="active",
     )

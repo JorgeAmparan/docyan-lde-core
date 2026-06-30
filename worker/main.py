@@ -35,7 +35,6 @@ import tempfile
 
 from fastapi import FastAPI
 
-from app.ingesta.budget_manager import BudgetManager
 from app.jobs.dispatcher import JobDispatcher, RedisQueueBackend
 from worker.ingest_pipeline import IngestPipeline
 
@@ -217,9 +216,9 @@ async def _consumer_loop():
     import redis  # cliente ya en el runtime del worker
 
     backend = RedisQueueBackend()
-    # F1.5: el worker liquida/libera el saldo al completar/fallar (necesita acceso
-    # a tenant_budget en Supabase, vía SUPABASE_URL + SUPABASE_SERVICE_KEY).
-    dispatcher = JobDispatcher(backend=backend, budget_manager=BudgetManager())
+    # v2.1: sin saldo prepagado — el dispatcher gobierna cupo + idempotencia al
+    # completar/fallar; no hay wallet que liquidar/liberar.
+    dispatcher = JobDispatcher(backend=backend)
     pipeline = IngestPipeline(
         document_store=_build_document_store(),
         schema_registry=_build_schema_registry(),

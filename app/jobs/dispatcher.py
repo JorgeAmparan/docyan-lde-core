@@ -190,21 +190,17 @@ class RedisQueueBackend:
 class JobDispatcher:
     """Encola jobs hacia el worker y gestiona transiciones de estado.
 
-    F1.5: si se inyecta `budget_manager`, las transiciones del gate ejecutan el
-    esquema reservar/liquidar/liberar sobre `tenant_budget` (confirmar reserva el
-    monto cotizado; completar liquida a costo real; fallar/idempotente liberan).
-    Producción y worker SIEMPRE lo inyectan (ver providers / worker.main). Si es
-    None, el débito se omite (tests que verifican invariantes ortogonales al saldo).
+    v2.1 (modelo comercial sin saldo prepagado): el gate de ingesta es
+    **cupo + confirmación**; no hay reserva/liquidación/liberación de saldo. La
+    idempotencia por SHA-256 y el descuento de cupo al confirmar se conservan.
     """
 
     def __init__(
         self,
         backend: QueueBackend | None = None,
-        budget_manager=None,
         quota_manager=None,
     ):
         self.backend = backend or RedisQueueBackend()
-        self.budget = budget_manager
         # Cupo de ingestas (F3 §C). Si se inyecta y la ingesta fue cotizada DENTRO de
         # cupo, al confirmar se descuenta 1 (idempotente por job_id). Si es None, no
         # se toca cupo (tests ortogonales al cupo / planes sin cupo).
@@ -228,13 +224,10 @@ class JobDispatcher:
         Confirma e encola un job aprobado. Lanza si el job no existe o no es
         confirmable (rechazado, ya procesado, o sin cotización aprobada).
 
-        F1.5: tras pasar el gate, RESERVA el monto cotizado (disponible→retenido).
-          · Idempotencia (A.3): si el contenido (SHA-256) YA fue liquidado, corta
-            ANTES de reservar — no re-cobra; cierra el job como idempotente sin
-            encolar.
-          · Si la reserva falla (saldo disponible insuficiente), NO encola y lanza
-            ValueError (el endpoint responde 409; el comportamiento "cuántos caben"
-            del cotizador sigue vigente).
+        v2.1 (sin saldo prepagado): el gate es cupo + confirmación. No hay
+        reserva de saldo.
+          · Idempotencia (A.3): si el contenido (SHA-256) YA fue ingerido, corta
+            ANTES de encolar — cierra el job como idempotente sin reprocesar.
         """
         job = self.backend.load_job(job_id)
         if job is None:
@@ -246,35 +239,23 @@ class JobDispatcher:
                 "Sin confirmación válida no se encola hacia el worker."
             )
 
-        # Idempotencia (A.3): contenido ya ingerido/liquidado → no se cobra de
-        # nuevo. Corta antes de reservar (igual que F1 corta antes de reprocesar).
+        # Idempotencia (A.3): contenido ya ingerido → no se reprocesa. Corta antes
+        # de encolar (igual que F1 corta antes de reprocesar).
         if job.content_sha256:
             previo = self.backend.lookup_ingested(job.tenant_id, job.content_sha256)
             if previo is not None:
                 logger.info(
-                    "job %s: SHA-256 ya liquidado; idempotente, no reserva ni encola",
+                    "job %s: SHA-256 ya ingerido; idempotente, no encola",
                     job_id,
                 )
                 return self.marcar_completado_idempotente(
                     job_id, previo.get("resultado", {})
                 )
 
-        # Reserva del monto cotizado (costo de cómputo estimado).
-        if self.budget is not None and job.reserva_estado == "ninguna":
-            monto = job.cotizacion.costo_estimado_usd if job.cotizacion else 0.0
-            res = self.budget.reservar(job.tenant_id, monto)
-            if not res.ok:
-                raise ValueError(
-                    f"job {job_id}: {res.motivo} (falta ${res.falta_usd:.4f})."
-                )
-            job.reserva_usd = res.monto_reservado
-            job.reserva_estado = "retenido"
-
         # Cupo de ingestas (F3 §C): si esta ingesta fue cotizada DENTRO de cupo,
         # descuenta 1 al confirmar. Idempotente por job_id (un reintento de confirm
         # del mismo job NO vuelve a descontar — lo garantiza el ledger de la RPC /
-        # el store en memoria). El cupo gobierna el setup comercial, no el cómputo:
-        # el saldo ya se reservó arriba por separado.
+        # el store en memoria). El cupo gobierna el setup comercial.
         if (
             self.quota is not None
             and job.cotizacion is not None
@@ -289,7 +270,7 @@ class JobDispatcher:
 
     # ── Transiciones que ejecuta el worker ───────────────────────────────────
     def marcar_procesando(self, job_id: str) -> IngestJob:
-        """Marca el job en proceso y sella `started_at` (instrumentación F1.5)."""
+        """Marca el job en proceso y sella `started_at` (instrumentación de duración)."""
         job = self.backend.load_job(job_id)
         if job is None:
             raise KeyError(f"job inexistente: {job_id}")
@@ -337,13 +318,12 @@ class JobDispatcher:
         self, job_id: str, resultado: dict, costo_real_usd: float | None = None
     ) -> IngestJob:
         """
-        Cierra un job con éxito. F1.5:
-          · LIQUIDA la reserva a costo real (devuelve el sobrante a disponible).
-            `costo_real_usd` = tokens reales del SDK si se conocen; si no, se usa
-            el cotizado como aproximación (el IngestionResult del SDK NO expone los
-            tokens consumidos — documentado en el reporte). Idempotente vía
-            `reserva_estado`: un cierre repetido no re-liquida.
+        Cierra un job con éxito.
           · Sella `completed_at`/`duracion_seg` y el peso del resultado.
+          · v2.1 (sin saldo prepagado): no hay liquidación de reserva. Se conserva
+            la semántica de NO-COBRO (estado honesto `sin_contenido`) para gobernar
+            el registro de idempotencia. `costo_real_usd` se mantiene en la firma
+            por compatibilidad; no debita saldo.
         """
         job = self.backend.load_job(job_id)
         if job is None:
@@ -357,25 +337,14 @@ class JobDispatcher:
         if job.bytes_resultado is None and resultado.get("markdown_bytes") is not None:
             job.bytes_resultado = int(resultado["markdown_bytes"])
 
-        # Pieza 6 — POLÍTICA DE NO-COBRO: una ingesta que rinde 0 ontología (o que no
-        # dejó `:DocumentoSource` vivo) NO entregó contenido consultable → NO se cobra.
-        # Se LIBERA la reserva completa (en vez de liquidarla). El usuario ve el estado
-        # honesto (`completed_sin_ontologia`) + Retry, y su saldo queda intacto.
+        # POLÍTICA DE NO-COBRO (v2.1): una ingesta que rinde 0 ontología (o que no
+        # dejó `:DocumentoSource` vivo) NO entregó contenido consultable. El usuario
+        # ve el estado honesto (`completed_sin_ontologia`) + Retry. Este flag además
+        # gobierna el registro de idempotencia abajo (no se marca contenido vacío).
         sin_contenido = bool(
             resultado.get("completed_sin_ontologia")
             or resultado.get("completed_sin_documento")
         )
-        # Liquidación del débito (idempotente: solo si hay reserva viva).
-        if self.budget is not None and job.reserva_estado == "retenido":
-            if sin_contenido:
-                self.budget.liberar(job.tenant_id, job.reserva_usd)
-                job.costo_real_usd = 0.0
-                job.reserva_estado = "liberado_sin_contenido"
-            else:
-                real = job.reserva_usd if costo_real_usd is None else round(costo_real_usd, 4)
-                self.budget.liquidar(job.tenant_id, job.reserva_usd, real)
-                job.costo_real_usd = real
-                job.reserva_estado = "liquidado"
 
         self.backend.save_job(job)
         # Idempotencia: registra el contenido como ya ingerido (clave SHA-256 por
@@ -392,11 +361,11 @@ class JobDispatcher:
     def marcar_completado_idempotente(self, job_id: str, resultado: dict) -> IngestJob:
         """
         Cierra un job porque su contenido (SHA-256) YA estaba ingerido: reusa el
-        resultado previo, marca `idempotente=True` y NO reprocesa ni re-cobra. El
-        estado final del sistema es idéntico a la primera ingesta (F1 §2.4 / #8).
+        resultado previo, marca `idempotente=True` y NO reprocesa. El estado final
+        del sistema es idéntico a la primera ingesta (F1 §2.4 / #8).
 
-        F1.5: como NO se consumió cómputo, LIBERA la reserva (si la hubiera) — el
-        re-ingerir el mismo contenido no cuesta saldo (A.3).
+        v2.1 (sin saldo prepagado): no hay reserva que liberar; re-ingerir el mismo
+        contenido simplemente no reprocesa (A.3).
         """
         job = self.backend.load_job(job_id)
         if job is None:
@@ -408,25 +377,19 @@ class JobDispatcher:
         job.phase_fraction = 1.0
         job.completed_at = _now_iso()
         job.duracion_seg = _duracion_seg(job.started_at, job.completed_at)
-        if self.budget is not None and job.reserva_estado == "retenido":
-            self.budget.liberar(job.tenant_id, job.reserva_usd)
-            job.reserva_estado = "liberado"
         self.backend.save_job(job)
         return job
 
     def marcar_fallido(self, job_id: str, error: str) -> IngestJob:
         """
         Estado terminal de error (F1 §2.4): agotados los reintentos del worker.
-        F1.5: LIBERA la reserva completa a disponible (idempotente vía estado).
+        v2.1 (sin saldo prepagado): no hay reserva que liberar.
         """
         job = self.backend.load_job(job_id)
         if job is None:
             raise KeyError(f"job inexistente: {job_id}")
         job.status = JobStatus.failed
         job.error = error
-        if self.budget is not None and job.reserva_estado == "retenido":
-            self.budget.liberar(job.tenant_id, job.reserva_usd)
-            job.reserva_estado = "liberado"
         self.backend.save_job(job)
         return job
 
@@ -445,29 +408,14 @@ class JobDispatcher:
     # ── Gate de costo del reintento AUTOMÁTICO del worker (Pieza 4c) ──────────
     def gate_costo_reintento(self, job_id: str) -> tuple[bool, str]:
         """
-        ¿Puede el worker REINTENTAR automáticamente este job sin saltarse el gate de
-        costo? Cada reintento re-corre la extracción COMPLETA = gasto real adicional;
-        sin gate, `MAX_RETRIES` multiplica el costo ≤3× sin control (lo que el contrato
-        prohíbe). Verifica que el tenant pueda absorber OTRA corrida estimada (la
-        reserva original solo cubre una). Devuelve (permitido, motivo).
+        ¿Puede el worker REINTENTAR automáticamente este job? Devuelve
+        (permitido, motivo).
 
-        Conservador con el COSTO: si no se puede verificar el presupuesto (sin budget
-        manager / store inalcanzable) NO se asume saldo — pero para no estrangular
-        entornos de test sin saldo configurado, la ausencia TOTAL de budget manager
-        (inyección None) sí permite. La falta de saldo real (verificar→rechazado)
-        bloquea el reintento.
+        v2.1 (sin saldo prepagado): no hay verificación de presupuesto que bloquee
+        el reintento — el gate de saldo desapareció con el modelo prepagado. El
+        método se conserva en la API pública por compatibilidad y siempre permite.
         """
-        if self.budget is None:
-            return True, ""  # sin contabilidad de saldo (tests) — no aplica gate
-        job = self.backend.load_job(job_id)
-        if job is None or job.cotizacion is None:
-            return True, ""
-        verdict = self.budget.verificar(
-            job.tenant_id, job.cotizacion.costo_estimado_usd
-        )
-        if verdict.aprobado:
-            return True, ""
-        return False, verdict.motivo
+        return True, ""
 
     # ── Reintento manual (F1 §2.5) ────────────────────────────────────────────
     def reintentar(self, job_id: str) -> IngestJob:
@@ -485,21 +433,9 @@ class JobDispatcher:
                 f"job {job_id} no es reintentable (status={job.status.value}). "
                 "Solo un job en estado terminal de error se reintenta a mano."
             )
-        # F1.5: el fallo terminal ya liberó la reserva; un reintento manual vuelve
-        # a procesar (consume cómputo), así que RE-reserva. Si el contenido ya
-        # estaba ingerido, el worker lo resolverá por idempotencia y liberará. Un
-        # reintento AUTOMÁTICO del worker (antes del fallo terminal) NO pasa por
-        # aquí: opera sobre la reserva viva sin re-reservar (A.3).
-        if self.budget is not None and job.reserva_estado != "retenido":
-            monto = job.cotizacion.costo_estimado_usd if job.cotizacion else 0.0
-            res = self.budget.reservar(job.tenant_id, monto)
-            if not res.ok:
-                raise ValueError(
-                    f"job {job_id}: {res.motivo} (falta ${res.falta_usd:.4f})."
-                )
-            job.reserva_usd = res.monto_reservado
-            job.reserva_estado = "retenido"
-            job.costo_real_usd = None
+        # v2.1 (sin saldo prepagado): un reintento manual vuelve a procesar sin
+        # re-reservar saldo. Si el contenido ya estaba ingerido, el worker lo
+        # resolverá por idempotencia.
         job.status = JobStatus.queued
         job.error = None
         job.phase = None

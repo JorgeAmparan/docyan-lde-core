@@ -9,7 +9,6 @@ Centralizadas aquí para que los tests las sustituyan con una sola sobreescritur
 """
 from __future__ import annotations
 
-from app.ingesta.budget_manager import BudgetManager
 from app.ingesta.cotizador import Cotizador
 from app.ingesta.document_store import SupabaseStorageDocumentStore
 from app.ingesta.quota_manager import QuotaManager
@@ -17,10 +16,6 @@ from app.jobs.dispatcher import JobDispatcher
 from app.jobs.job_status import JobStatusReader
 from app.schemas_documentales.registry import SchemaRegistry
 from app.schemas_documentales.selector import SchemaSelector
-
-
-def get_budget_manager() -> BudgetManager:
-    return BudgetManager()
 
 
 def get_quota_manager() -> QuotaManager:
@@ -36,9 +31,8 @@ def get_cotizador() -> Cotizador:
 
 def get_dispatcher() -> JobDispatcher:
     # F3 §C: descuenta cupo al confirmar una ingesta cotizada dentro de cupo.
-    # v2.1: SIN BudgetManager — no hay saldo prepagado que reservar/liquidar/liberar;
-    # los guards `if self.budget is not None` del dispatcher quedan inertes.
-    return JobDispatcher(budget_manager=None, quota_manager=QuotaManager())
+    # v2.1: SIN saldo prepagado — el dispatcher solo gobierna cupo + idempotencia.
+    return JobDispatcher(quota_manager=QuotaManager())
 
 
 def get_status_reader() -> JobStatusReader:

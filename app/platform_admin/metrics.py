@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any
 
 from app.platform_admin.models import (
-    BudgetMetrics,
     GraphMetrics,
     OrgList,
     OrgMetrics,
@@ -114,14 +113,6 @@ class MetricsService:
         return OrgList(items=items, total=len(items))
 
     def org_metrics(self, org_id: str, *, include_graph: bool = True) -> OrgMetrics:
-        budget = self.store.get_budget(org_id)
-        bm = BudgetMetrics(
-            saldo_actual_usd=float(budget["saldo_actual_usd"]) if budget else None,
-            retenido_usd=float(budget.get("retenido_usd", 0.0) or 0.0) if budget else None,
-            hard_cap_por_documento=float(budget["hard_cap_por_documento"]) if budget else None,
-            hard_cap_por_sesion=float(budget["hard_cap_por_sesion"]) if budget else None,
-            moneda=(budget or {}).get("moneda", "USD"),
-        )
         # F1.5: peso y tiempos reales de ingesta (antes null) — metadata, no contenido.
         almacenamiento, tiempo_total, tiempo_prom = self._ingesta_storage_y_tiempos(org_id)
         return OrgMetrics(
@@ -133,7 +124,6 @@ class MetricsService:
             ingesta_tiempo_promedio_seg=tiempo_prom,
             consultas_total=self.store.sum_consultas(org_id),
             grafo=self.graph_metrics(org_id) if include_graph else GraphMetrics(reachable=False),
-            presupuesto=bm,
         )
 
     def trends(self, moneda: str = "MXN") -> PlatformTrends:
