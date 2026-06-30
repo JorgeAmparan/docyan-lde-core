@@ -10,6 +10,7 @@ import {
 } from "@/components/brand/consulta-span-overlay";
 import { api } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth";
+import { SCHEMAS, SCHEMA_ESTADO_META } from "@/lib/schemas-catalog";
 
 import {
   errorAnswer,
@@ -36,6 +37,10 @@ import { HistorialTimeline } from "./renderers/historial-timeline";
 import { AlertasDashboard } from "./renderers/alertas-dashboard";
 import { ComparativaView } from "./renderers/comparativa-view";
 import { BilingualAlignment } from "./renderers/bilingual-alignment";
+
+/** Lookup tipo documental (id de schema) → schema, para el chip `.doc-tipo` del
+ *  prototipo (consult.jsx). Espejo de `SCHEMA_BY_ID` del design system. */
+const SCHEMA_BY_ID = new Map(SCHEMAS.map((s) => [s.id, s] as const));
 
 export interface ConsultContext {
   codo: string;
@@ -307,6 +312,8 @@ export function ConsultView({
   const activeDoc = documentos[activeDocIdx];
   const activeDocumentoId =
     activeDoc?.id ?? ("documentoId" in ctx ? ctx.documentoId : undefined);
+  // Schema del documento activo (tipo REAL → catálogo) para el chip `.doc-tipo`.
+  const activeSchema = activeDoc?.tipo ? SCHEMA_BY_ID.get(activeDoc.tipo) : undefined;
 
   // "Tus consultas" — etiquetas de las respuestas guardadas en esta sesión (real).
   const [savedQ, setSavedQ] = useState<string[]>([]);
@@ -572,7 +579,7 @@ export function ConsultView({
           <h1>{ctx.entityName}</h1>
         </div>
 
-        {documentos.length > 1 && (
+        {documentos.length >= 1 && (
           <div className="doctabs">
             {documentos.map((d, i) => (
               <button
@@ -583,6 +590,10 @@ export function ConsultView({
               >
                 <Icon name="file-text" size={14} />
                 {d.nombre || "Documento"}
+                {/* Badge de idioma del prototipo (.lt). El backend aún no provee el
+                    idioma del documento: se conserva el elemento y se omite el valor
+                    (regla #4 — sin fabricarlo, sin quitar el elemento). */}
+                <span className="lt">{(d as { lang?: string }).lang ?? ""}</span>
               </button>
             ))}
           </div>
@@ -598,12 +609,23 @@ export function ConsultView({
                 <div style={{ minWidth: 0 }}>
                   <div className="dn">{activeDoc?.nombre || ctx.entityTitle}</div>
                   <div className="dm">{ctx.entityMeta}</div>
+                  {/* Chip de tipo documental del prototipo (.doc-tipo + .sev-dot),
+                      alimentado del tipo REAL del documento activo. Solo aparece si
+                      el tipo existe en el catálogo de schemas (sin fabricar dato). */}
+                  {activeSchema && (
+                    <span className="doc-tipo">
+                      <span
+                        className={"sev-dot " + SCHEMA_ESTADO_META[activeSchema.estado].sev}
+                      />
+                      {activeSchema.label}
+                    </span>
+                  )}
                 </div>
-                <span className="badge-vivo">
-                  <span className="bd" />
-                  documento vivo
-                </span>
               </div>
+              <span className="badge-vivo">
+                <span className="bd" />
+                documento vivo
+              </span>
             </div>
 
             {/* Sugeridas por DOCYAN — preguntas que el documento sabe responder

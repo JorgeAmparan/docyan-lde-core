@@ -39,7 +39,10 @@
 .consult-desktop .doc-card2 .dm{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-muted);margin-top:3px;}
 .consult-desktop .doc-card2 .doc-tipo{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);margin-top:6px;}
 .consult-desktop .doc-card2 .doc-tipo .sev-dot{width:8px;height:8px;border-radius:50%;background:var(--fg-subtle);flex:none;}
-.consult-desktop .doc-card2 .badge-vivo{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--success-600);background:var(--success-100);border-radius:20px;padding:2px 7px;margin-left:auto;flex:none;}
+.consult-desktop .doc-card2 .doc-tipo .sev-dot.ok{background:var(--success-600);}
+.consult-desktop .doc-card2 .doc-tipo .sev-dot.caution{background:var(--caution-500);}
+.consult-desktop .doc-card2 .doc-tipo .sev-dot.warn{background:var(--warning-600);}
+.consult-desktop .doc-card2 .badge-vivo{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--success-600);background:var(--success-100);border-radius:20px;padding:2px 7px;margin-top:10px;}
 .consult-desktop .doc-card2 .badge-vivo .bd{width:5px;height:5px;border-radius:50%;background:var(--success-600);}
 
 /* ---- left-rail groups ---- */
