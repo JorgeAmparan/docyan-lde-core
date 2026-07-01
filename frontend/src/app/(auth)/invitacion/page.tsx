@@ -208,7 +208,7 @@ function GuestFlow() {
 
 export default function GuestPage() {
   return (
-    <div className="onb-kit">
+    <div className="entry-view">
       <Suspense fallback={null}>
         <GuestFlow />
       </Suspense>
