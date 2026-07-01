@@ -7,12 +7,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { Icon } from "@/components/icon";
-import { DocyanMark } from "@/components/brand/docyan-mark";
+import { BrandRow } from "@/components/brand/brand-row";
 import { api, ApiError } from "@/lib/api-client";
 
 /**
- * Capa A · Acceso — password reset request. Email → reset request. Reuses the
- * `.login-card` surface from access.jsx.
+ * Superficie de ENTRADA — recuperar contraseña. El prototipo (`entry.jsx`) no
+ * define esta pantalla; se construye con el mismo vocabulario `.entry-view` /
+ * `.auth-*` que Login (tarjeta centrada única), sin inventar clases nuevas.
  *
  * DESIGN: there is no /auth/reset-password endpoint in the generated OpenAPI
  * yet. We POST optimistically and ALWAYS show the same confirmation regardless
@@ -44,41 +45,44 @@ export default function ResetPasswordPage() {
   });
 
   return (
-    <div className="access-stage">
-      <div className="login-card">
-        <div className="login-brand">
-          <DocyanMark size={34} />
-          <span className="lw">
-            DOCYAN<span className="lde">LDE</span>
-          </span>
-        </div>
-
-        {sent ? (
-          <>
-            <h1>Revisa tu correo</h1>
-            <p className="login-sub">
-              Si hay una cuenta asociada a ese correo, te enviamos un enlace para restablecer tu contraseña. El enlace caduca en 30 minutos.
-            </p>
-            <Link className="primary-btn full" href="/login" style={{ textDecoration: "none" }}>
-              Volver a iniciar sesión
-            </Link>
-          </>
-        ) : (
-          <form onSubmit={onSubmit} noValidate>
-            <h1>Restablece tu contraseña</h1>
-            <p className="login-sub">
-              Escribe el correo de tu cuenta y te enviamos un enlace para crear una nueva contraseña.
-            </p>
-            <div className="field2">
-              <label htmlFor="reset-email">Correo</label>
-              <input id="reset-email" type="email" autoComplete="email" placeholder="tú@empresa.mx" {...register("email")} />
-              {errors.email && <span className="warn">{errors.email.message}</span>}
+    <div className="entry-view">
+      <div className="auth-stage">
+        <div className="auth-form" style={{ width: "100%" }}>
+          <div className="auth-card auth-centered">
+            <div className="ac-head" style={{ textAlign: "center" }}>
+              <div style={{ display: "inline-flex" }}>
+                <Link href="/" style={{ textDecoration: "none", color: "inherit" }}>
+                  <BrandRow size={30} />
+                </Link>
+              </div>
+              <h2>{sent ? "Revisa tu correo" : "Restablece tu contraseña"}</h2>
+              <p className="ac-sub">
+                {sent
+                  ? "Si hay una cuenta asociada a ese correo, te enviamos un enlace para restablecer tu contraseña. El enlace caduca en 30 minutos."
+                  : "Escribe el correo de tu cuenta y te enviamos un enlace para crear una nueva contraseña."}
+              </p>
             </div>
-            <button className="primary-btn full" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Enviando…" : "Enviar enlace"}
-            </button>
+
+            {sent ? (
+              <Link href="/login" className="btn primary full lg" style={{ textDecoration: "none" }}>
+                Volver a iniciar sesión
+              </Link>
+            ) : (
+              <form onSubmit={onSubmit} noValidate>
+                <div className="field">
+                  <label htmlFor="reset-email">Correo</label>
+                  <input id="reset-email" type="email" autoComplete="email" placeholder="tú@empresa.mx" {...register("email")} />
+                  {errors.email && <span className="warn">{errors.email.message}</span>}
+                </div>
+                <button className="btn primary full lg" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Enviando…" : "Enviar enlace"}
+                  {!isSubmitting && <Icon name="arrow-right" size={17} />}
+                </button>
+              </form>
+            )}
+
             <div className="qr-alt">
-              <Icon name="arrow-left" size={16} />
+              <Icon name="arrow-left" size={18} />
               <div>
                 <div className="qa-t">
                   <Link className="link" href="/login">
@@ -88,8 +92,8 @@ export default function ResetPasswordPage() {
                 <div className="qa-m">Los colaboradores entran por QR, sin contraseña.</div>
               </div>
             </div>
-          </form>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   );

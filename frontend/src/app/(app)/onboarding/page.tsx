@@ -262,7 +262,6 @@ export default function OnboardingFase1Page() {
                       totalUsd={quoteCurrency === "MXN" ? (quote.setupLocal ?? quote.costUsd) : quote.costUsd}
                       currency={quoteCurrency}
                       dentroCupo={quote.dentroCupo}
-                      cupoRestante={quote.cupoRestante}
                       tipoNoCubierto={quote.tipoNoCubierto}
                       rejected={!quote.aprobado}
                       advertencia={quote.advertencia}

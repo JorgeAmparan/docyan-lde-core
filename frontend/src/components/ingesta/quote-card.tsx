@@ -42,7 +42,6 @@ export interface QuoteCardProps {
   currency: string;
   /** Incluida en el cupo del plan (setup $0 sin ser freemium). */
   dentroCupo?: boolean;
-  cupoRestante?: number | null;
   /** Tipo sin schema optimizado (worker_generara) → aviso honesto. */
   tipoNoCubierto?: boolean;
   /** Rechazada por hard cap, o fuera del cap de sesión. */
@@ -80,7 +79,6 @@ export function QuoteCard({
   totalUsd,
   currency,
   dentroCupo,
-  cupoRestante,
   tipoNoCubierto,
   rejected,
   overCap,

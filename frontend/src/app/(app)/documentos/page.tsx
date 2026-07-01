@@ -453,7 +453,6 @@ export default function DocumentsPage() {
                 totalUsd={quoteCurrency === "MXN" ? (pendingQuote.setupLocal ?? pendingQuote.costUsd) : pendingQuote.costUsd}
                 currency={quoteCurrency}
                 dentroCupo={pendingQuote.dentroCupo}
-                cupoRestante={pendingQuote.cupoRestante}
                 tipoNoCubierto={pendingQuote.tipoNoCubierto}
                 rejected={!pendingQuote.aprobado}
                 advertencia={pendingQuote.advertencia}

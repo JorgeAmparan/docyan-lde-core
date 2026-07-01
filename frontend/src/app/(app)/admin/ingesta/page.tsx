@@ -538,7 +538,6 @@ export default function IngestaPage() {
                     totalUsd={localCurrency === "MXN" ? (q.setupLocal ?? q.costUsd) : q.costUsd}
                     currency={localCurrency}
                     dentroCupo={q.dentroCupo}
-                    cupoRestante={q.cupoRestante}
                     tipoNoCubierto={q.tipoNoCubierto}
                     rejected={!q.aprobado}
                     overCap={q.aprobado && !fits}
