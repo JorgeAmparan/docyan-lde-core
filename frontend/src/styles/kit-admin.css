@@ -26,6 +26,14 @@
 .rail-in{position:absolute;inset:0 auto 0 0;width:66px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:14px 13px;overflow:hidden;transition:width .18s var(--ease-out);}
 .rail:hover .rail-in{width:224px;box-shadow:10px 0 34px -14px rgba(33,28,22,.28);}
 .nav{display:flex;flex-direction:column;gap:3px;overflow:hidden;}
+/* FIX colisión: el navbar de marketing (kit-sitio-v2/kit-landing-v2) define
+   `.nav{align-items:center; padding:...}` con selector `.nav` (misma clase que el
+   rail) y se FILTRA al rail: `align-items:center` centra los items de 130px y
+   `padding-left:32px` los empuja → los íconos caen en x negativo (fuera de pantalla,
+   sobre el fondo crema). El `.nav` del rail del prototipo NO lleva ni align-items ni
+   padding. Re-afirmado bajo `.rail` (mayor especificidad) para inmunizarlo del bleed:
+   con esto los íconos quedan en x=23 (izquierda), idéntico al prototipo. */
+.rail .nav{align-items:stretch;flex-direction:column;padding:0;}
 .nav a{display:flex;align-items:center;gap:13px;padding:10px;border-radius:10px;color:var(--fg-muted);cursor:pointer;font-weight:500;font-size:13.5px;white-space:nowrap;text-decoration:none;}
 .nav a .lic{width:19px;height:19px;flex:none;color:var(--fg-subtle);}
 .nav a .label{opacity:0;transition:opacity .14s;}
