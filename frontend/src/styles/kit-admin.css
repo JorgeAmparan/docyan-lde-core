@@ -61,6 +61,11 @@
 .rail-org .otm{font-family:var(--font-mono);font-size:10px;color:var(--fg-subtle);}
 .main{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;}
 .content{flex:1;min-height:0;overflow-y:auto;padding:22px 26px 30px;}
+/* Wrap de las vistas de organización (app.css del prototipo: `.wrap{max-width:1020px;
+   margin:0 auto}`). Scopeado bajo `.content` para NO colisionar con el `.wrap` del
+   sitio comercial (kit-commercial: max-width 1120px + padding). Sin esto la vista se
+   extendía a todo el ancho de la pantalla en monitores anchos. */
+.content .wrap{max-width:1020px;margin:0 auto;}
 .content.consult{overflow:hidden;display:flex;flex-direction:column;padding-bottom:0;}
 
 /* stat row */

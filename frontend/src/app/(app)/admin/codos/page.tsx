@@ -151,7 +151,7 @@ export default function CodosPage() {
   }
 
   return (
-    <div className="codos-view">
+    <div className="codos-view wrap">
       <div className="list-head">
         <div className="lh-t">
           <h2>{isFree ? "Documentos vivos" : "CoDos"}</h2>
