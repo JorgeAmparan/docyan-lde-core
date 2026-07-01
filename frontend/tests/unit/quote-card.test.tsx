@@ -31,7 +31,7 @@ describe("QuoteCard — freemium", () => {
 });
 
 describe("QuoteCard — plan pago", () => {
-  it("muestra la cotización real y el saldo, sin tachado", () => {
+  it("muestra la cotización real del excedente, sin tachado", () => {
     render(
       <QuoteCard
         name="manual.pdf"
@@ -40,14 +40,29 @@ describe("QuoteCard — plan pago", () => {
         valueUsd={15}
         totalUsd={3.4}
         currency="USD"
-        saldoUsd={42}
       />,
     );
     expect(screen.getByTestId("quote-total")).toHaveTextContent("$3.40 USD");
-    expect(screen.getByText(/Saldo: \$42\.00 USD/)).toBeInTheDocument();
+    expect(screen.getByText(/excede el cupo · se cotiza el excedente/)).toBeInTheDocument();
     // Sin elemento tachado en planes pagos.
     expect(screen.queryByTestId("quote-struck")).toBeNull();
     expect(screen.queryByTestId("quote-discount")).toBeNull();
+  });
+
+  it("dentro de cupo: chip Incluido, sin cobro", () => {
+    render(
+      <QuoteCard
+        name="ficha.pdf"
+        tipo="ficha técnica"
+        isFreemium={false}
+        valueUsd={15}
+        totalUsd={0}
+        currency="USD"
+        dentroCupo
+      />,
+    );
+    expect(screen.getByTestId("quote-total")).toHaveTextContent("Incluido");
+    expect(screen.getByText(/en tu plan · \$0/)).toBeInTheDocument();
   });
 });
 
@@ -80,7 +95,6 @@ describe("QuoteCard — rechazada y quitar", () => {
         valueUsd={20}
         totalUsd={9}
         currency="USD"
-        saldoUsd={1}
         rejected
         onRemove={onRemove}
       />,
