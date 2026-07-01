@@ -33,7 +33,7 @@
    sobre el fondo crema). El `.nav` del rail del prototipo NO lleva ni align-items ni
    padding. Re-afirmado bajo `.rail` (mayor especificidad) para inmunizarlo del bleed:
    con esto los íconos quedan en x=23 (izquierda), idéntico al prototipo. */
-.rail .nav{align-items:stretch;flex-direction:column;padding:0;}
+.rail .nav{align-items:stretch;flex-direction:column;padding:0;gap:3px;background:transparent;backdrop-filter:none;border-bottom:none;position:static;z-index:auto;top:auto;}
 .nav a{display:flex;align-items:center;gap:13px;padding:10px;border-radius:10px;color:var(--fg-muted);cursor:pointer;font-weight:500;font-size:13.5px;white-space:nowrap;text-decoration:none;}
 .nav a .lic{width:19px;height:19px;flex:none;color:var(--fg-subtle);}
 .nav a .label{opacity:0;transition:opacity .14s;}
