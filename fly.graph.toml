@@ -42,7 +42,13 @@ primary_region = "dfw"
     timeout = "5s"
     grace_period = "30s"
 
-# FalkorDB es más exigente en RAM que el backend (B1 §3.1: shared-cpu-2x / 2 GB).
+# Sprint Infra Right-Sizing (jul 2026): FalkorDB responde consultas EN VIVO
+# (Nivel 1) → NO duerme (min=1 + auto_stop off, arriba). Pero el dataset actual
+# es diminuto (3–5 docs) y 2x/2 GB estaba sobredimensionado (renta de reposo).
+# Bajado a 1x/1 GB = mínimo viable + margen para AOF rewrite de un grafo pequeño.
+# Volumen persistente de 5 GB INTACTO (dato, no se toca). Si con carga real de
+# piloto el grafo pide más, subir aquí (verdad operacional, revertir si no arranca
+# estable — restricción §5 del Sprint Contract).
 [[vm]]
-  size = "shared-cpu-2x"
-  memory = "2gb"
+  size = "shared-cpu-1x"
+  memory = "1gb"
