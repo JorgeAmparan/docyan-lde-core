@@ -123,10 +123,14 @@ export function DemoConsult({ vkey }: { vkey: string }) {
   const documentosReales = contexto?.documentos ?? [];
   const activeDoc = documentosReales[activeDocIdx];
 
-  // CoDo nuevo (cambio de vertical) ⇒ vuelve al primer documento.
-  useEffect(() => {
+  // CoDo nuevo (cambio de vertical) ⇒ vuelve al primer documento. Ajuste de
+  // estado durante el render (no en un efecto): evita el cascading render que
+  // marca react-hooks/set-state-in-effect.
+  const [prevVertKey, setPrevVertKey] = useState(vert.key);
+  if (vert.key !== prevVertKey) {
+    setPrevVertKey(vert.key);
     setActiveDocIdx(0);
-  }, [vert.key]);
+  }
 
   const ask = async (question: string) => {
     setMsgs((m) => [...m, { role: "user", text: question }]);
