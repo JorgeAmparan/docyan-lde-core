@@ -178,3 +178,30 @@ def _meta_docs(n: int) -> str:
     if n <= 0:
         return "sin documentos vivos"
     return f"{n} documento{'' if n == 1 else 's'} vivo{'' if n == 1 else 's'}"
+
+
+def documentos_tenant(client: Any, tenant_id: str) -> list[dict]:
+    """
+    TODOS los `:DocumentoSource` del tenant (id, nombre, tipo), sin agrupar por
+    entidad ni por CoDo suelto.
+
+    Usado por el explorador demo público: ahí "el CoDo" que la UI muestra (p. ej.
+    "CODO-LAB-04") es una etiqueta de presentación sin nodo propio en el grafo — el
+    tenant demo completo son sus documentos reales sueltos (2-3 por vertical), y
+    `/demo/query` ya consulta con scope de TENANT (no de un id de CoDo). Esta función
+    les da a las doc-tabs el `id` real de cada documento para acotar esa consulta.
+    """
+    rows = client.query(
+        tenant_id,
+        """
+        MATCH (d:DocumentoSource)
+        RETURN d.id AS id, coalesce(d.nombre_archivo, d.id) AS nombre,
+               d.tipo_documento AS tipo
+        ORDER BY d.id
+        """,
+    )
+    return [
+        {"id": r["id"], "nombre": r.get("nombre") or r["id"], "tipo": r.get("tipo")}
+        for r in rows
+        if r.get("id")
+    ]
