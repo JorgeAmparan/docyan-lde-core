@@ -39,24 +39,3 @@ export function DocyanMark({
     </svg>
   );
 }
-
-/**
- * Wordmark lockup used in nav/sidebar/footer: DOCYAN + the LDE™ mono badge.
- */
-export function DocyanWordmark({
-  tone = "ink",
-  withMark = true,
-  size = 19,
-}: {
-  tone?: "ink" | "light";
-  withMark?: boolean;
-  size?: number;
-}) {
-  return (
-    <span className="brand" style={{ fontWeight: 700, fontSize: size, letterSpacing: "-0.01em", display: "inline-flex", alignItems: "center", gap: 9 }}>
-      {withMark && <DocyanMark size={size + 7} tone={tone} />}
-      <span style={{ color: tone === "light" ? "var(--amate-50)" : undefined }}>DOCYAN</span>
-      <span className="lde">LDE™</span>
-    </span>
-  );
-}
