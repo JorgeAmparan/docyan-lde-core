@@ -9,6 +9,9 @@ Cubre:
   · Aislamiento solo-lectura: no hay escritura pública contra tenants demo (la
     ingesta exige auth admin/editor → 401/403 sin JWT).
   · CoDo inválido cae a 'hero' (no filtra tenants arbitrarios).
+  · `documento_id` (doc-tabs, fix §2.4) se reenvía al MO tal cual llega.
+  · `GET /demo/codo/{key}/{codo_id}` — contexto real (documentos con su id) para
+    alimentar las doc-tabs, sin auth, rate-limited, 404 honesto.
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import pytest
 
 from app.api.routers import demo as demo_router
 from app.cache.rate_limiter import InMemoryRateLimiter
+from tests.test_b13_codos_consulta import FakeCodosDkg
 
 
 class _Kind:
@@ -140,3 +144,108 @@ def test_demo_no_permite_escritura_sin_auth(test_client):
     # ingesta vive en /ingesta/documents y exige rol admin/editor.
     r = test_client.post("/ingesta/documents", files={"file": ("d.txt", b"x")})
     assert r.status_code in (401, 403)
+
+
+# ── documento_id (doc-tabs — fix §2.4) ───────────────────────────────────────────
+
+
+class _CapturaPayloadMO:
+    """MO falso que solo captura el payload recibido, para verificar el reenvío."""
+
+    def __init__(self) -> None:
+        self.ultimo_payload: dict | None = None
+
+    def handle_request(self, req):
+        self.ultimo_payload = req.payload
+        return _NotServedResp()
+
+
+def test_demo_query_reenvia_documento_id_al_mo(demo_client):
+    # `demo_client` ya deja `get_mo`/`get_rate_limiter` en dependency_overrides y los
+    # limpia al terminar (fixture); aquí solo se sustituye el MO por el que captura.
+    client, _ = demo_client
+    mo = _CapturaPayloadMO()
+    from app.api.main import app
+
+    app.dependency_overrides[demo_router.get_mo] = lambda: mo
+    r = client.post(
+        "/demo/query",
+        json={"texto": "¿rango de medición?", "codo": "lab", "documento_id": "doc-mitutoyo-1"},
+    )
+    assert r.status_code == 200
+    assert mo.ultimo_payload["documento_id"] == "doc-mitutoyo-1"
+
+
+def test_demo_query_sin_documento_id_reenvia_none(demo_client):
+    client, _ = demo_client
+    mo = _CapturaPayloadMO()
+    from app.api.main import app
+
+    app.dependency_overrides[demo_router.get_mo] = lambda: mo
+    r = client.post("/demo/query", json={"texto": "hola", "codo": "lab"})
+    assert r.status_code == 200
+    assert mo.ultimo_payload["documento_id"] is None
+
+
+# ── GET /demo/codo/{key}/{codo_id} — contexto real para las doc-tabs ─────────────
+
+
+@pytest.fixture
+def demo_codo_client(monkeypatch):
+    dkg = FakeCodosDkg()
+    dkg.add_entidad("demo-lab", "CODO-LAB-04", nombre="Calibrador Mitutoyo 500")
+    dkg.add_doc(
+        "demo-lab", "doc-1", nombre_archivo="Mitutoyo Caliper 500 — Operating Manual",
+        tipo_documento="manual_tecnico", entidad="CODO-LAB-04",
+    )
+    dkg.add_doc(
+        "demo-lab", "doc-2", nombre_archivo="Mitutoyo Caliper 500 — Calibration Certificate",
+        tipo_documento="calibracion", entidad="CODO-LAB-04",
+    )
+    from app.onboarding import providers as onb
+
+    monkeypatch.setattr(onb, "get_dkg", lambda: dkg)
+
+    from fastapi.testclient import TestClient
+
+    from app.api.main import app
+
+    limiter = InMemoryRateLimiter(limit=3, window_seconds=60)
+    app.dependency_overrides[demo_router.get_rate_limiter] = lambda: limiter
+    yield TestClient(app), limiter
+    app.dependency_overrides.pop(demo_router.get_rate_limiter, None)
+
+
+def test_demo_codo_contexto_devuelve_documentos_con_id_real(demo_codo_client):
+    client, _ = demo_codo_client
+    r = client.get("/demo/codo/lab/CODO-LAB-04")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == "CODO-LAB-04"
+    assert body["tipo"] == "entidad"
+    ids = {d["id"] for d in body["documentos"]}
+    assert ids == {"doc-1", "doc-2"}
+    nombres = {d["nombre"] for d in body["documentos"]}
+    assert "Mitutoyo Caliper 500 — Operating Manual" in nombres
+
+
+def test_demo_codo_contexto_key_invalida_404(demo_codo_client):
+    client, _ = demo_codo_client
+    r = client.get("/demo/codo/no-existe/CODO-LAB-04")
+    assert r.status_code == 404
+
+
+def test_demo_codo_contexto_codo_inexistente_404(demo_codo_client):
+    client, _ = demo_codo_client
+    r = client.get("/demo/codo/lab/CODO-QUE-NO-EXISTE")
+    assert r.status_code == 404
+
+
+def test_demo_codo_contexto_rate_limit_429(demo_codo_client):
+    client, _ = demo_codo_client
+    for _ in range(3):
+        ok = client.get("/demo/codo/lab/CODO-LAB-04")
+        assert ok.status_code == 200
+    blocked = client.get("/demo/codo/lab/CODO-LAB-04")
+    assert blocked.status_code == 429
+    assert "retry-after" in {k.lower() for k in blocked.headers}

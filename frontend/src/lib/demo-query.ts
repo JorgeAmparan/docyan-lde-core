@@ -23,11 +23,43 @@ export interface DemoQueryResult {
 export const DEMO_FALLBACK =
   "Esa pregunta no está en este documento demo — pruébalo con tus documentos.";
 
-export async function demoQuery(texto: string, codo: string): Promise<DemoQueryResult> {
+/** Documento activo de las doc-tabs (fix §2.4): acota el retrieval a ESE
+ *  `:DocumentoSource` — sin él, la consulta corre contra todo el CoDo y puede
+ *  citar otro documento del mismo tenant demo (cross-citation). */
+export async function demoQuery(
+  texto: string,
+  codo: string,
+  documentoId?: string | null,
+): Promise<DemoQueryResult> {
   try {
-    return await api.post<DemoQueryResult>("/demo/query", { texto, codo });
+    return await api.post<DemoQueryResult>("/demo/query", { texto, codo, documento_id: documentoId ?? null });
   } catch {
     // El demo nunca rompe la UX del visitante: ante error de red/limite, fallback.
     return { servido: false, kind: null, resultado: null, fallback: DEMO_FALLBACK, codo, tenant_demo: "" };
   }
+}
+
+export interface DemoDocumentoOut {
+  id: string;
+  nombre?: string | null;
+  tipo?: string | null;
+}
+
+export interface DemoCodoContextoOut {
+  id: string;
+  tipo: string;
+  entidad_id?: string | null;
+  nombre: string;
+  titulo: string;
+  meta: string;
+  documentos: DemoDocumentoOut[];
+}
+
+/** Contexto REAL del CoDo demo (documentos con su id) — alimenta las doc-tabs.
+ *  `GET /demo/codo/{key}/{codoId}`, sin auth, rate-limited por IP. Sin datos
+ *  enlatados: si el CoDo demo no existe en el grafo, `api.get` lanza (404). */
+export function getDemoCodoContexto(key: string, codoId: string): Promise<DemoCodoContextoOut> {
+  return api.get<DemoCodoContextoOut>(
+    `/demo/codo/${encodeURIComponent(key)}/${encodeURIComponent(codoId)}`,
+  );
 }

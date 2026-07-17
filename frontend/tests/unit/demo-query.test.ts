@@ -18,9 +18,21 @@ describe("demoQuery", () => {
       fallback: null, codo: "lab", tenant_demo: "demo-lab",
     });
     const r = await demoQuery("¿torque?", "lab");
-    expect(post).toHaveBeenCalledWith("/demo/query", { texto: "¿torque?", codo: "lab" });
+    expect(post).toHaveBeenCalledWith("/demo/query", { texto: "¿torque?", codo: "lab", documento_id: null });
     expect(r.servido).toBe(true);
     expect(r.kind).toBe("info");
+  });
+
+  it("acota la consulta al documento activo (doc-tabs — fix §2.4)", async () => {
+    post.mockResolvedValueOnce({
+      servido: true, kind: "info", resultado: { payload: { valor: "85" } },
+      fallback: null, codo: "lab", tenant_demo: "demo-lab",
+    });
+    await demoQuery("¿torque?", "lab", "doc-mitutoyo-1");
+    expect(post).toHaveBeenCalledWith(
+      "/demo/query",
+      { texto: "¿torque?", codo: "lab", documento_id: "doc-mitutoyo-1" },
+    );
   });
 
   it("degrada al fallback honesto ante error", async () => {

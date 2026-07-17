@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { useT, type Bilingual } from "@/lib/site-i18n";
-import { VERTICALS, DOC_TIPO_LABEL, type DemoVertical, type DemoDoc } from "@/lib/demo-data";
-import { demoQuery } from "@/lib/demo-query";
+import { VERTICALS, type DemoVertical, type DemoDoc } from "@/lib/demo-data";
+import { demoQuery, getDemoCodoContexto } from "@/lib/demo-query";
 import { DemoAnswerCard, type DemoCardData } from "@/components/commercial/demo-answer-card";
 
 type T = (o: Bilingual) => string;
@@ -109,14 +110,30 @@ export function DemoConsult({ vkey }: { vkey: string }) {
   const [msgs, setMsgs] = useState<({ role: "user"; text: string } | { role: "answer"; a: Answer })[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [docsOpen, setDocsOpen] = useState(false);
+  const [activeDocIdx, setActiveDocIdx] = useState(0);
   const convoRef = useRef<HTMLDivElement>(null);
+
+  // Doc-tabs reales (fix §2.4): documentos REALES del grafo (con su id), no el
+  // listado curado local (que no trae id). Sin esto la consulta corre contra
+  // todo el CoDo y puede citar otro documento del mismo tenant (cross-citation).
+  const { data: contexto, isLoading: contextoLoading } = useQuery({
+    queryKey: ["demo-codo-contexto", vert.key, vert.codo],
+    queryFn: () => getDemoCodoContexto(vert.key, vert.codo),
+  });
+  const documentosReales = contexto?.documentos ?? [];
+  const activeDoc = documentosReales[activeDocIdx];
+
+  // CoDo nuevo (cambio de vertical) ⇒ vuelve al primer documento.
+  useEffect(() => {
+    setActiveDocIdx(0);
+  }, [vert.key]);
 
   const ask = async (question: string) => {
     setMsgs((m) => [...m, { role: "user", text: question }]);
     setLoading(true);
-    // Capa 3 única (D3): toda consulta —sugerida o libre— al backend real.
-    const res = await demoQuery(question, vert.key);
+    // Capa 3 única (D3): toda consulta —sugerida o libre— al backend real,
+    // acotada al documento activo de las doc-tabs (fix §2.4).
+    const res = await demoQuery(question, vert.key, activeDoc?.id);
     const payload = ((res.resultado || {}) as Record<string, unknown>).payload as Record<string, unknown> | undefined;
     const kind = (payload?.kind as string) || "info_card";
     let especificaciones = (payload?.especificaciones as Espec[]) || [];
@@ -153,7 +170,9 @@ export function DemoConsult({ vkey }: { vkey: string }) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (text.trim()) { ask(text.trim()); setText(""); }
+    // Espera al contexto real (doc-tabs) antes de consultar: sin él, la pregunta
+    // correría sin acotar a un documento (riesgo de cross-citation — fix §2.4).
+    if (text.trim() && !contextoLoading) { ask(text.trim()); setText(""); }
   };
 
   // B7: volver al hub /demo (o a la página de origen si se llegó desde verticales/demo).
@@ -193,32 +212,27 @@ export function DemoConsult({ vkey }: { vkey: string }) {
               <div className="mn">{vert.codo} · {t(vert.entity)}</div>
             </div>
           </div>
-          {/* Chip expandible: lista los documentos del CoDo (nombre + tipo). Sin
-              selector por documento — la unidad consultable es el CoDo; la cita
-              ya atribuye de qué documento viene cada dato. */}
-          <div className="dc-docchip">
-            <button
-              type="button"
-              className="dc-tag dc-tag-btn"
-              aria-expanded={docsOpen}
-              onClick={() => setDocsOpen((o) => !o)}
-            >
-              {vert.docs.length} {t({ es: "documentos vivos", en: "live documents" })}
-              <Icon name={docsOpen ? "chevron-up" : "chevron-down"} size={14} />
-            </button>
-            {docsOpen && (
-              <ul className="dc-doclist" role="list">
-                {vert.docs.map((d) => (
-                  <li key={d.name}>
-                    <Icon name="file-text" size={13} />
-                    <span className="dc-doclist-n">{d.name}</span>
-                    <span className="dc-doclist-t">{t(DOC_TIPO_LABEL[d.tipo])}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <span className="dc-tag">{documentosReales.length || vert.docs.length} {t({ es: "documentos vivos", en: "live documents" })}</span>
         </div>
+
+        {/* Doc-tabs reales (fix §2.4): acotan el retrieval a UN documento — sin esto
+            la consulta corría contra todo el CoDo y podía citar otro documento del
+            mismo tenant demo (cross-citation). Verbatim de consult.jsx .doctabs. */}
+        {documentosReales.length > 1 && (
+          <div className="doctabs">
+            {documentosReales.map((d, i) => (
+              <button
+                key={d.id}
+                type="button"
+                className={"doctab" + (i === activeDocIdx ? " on" : "")}
+                onClick={() => setActiveDocIdx(i)}
+              >
+                <Icon name="file-text" size={14} />
+                {d.nombre || "Documento"}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="dc-body" ref={convoRef}>
           {msgs.length === 0 && (
@@ -240,13 +254,13 @@ export function DemoConsult({ vkey }: { vkey: string }) {
 
         <div className="dc-foot">
           {vert.questions.length > 0 ? (
-            <div className="dc-sugs">{vert.questions.map((q, i) => <button key={i} className="demo-sug" onClick={() => ask(t(q))} disabled={loading}>{t(q)}</button>)}</div>
+            <div className="dc-sugs">{vert.questions.map((q, i) => <button key={i} className="demo-sug" onClick={() => ask(t(q))} disabled={loading || contextoLoading}>{t(q)}</button>)}</div>
           ) : (
             <div className="dc-sugs dc-sugs-empty">{t({ es: `Escribe tu pregunta sobre ${t(vert.entity)}.`, en: `Type your question about ${t(vert.entity)}.` })}</div>
           )}
           <form className="demo-box dc-box" onSubmit={submit}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`${t({ es: "Pregunta sobre", en: "Ask about" })} ${t(vert.entity)}…`} aria-label={t({ es: "Pregunta", en: "Question" })} />
-            <button type="submit" className="db-send" aria-label={t({ es: "Preguntar", en: "Ask" })} disabled={loading}><Icon name="arrow-up" size={17} /></button>
+            <button type="submit" className="db-send" aria-label={t({ es: "Preguntar", en: "Ask" })} disabled={loading || contextoLoading}><Icon name="arrow-up" size={17} /></button>
           </form>
         </div>
       </div>
