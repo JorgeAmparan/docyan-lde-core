@@ -25,7 +25,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from app.api.routers.mo import CodoContextoOut, DocumentoRefOut
+from app.api.routers.mo import DocumentoRefOut
 from app.orchestrator import providers
 from app.orchestrator.master_orchestrator import MasterOrchestrator
 from app.orchestrator.models import Canal, MORequest
@@ -105,6 +105,15 @@ class DemoQueryResponse(BaseModel):
     tenant_demo: str
 
 
+class DemoCodoDocumentosOut(BaseModel):
+    """Documentos reales del tenant demo — alimenta las doc-tabs (fix §2.4).
+    Sin `id`/`titulo`/`entidad_id`: en el demo el "CoDo" (p. ej. "CODO-LAB-04") es
+    una etiqueta de presentación del front, no un nodo del grafo — el tenant
+    completo son sus documentos sueltos."""
+
+    documentos: list[DocumentoRefOut]
+
+
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 
 
@@ -173,22 +182,24 @@ async def demo_query(
     )
 
 
-@router.get("/codo/{key}/{codo_id}", response_model=CodoContextoOut)
-async def demo_codo_contexto(
+@router.get("/codo/{key}", response_model=DemoCodoDocumentosOut)
+async def demo_codo_documentos(
     key: str,
-    codo_id: str,
     request: Request,
     response: Response,
     limiter=Depends(get_rate_limiter),
-) -> CodoContextoOut:
+) -> DemoCodoDocumentosOut:
     """
-    Contexto REAL de un CoDo demo (documentos reales del grafo, con su id) — sin auth,
-    rate-limited por IP. Alimenta las doc-tabs del explorador demo (F3/§2.4 fix): el
-    front necesita el `id` real de cada documento para acotar `/demo/query` por
-    documento (`documento_id`) y evitar cross-citation entre los documentos del CoDo.
-    Reutiliza `dkg_codos.contexto_codo` — el mismo resolutor que `/mo/codos/{id}`,
-    solo que scopeado al tenant demo en vez del tenant del JWT. Sin datos enlatados:
-    404 si el CoDo no existe en el grafo del tenant demo.
+    Documentos REALES del tenant demo (con su id) — sin auth, rate-limited por IP.
+    Alimenta las doc-tabs del explorador demo (F3/§2.4 fix): el front necesita el
+    `id` real de cada documento para acotar `/demo/query` por documento
+    (`documento_id`) y evitar cross-citation entre los documentos del mismo tenant.
+
+    Sin `codo_id`: en estos tenants demo no hay `:EntidadOperativa` que agrupe los
+    documentos — "el CoDo" que muestra la UI (p. ej. "CODO-LAB-04") es una etiqueta
+    de presentación sin nodo propio en el grafo. El tenant completo son sus 2-3
+    documentos sueltos, igual que ya scopea `/demo/query` (por `org_id`, no por un
+    id de CoDo). Sin datos enlatados: lista vacía si el tenant no tiene documentos.
     """
     from app.graph import dkg_codos
     from app.onboarding import providers as onb
@@ -208,11 +219,5 @@ async def demo_codo_contexto(
             headers={"Retry-After": str(rl.retry_after)},
         )
 
-    ctxd = dkg_codos.contexto_codo(onb.get_dkg(), tenant_demo, codo_id)
-    if ctxd is None:
-        raise HTTPException(status_code=404, detail="CoDo demo no encontrado.")
-    return CodoContextoOut(
-        id=ctxd["id"], tipo=ctxd["tipo"], entidad_id=ctxd.get("entidad_id"),
-        nombre=ctxd["nombre"], titulo=ctxd["titulo"], meta=ctxd["meta"],
-        documentos=[DocumentoRefOut(**d) for d in ctxd.get("documentos", [])],
-    )
+    docs = dkg_codos.documentos_tenant(onb.get_dkg(), tenant_demo)
+    return DemoCodoDocumentosOut(documentos=[DocumentoRefOut(**d) for d in docs])

@@ -90,6 +90,13 @@ class FakeCodosDkg:
                 "tipo": d["tipo_documento"], "contenido": d["contenido"],
             }]
 
+        if "ORDER BY d.id" in cypher:  # dkg_codos.documentos_tenant (demo público)
+            out = [
+                {"id": d["id"], "nombre": d["nombre_archivo"] or d["id"], "tipo": d["tipo_documento"]}
+                for d in docs.values()
+            ]
+            return sorted(out, key=lambda r: r["id"])
+
         return []
 
 

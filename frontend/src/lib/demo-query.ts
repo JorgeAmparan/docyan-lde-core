@@ -45,21 +45,16 @@ export interface DemoDocumentoOut {
   tipo?: string | null;
 }
 
-export interface DemoCodoContextoOut {
-  id: string;
-  tipo: string;
-  entidad_id?: string | null;
-  nombre: string;
-  titulo: string;
-  meta: string;
+export interface DemoCodoDocumentosOut {
   documentos: DemoDocumentoOut[];
 }
 
-/** Contexto REAL del CoDo demo (documentos con su id) — alimenta las doc-tabs.
- *  `GET /demo/codo/{key}/{codoId}`, sin auth, rate-limited por IP. Sin datos
- *  enlatados: si el CoDo demo no existe en el grafo, `api.get` lanza (404). */
-export function getDemoCodoContexto(key: string, codoId: string): Promise<DemoCodoContextoOut> {
-  return api.get<DemoCodoContextoOut>(
-    `/demo/codo/${encodeURIComponent(key)}/${encodeURIComponent(codoId)}`,
-  );
+/** Documentos REALES del tenant demo (con su id) — alimenta las doc-tabs.
+ *  `GET /demo/codo/{key}`, sin auth, rate-limited por IP. Sin `codoId`: estos
+ *  tenants demo no tienen `:EntidadOperativa` que agrupe documentos — "el CoDo"
+ *  que muestra la UI es una etiqueta de presentación, no un nodo del grafo. Sin
+ *  datos enlatados: lista vacía si el tenant no tiene documentos; 404 solo si
+ *  `key` no es un demo válido. */
+export function getDemoCodoDocumentos(key: string): Promise<DemoCodoDocumentosOut> {
+  return api.get<DemoCodoDocumentosOut>(`/demo/codo/${encodeURIComponent(key)}`);
 }

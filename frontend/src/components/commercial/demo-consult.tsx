@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { useT, type Bilingual } from "@/lib/site-i18n";
 import { VERTICALS, type DemoVertical, type DemoDoc } from "@/lib/demo-data";
-import { demoQuery, getDemoCodoContexto } from "@/lib/demo-query";
+import { demoQuery, getDemoCodoDocumentos } from "@/lib/demo-query";
 import { DemoAnswerCard, type DemoCardData } from "@/components/commercial/demo-answer-card";
 
 type T = (o: Bilingual) => string;
@@ -117,8 +117,8 @@ export function DemoConsult({ vkey }: { vkey: string }) {
   // listado curado local (que no trae id). Sin esto la consulta corre contra
   // todo el CoDo y puede citar otro documento del mismo tenant (cross-citation).
   const { data: contexto, isLoading: contextoLoading } = useQuery({
-    queryKey: ["demo-codo-contexto", vert.key, vert.codo],
-    queryFn: () => getDemoCodoContexto(vert.key, vert.codo),
+    queryKey: ["demo-codo-documentos", vert.key],
+    queryFn: () => getDemoCodoDocumentos(vert.key),
   });
   const documentosReales = contexto?.documentos ?? [];
   const activeDoc = documentosReales[activeDocIdx];

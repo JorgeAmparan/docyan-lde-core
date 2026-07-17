@@ -192,15 +192,17 @@ def test_demo_query_sin_documento_id_reenvia_none(demo_client):
 
 @pytest.fixture
 def demo_codo_client(monkeypatch):
+    # Sin entidad: los tenants demo reales son documentos SUELTOS (verificado en
+    # producción — no hay `:EntidadOperativa` que agrupe "CODO-LAB-04", es una
+    # etiqueta de presentación del front). `documentos_tenant` lista todo el tenant.
     dkg = FakeCodosDkg()
-    dkg.add_entidad("demo-lab", "CODO-LAB-04", nombre="Calibrador Mitutoyo 500")
     dkg.add_doc(
         "demo-lab", "doc-1", nombre_archivo="Mitutoyo Caliper 500 — Operating Manual",
-        tipo_documento="manual_tecnico", entidad="CODO-LAB-04",
+        tipo_documento="manual_tecnico",
     )
     dkg.add_doc(
         "demo-lab", "doc-2", nombre_archivo="Mitutoyo Caliper 500 — Calibration Certificate",
-        tipo_documento="calibracion", entidad="CODO-LAB-04",
+        tipo_documento="calibracion",
     )
     from app.onboarding import providers as onb
 
@@ -216,36 +218,37 @@ def demo_codo_client(monkeypatch):
     app.dependency_overrides.pop(demo_router.get_rate_limiter, None)
 
 
-def test_demo_codo_contexto_devuelve_documentos_con_id_real(demo_codo_client):
+def test_demo_codo_documentos_devuelve_documentos_con_id_real(demo_codo_client):
     client, _ = demo_codo_client
-    r = client.get("/demo/codo/lab/CODO-LAB-04")
+    r = client.get("/demo/codo/lab")
     assert r.status_code == 200
     body = r.json()
-    assert body["id"] == "CODO-LAB-04"
-    assert body["tipo"] == "entidad"
     ids = {d["id"] for d in body["documentos"]}
     assert ids == {"doc-1", "doc-2"}
     nombres = {d["nombre"] for d in body["documentos"]}
     assert "Mitutoyo Caliper 500 — Operating Manual" in nombres
 
 
-def test_demo_codo_contexto_key_invalida_404(demo_codo_client):
+def test_demo_codo_documentos_key_invalida_404(demo_codo_client):
     client, _ = demo_codo_client
-    r = client.get("/demo/codo/no-existe/CODO-LAB-04")
+    r = client.get("/demo/codo/no-existe")
     assert r.status_code == 404
 
 
-def test_demo_codo_contexto_codo_inexistente_404(demo_codo_client):
+def test_demo_codo_documentos_tenant_sin_documentos_lista_vacia(demo_codo_client):
     client, _ = demo_codo_client
-    r = client.get("/demo/codo/lab/CODO-QUE-NO-EXISTE")
-    assert r.status_code == 404
+    # "maq" mapea a otro tenant (demo-maq), sin documentos en este fake — sin datos
+    # enlatados: lista vacía, no 404 (el tenant existe, solo no tiene contenido aquí).
+    r = client.get("/demo/codo/maq")
+    assert r.status_code == 200
+    assert r.json()["documentos"] == []
 
 
-def test_demo_codo_contexto_rate_limit_429(demo_codo_client):
+def test_demo_codo_documentos_rate_limit_429(demo_codo_client):
     client, _ = demo_codo_client
     for _ in range(3):
-        ok = client.get("/demo/codo/lab/CODO-LAB-04")
+        ok = client.get("/demo/codo/lab")
         assert ok.status_code == 200
-    blocked = client.get("/demo/codo/lab/CODO-LAB-04")
+    blocked = client.get("/demo/codo/lab")
     assert blocked.status_code == 429
     assert "retry-after" in {k.lower() for k in blocked.headers}
