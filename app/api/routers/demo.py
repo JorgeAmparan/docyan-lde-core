@@ -22,9 +22,10 @@ import asyncio
 import logging
 import os
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from app.api.routers.mo import CodoContextoOut, DocumentoRefOut
 from app.orchestrator import providers
 from app.orchestrator.master_orchestrator import MasterOrchestrator
 from app.orchestrator.models import Canal, MORequest
@@ -88,6 +89,11 @@ def _client_ip(request: Request) -> str:
 class DemoQueryRequest(BaseModel):
     texto: str = Field(min_length=1, max_length=500)
     codo: str = "hero"  # clave del CoDo demo (hero/lab/maq/pharma/min/agri)
+    # Documento activo de las doc-tabs (F3/§2.4 fix): acota el retrieval a ESE
+    # :DocumentoSource. Sin él, la consulta corre contra todo el CoDo y puede citar
+    # otro documento del mismo tenant demo (cross-citation, mismo riesgo que en la
+    # consulta autenticada — ver ConsultaRequest.documento_id en mo.py).
+    documento_id: str | None = None
 
 
 class DemoQueryResponse(BaseModel):
@@ -114,8 +120,6 @@ async def demo_query(
     Consulta real contra un tenant demo (solo lectura), sin auth, rate-limited por IP.
     Devuelve la respuesta citada si el grafo demo la sostiene; si no, el fallback honesto.
     """
-    from fastapi import HTTPException
-
     codo = body.codo if body.codo in DEMO_TENANTS else "hero"
     tenant_demo = DEMO_TENANTS[codo]
 
@@ -138,7 +142,7 @@ async def demo_query(
         canal=Canal.pwa,
         texto=body.texto,
         accion="consulta",
-        payload={"params": {}},
+        payload={"documento_id": body.documento_id, "params": {}},
         session_id=None,
     )
 
@@ -166,4 +170,49 @@ async def demo_query(
     # Sin respuesta citada en el grafo demo → fallback honesto (no inventa).
     return DemoQueryResponse(
         servido=False, fallback=FALLBACK_MSG, codo=codo, tenant_demo=tenant_demo
+    )
+
+
+@router.get("/codo/{key}/{codo_id}", response_model=CodoContextoOut)
+async def demo_codo_contexto(
+    key: str,
+    codo_id: str,
+    request: Request,
+    response: Response,
+    limiter=Depends(get_rate_limiter),
+) -> CodoContextoOut:
+    """
+    Contexto REAL de un CoDo demo (documentos reales del grafo, con su id) — sin auth,
+    rate-limited por IP. Alimenta las doc-tabs del explorador demo (F3/§2.4 fix): el
+    front necesita el `id` real de cada documento para acotar `/demo/query` por
+    documento (`documento_id`) y evitar cross-citation entre los documentos del CoDo.
+    Reutiliza `dkg_codos.contexto_codo` — el mismo resolutor que `/mo/codos/{id}`,
+    solo que scopeado al tenant demo en vez del tenant del JWT. Sin datos enlatados:
+    404 si el CoDo no existe en el grafo del tenant demo.
+    """
+    from app.graph import dkg_codos
+    from app.onboarding import providers as onb
+
+    if key not in DEMO_TENANTS:
+        raise HTTPException(status_code=404, detail="Demo no encontrado.")
+    tenant_demo = DEMO_TENANTS[key]
+
+    ip = _client_ip(request)
+    rl = limiter.hit(f"{ip}:{key}:codo")
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Demasiadas consultas al demo. Intenta en un momento.",
+            headers={"Retry-After": str(rl.retry_after)},
+        )
+
+    ctxd = dkg_codos.contexto_codo(onb.get_dkg(), tenant_demo, codo_id)
+    if ctxd is None:
+        raise HTTPException(status_code=404, detail="CoDo demo no encontrado.")
+    return CodoContextoOut(
+        id=ctxd["id"], tipo=ctxd["tipo"], entidad_id=ctxd.get("entidad_id"),
+        nombre=ctxd["nombre"], titulo=ctxd["titulo"], meta=ctxd["meta"],
+        documentos=[DocumentoRefOut(**d) for d in ctxd.get("documentos", [])],
     )

@@ -24,16 +24,9 @@ export interface DemoVertical {
   codo: string;           // id del CoDo (display)
   entity: Bilingual;      // de qué trata el CoDo (su documento real)
   blurb: Bilingual;
-  docs: DemoDoc[];        // documentos del CoDo (nombre + tipo); el chip los lista
+  docs: DemoDoc[];        // documentos del CoDo (nombre + tipo curados; atribución de cita)
   questions: Bilingual[]; // preguntas sugeridas — verificadas: cada una cita real
 }
-
-/** Etiqueta bilingüe del tipo documental para el badge del chip. */
-export const DOC_TIPO_LABEL: Record<DocTipo, Bilingual> = {
-  msds: { es: "Hoja de seguridad", en: "Safety data sheet" },
-  manual_tecnico: { es: "Manual técnico", en: "Technical manual" },
-  calibracion: { es: "Certificado de calibración", en: "Calibration certificate" },
-};
 
 export const VERTICALS: DemoVertical[] = [
   {
