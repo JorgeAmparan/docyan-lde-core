@@ -122,7 +122,7 @@ test("Tipo 7 · AlertsDashboard shows admin-only banner (regulatory)", async ({ 
   });
   await preguntar(page, "¿Qué alertas tengo pendientes?");
   await expect(page.getByText(/No constituyen instrucciones operativas ni clínicas/i)).toBeVisible();
-  await expect(page.locator(".alert-card.s-warn").first()).toBeVisible();
+  await expect(page.locator(".al-card.s-warn").first()).toBeVisible();
 });
 
 test("backend failure shows an honest error (no canned data)", async ({ page }) => {
