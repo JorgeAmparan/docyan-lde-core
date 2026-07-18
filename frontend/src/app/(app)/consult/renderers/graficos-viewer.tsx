@@ -37,43 +37,18 @@ export function GraficosViewer({
         }
       >
         {!payload.recurso_url && <span className="ph-tag">DIAGRAMA TÉCNICO · DROP IMAGE</span>}
-        {/* Caja del rótulo (x,y,w,h auto-extraídos) cuando hay dimensiones; si no, pin. */}
-        {etiquetas.map((p, i) =>
-          p.w != null && p.h != null ? (
-            <button
-              key={i}
-              type="button"
-              className={"diag-box" + (active === i ? " on" : "")}
-              style={{
-                position: "absolute",
-                left: (p.x ?? 0) * 100 + "%",
-                top: (p.y ?? 0) * 100 + "%",
-                width: p.w * 100 + "%",
-                height: p.h * 100 + "%",
-                border: "2px solid var(--cinnabar-500)",
-                borderRadius: 4,
-                background: active === i ? "rgba(226,84,46,0.15)" : "transparent",
-              }}
-              onClick={() => toggle(i)}
-              aria-label={p.texto}
-            >
-              <span className="pin" style={{ position: "absolute", left: -8, top: -8 }}>
-                {i + 1}
-              </span>
-            </button>
-          ) : (
-            <button
-              key={i}
-              type="button"
-              className={"pin" + (active === i ? " on" : "")}
-              style={{ left: (p.x ?? 0) * 100 + "%", top: (p.y ?? 0) * 100 + "%" }}
-              onClick={() => toggle(i)}
-              aria-label={p.texto}
-            >
-              {i + 1}
-            </button>
-          ),
-        )}
+        {etiquetas.map((p, i) => (
+          <button
+            key={i}
+            type="button"
+            className={"pin" + (active === i ? " on" : "")}
+            style={{ left: (p.x ?? 0) * 100 + "%", top: (p.y ?? 0) * 100 + "%" }}
+            onClick={() => toggle(i)}
+            aria-label={p.texto}
+          >
+            {i + 1}
+          </button>
+        ))}
         <span className="diag-zoom">
           <Icon name="zoom-in" size={14} />
           Pellizca para acercar

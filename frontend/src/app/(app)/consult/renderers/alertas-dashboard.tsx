@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Icon } from "@/components/icon";
-import { CitedFragment } from "./cited-fragment";
-import type { AlertsDashboardPayload } from "../consult-data";
+import { SaveBtn } from "./save-btn";
+import { citaLabel, type AlertsDashboardPayload } from "../consult-data";
 
 /**
  * Tipo 7 · Alertas administrativas. REGULATORY ABSOLUTE (CLAUDE.md §11.1):
@@ -26,14 +26,21 @@ function grupoOf(urgencia: string | undefined): string {
 
 function AnsAlertCard({ a }: { a: AlertaItem }) {
   const [state, setState] = useState<"read" | "snooze" | null>(null);
+  const cite = citaLabel(a.cita);
   return (
-    <div className={"al-card alert-card s-" + sevOf(a.urgencia) + (state ? " done" : "")}>
+    <div className={"al-card s-" + sevOf(a.urgencia) + (state ? " done" : "")}>
       <div className="al-top">
         <span className="al-t">{a.descripcion}</span>
         {state && <span className="al-state">{state === "read" ? "Leída" : "Pospuesta"}</span>}
       </div>
       {a.fecha_vencimiento && <span className="al-m">Vence: {a.fecha_vencimiento}</span>}
       <div className="al-foot">
+        {cite && (
+          <span className="al-cite">
+            <span className="brk" />
+            {cite} ↗
+          </span>
+        )}
         {!state && (
           <div className="al-acts">
             <button type="button" onClick={() => setState("read")}>
@@ -86,7 +93,9 @@ export function AlertasDashboard({
             ))}
         </div>
       ))}
-      <CitedFragment cita={null} saved={saved} onSave={onSave} onOpenDoc={() => {}} />
+      <div className="citerow">
+        <SaveBtn saved={saved} onSave={onSave} />
+      </div>
     </div>
   );
 }
