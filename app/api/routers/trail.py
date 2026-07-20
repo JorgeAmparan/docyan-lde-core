@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.core.matrix import TraceabilityMatrix
 
 router = APIRouter(prefix="/trail", tags=["trail"])
@@ -13,7 +14,9 @@ async def trail_documento(
 ):
     """Audit trail completo de un documento."""
     tm = TraceabilityMatrix(org_id=ctx["org_id"])
-    trail = tm.get_document_trail(document_id)
+    trail = await run_blocking(
+        tm.get_document_trail, document_id, endpoint="/trail/document/{id}"
+    )
 
     if not trail:
         raise HTTPException(
@@ -35,7 +38,9 @@ async def actividad_reciente(
 ):
     """Actividad reciente de la organización."""
     tm = TraceabilityMatrix(org_id=ctx["org_id"])
-    actividad = tm.get_recent_activity(limit=limit)
+    actividad = await run_blocking(
+        tm.get_recent_activity, endpoint="/trail/recent", limit=limit
+    )
 
     return {
         "org_id": ctx["org_id"],
@@ -47,7 +52,9 @@ async def actividad_reciente(
 async def resumen_actividad(ctx: dict = Depends(requiere_rol("admin", "editor", "viewer"))):
     """Resumen de actividad por componente."""
     tm = TraceabilityMatrix(org_id=ctx["org_id"])
-    resumen = tm.get_component_summary()
+    resumen = await run_blocking(
+        tm.get_component_summary, endpoint="/trail/summary"
+    )
 
     return {
         "org_id": ctx["org_id"],

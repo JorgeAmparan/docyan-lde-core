@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import requiere_rol, verificar_credenciales
+from app.api.blocking import run_blocking
 from app.onboarding import providers, service
 from app.onboarding.limites import estado_cupo
 from app.onboarding.models import (
@@ -45,9 +46,11 @@ def _org_out(org: dict) -> OrgOut:
 async def signup(req: SignupRequest) -> SignupResponse:
     """Fase 1: crea la cuenta (Freemium o, con `codigo_acceso`, Piloto) y entra."""
     try:
-        out = service.signup(
+        out = await run_blocking(
+            service.signup,
             providers.get_store(), providers.get_audit(),
             providers.get_token_issuer(), req,
+            endpoint="/onboarding/signup",
             quota=providers.get_quota_manager(),
         )
     except OnboardingError as e:
@@ -68,8 +71,10 @@ async def activar_plan(
     """Fase 2: el admin de la org activa/elige plan + fija criticidad (decisión #15)."""
     actor = ctx.get("email") or ctx.get("user_id") or ctx["org_id"]
     try:
-        org = service.activar_plan(
+        org = await run_blocking(
+            service.activar_plan,
             providers.get_store(), providers.get_audit(),
+            endpoint="/onboarding/plan",
             org_id=ctx["org_id"], actor=actor, req=req,
             quota=providers.get_quota_manager(),
         )
@@ -81,7 +86,9 @@ async def activar_plan(
 @router.get("/org", response_model=OrgOut)
 async def mi_org(ctx: dict = Depends(verificar_credenciales)) -> OrgOut:
     """Devuelve la org del usuario autenticado (estado de onboarding/plan/cupo)."""
-    org = providers.get_store().get_org(ctx["org_id"])
+    org = await run_blocking(
+        providers.get_store().get_org, ctx["org_id"], endpoint="/onboarding/org"
+    )
     if org is None:
         raise HTTPException(status_code=404, detail="Organización no encontrada.")
     return _org_out(org)
@@ -104,11 +111,17 @@ async def resumen_cuenta(ctx: dict = Depends(verificar_credenciales)) -> CuentaR
     """
     org_id = ctx["org_id"]
     store = providers.get_store()
-    org = store.get_org(org_id)
+
+    def _work() -> tuple[dict | None, dict | None]:
+        org = store.get_org(org_id)
+        if org is None:
+            return None, None
+        return org, estado_cupo(store, providers.get_dkg(), org_id)
+
+    org, cupo = await run_blocking(_work, endpoint="/onboarding/cuenta")
     if org is None:
         raise HTTPException(status_code=404, detail="Organización no encontrada.")
 
-    cupo = estado_cupo(store, providers.get_dkg(), org_id)
     plan = org.get("plan") or "freemium"
     return CuentaResumen(
         org_id=org_id,
@@ -130,7 +143,10 @@ async def usuarios_de_la_org(
     ctx: dict = Depends(requiere_rol("admin", "editor")),
 ) -> UsuariosList:
     """Usuarios activos de la org (aislado por org_id del JWT). Solo metadata."""
-    rows = providers.get_store().list_org_users(ctx["org_id"])
+    rows = await run_blocking(
+        providers.get_store().list_org_users, ctx["org_id"],
+        endpoint="/onboarding/usuarios",
+    )
     items = [
         UsuarioOut(
             id=str(u["id"]), email=u["email"], name=u.get("name"),

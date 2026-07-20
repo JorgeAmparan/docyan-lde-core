@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.recursos.video import adjuntar_video
 
 router = APIRouter(prefix="/recursos", tags=["recursos"])
@@ -43,14 +44,17 @@ async def adjuntar_recurso_video(
     ctx: dict = Depends(requiere_rol("admin", "editor")),
 ):
     """Adjunta un video como recurso de apoyo (Tipo 4; no se analiza ni transcribe)."""
-    try:
-        rid = adjuntar_video(
-            _dkg(), ctx["org_id"],
-            titulo=req.titulo, video_url=req.video_url,
-            doc_id=req.doc_id, entidad_id=req.entidad_id,
-            acompana_procedimiento_id=req.acompana_procedimiento_id,
-            capitulos=req.capitulos,
-        )
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"No se pudo adjuntar el video: {e}")
+    def _work() -> str:
+        try:
+            return adjuntar_video(
+                _dkg(), ctx["org_id"],
+                titulo=req.titulo, video_url=req.video_url,
+                doc_id=req.doc_id, entidad_id=req.entidad_id,
+                acompana_procedimiento_id=req.acompana_procedimiento_id,
+                capitulos=req.capitulos,
+            )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=500, detail=f"No se pudo adjuntar el video: {e}")
+
+    rid = await run_blocking(_work, endpoint="/recursos/video")
     return {"status": "attached", "recurso_id": rid, "kind": "video_player"}

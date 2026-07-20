@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from supabase import create_client
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.core.grg import GovernanceGuardrails
 from app.core.matrix import TraceabilityMatrix
 from app.core.supabase_client import require_module_enabled, require_supabase_config
@@ -33,59 +34,62 @@ async def procesar_documento(
     """
     org_id = ctx["org_id"]
 
-    # Guardar archivo temporalmente
-    suffix = f".{file.filename.split('.')[-1]}"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        tmp_path = tmp.name
+    def _work() -> dict:
+        # Guardar archivo temporalmente
+        suffix = f".{file.filename.split('.')[-1]}"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
 
-    final_path = os.path.join(os.path.dirname(tmp_path), file.filename)
+        final_path = os.path.join(os.path.dirname(tmp_path), file.filename)
 
-    try:
-        os.rename(tmp_path, final_path)
+        try:
+            os.rename(tmp_path, final_path)
 
-        # Pipeline DII
-        # Import perezoso: DII arrastra el stack pesado de ingesta
-        # (Docling/LlamaIndex/torch) que NO va en la imagen B0.5 (diferido a
-        # B1, donde DII se reemplaza por GraphRAG-SDK). A nivel de módulo
-        # rompía el arranque de la API en el contenedor.
-        from app.core.dii import DigestInputIntelligence
+            # Pipeline DII
+            # Import perezoso: DII arrastra el stack pesado de ingesta
+            # (Docling/LlamaIndex/torch) que NO va en la imagen B0.5 (diferido a
+            # B1, donde DII se reemplaza por GraphRAG-SDK). A nivel de módulo
+            # rompía el arranque de la API en el contenedor.
+            from app.core.dii import DigestInputIntelligence
 
-        dii = DigestInputIntelligence(org_id=org_id)
-        dii.data_path = os.path.dirname(final_path)
-        entidades = dii.run_dii_pipeline()
+            dii = DigestInputIntelligence(org_id=org_id)
+            dii.data_path = os.path.dirname(final_path)
+            entidades = dii.run_dii_pipeline()
 
-        # GRG si aplica
-        resumen_grg = {}
-        if aplicar_grg:
-            require_module_enabled("documents")
-            _url, _key = require_supabase_config("documents", service=True)
-            supabase = create_client(_url, _key)
-            doc = supabase.table("documents").select("id").eq(
-                "org_id", org_id
-            ).eq("name", file.filename).order(
-                "created_at", desc=True
-            ).limit(1).execute()
+            # GRG si aplica
+            resumen_grg = {}
+            if aplicar_grg:
+                require_module_enabled("documents")
+                _url, _key = require_supabase_config("documents", service=True)
+                supabase = create_client(_url, _key)
+                doc = supabase.table("documents").select("id").eq(
+                    "org_id", org_id
+                ).eq("name", file.filename).order(
+                    "created_at", desc=True
+                ).limit(1).execute()
 
-            if doc.data:
-                grg = GovernanceGuardrails(org_id=org_id)
-                resumen_grg = grg.evaluar_documento(doc.data[0]["id"])
+                if doc.data:
+                    grg = GovernanceGuardrails(org_id=org_id)
+                    resumen_grg = grg.evaluar_documento(doc.data[0]["id"])
 
-        return {
-            "status": "success",
-            "archivo": file.filename,
-            "entidades_extraidas": len(entidades),
-            "gobernanza": resumen_grg
-        }
+            return {
+                "status": "success",
+                "archivo": file.filename,
+                "entidades_extraidas": len(entidades),
+                "gobernanza": resumen_grg
+            }
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
-    finally:
-        # Limpiar archivos temporales
-        for path in (final_path, tmp_path):
-            if os.path.exists(path):
-                os.remove(path)
+        finally:
+            # Limpiar archivos temporales
+            for path in (final_path, tmp_path):
+                if os.path.exists(path):
+                    os.remove(path)
+
+    return await run_blocking(_work, endpoint="/documents/process")
 
 
 @router.get("/")
@@ -98,12 +102,16 @@ async def listar_documentos(
     require_module_enabled("documents")
     _url, _key = require_supabase_config("documents", service=True)
     supabase = create_client(_url, _key)
-    resultado = supabase.table("documents").select(
-        "id, name, source_type, status, processed_at, created_at, metadata",
-        count="exact"
-    ).eq("org_id", ctx["org_id"]).order(
-        "created_at", desc=True
-    ).limit(limit).offset(offset).execute()
+
+    def _work():
+        return supabase.table("documents").select(
+            "id, name, source_type, status, processed_at, created_at, metadata",
+            count="exact"
+        ).eq("org_id", ctx["org_id"]).order(
+            "created_at", desc=True
+        ).limit(limit).offset(offset).execute()
+
+    resultado = await run_blocking(_work, endpoint="/documents (list)")
 
     return {
         "documentos": resultado.data,
@@ -123,18 +131,22 @@ async def detalle_documento(
     _url, _key = require_supabase_config("documents", service=True)
     supabase = create_client(_url, _key)
 
-    doc = supabase.table("documents").select("*").eq(
-        "id", document_id
-    ).eq("org_id", ctx["org_id"]).execute()
+    def _work() -> tuple:
+        doc = supabase.table("documents").select("*").eq(
+            "id", document_id
+        ).eq("org_id", ctx["org_id"]).execute()
 
-    if not doc.data:
-        raise HTTPException(status_code=404, detail="Documento no encontrado.")
+        if not doc.data:
+            raise HTTPException(status_code=404, detail="Documento no encontrado.")
 
-    entidades = supabase.table("entities").select(
-        "id, entity_class, entity_value, entity_type, data_text, knowledge_triple, status, confidence, created_at"
-    ).eq("document_id", document_id).eq(
-        "org_id", ctx["org_id"]
-    ).execute()
+        entidades = supabase.table("entities").select(
+            "id, entity_class, entity_value, entity_type, data_text, knowledge_triple, status, confidence, created_at"
+        ).eq("document_id", document_id).eq(
+            "org_id", ctx["org_id"]
+        ).execute()
+        return doc, entidades
+
+    doc, entidades = await run_blocking(_work, endpoint="/documents/{id}")
 
     return {
         "documento": doc.data[0],
@@ -154,38 +166,41 @@ async def eliminar_documento(
     supabase = create_client(_url, _key)
     org_id = ctx["org_id"]
 
-    doc = supabase.table("documents").select("id, name").eq(
-        "id", document_id
-    ).eq("org_id", org_id).execute()
+    def _work() -> str:
+        doc = supabase.table("documents").select("id, name").eq(
+            "id", document_id
+        ).eq("org_id", org_id).execute()
 
-    if not doc.data:
-        raise HTTPException(status_code=404, detail="Documento no encontrado.")
+        if not doc.data:
+            raise HTTPException(status_code=404, detail="Documento no encontrado.")
 
-    entity_ids = supabase.table("entities").select("id").eq(
-        "document_id", document_id
-    ).eq("org_id", org_id).execute()
-    eids = [e["id"] for e in entity_ids.data]
+        entity_ids = supabase.table("entities").select("id").eq(
+            "document_id", document_id
+        ).eq("org_id", org_id).execute()
+        eids = [e["id"] for e in entity_ids.data]
 
-    if eids:
-        supabase.table("audit_trail").delete().in_(
-            "entity_id", eids
+        if eids:
+            supabase.table("audit_trail").delete().in_(
+                "entity_id", eids
+            ).execute()
+            supabase.table("quarantine").delete().in_(
+                "entity_id", eids
+            ).execute()
+
+        supabase.table("audit_trail").delete().eq(
+            "document_id", document_id
         ).execute()
-        supabase.table("quarantine").delete().in_(
-            "entity_id", eids
-        ).execute()
+        supabase.table("entities").delete().eq(
+            "document_id", document_id
+        ).eq("org_id", org_id).execute()
+        supabase.table("documents").delete().eq(
+            "id", document_id
+        ).eq("org_id", org_id).execute()
 
-    supabase.table("audit_trail").delete().eq(
-        "document_id", document_id
-    ).execute()
-    supabase.table("entities").delete().eq(
-        "document_id", document_id
-    ).eq("org_id", org_id).execute()
-    supabase.table("documents").delete().eq(
-        "id", document_id
-    ).eq("org_id", org_id).execute()
+        tm = TraceabilityMatrix(org_id=org_id)
+        tm.log(component="API", action="document_deleted",
+               detail={"document_id": document_id, "name": doc.data[0]["name"]})
+        return doc.data[0]["name"]
 
-    tm = TraceabilityMatrix(org_id=org_id)
-    tm.log(component="API", action="document_deleted",
-           detail={"document_id": document_id, "name": doc.data[0]["name"]})
-
-    return {"status": "deleted", "document_id": document_id, "name": doc.data[0]["name"]}
+    name = await run_blocking(_work, endpoint="/documents/{id} (delete)")
+    return {"status": "deleted", "document_id": document_id, "name": name}

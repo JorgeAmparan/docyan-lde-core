@@ -22,7 +22,15 @@ def get_genai_client() -> genai.Client:
     Variable canónica GEMINI_API_KEY (adenda §5); GOOGLE_API_KEY es compat
     deprecado que se retira con el DII.
     """
-    return genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    # Timeout de red del cliente Gemini (ED-0 §3.2), en ms. Sin él, un
+    # `generate_content` estancado bloquea el thread indefinidamente.
+    from google.genai import types
+
+    timeout_ms = int(float(os.getenv("LLM_TIMEOUT_SECONDS", "60")) * 1000)
+    return genai.Client(
+        api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"),
+        http_options=types.HttpOptions(timeout=timeout_ms),
+    )
 
 # ── Tipos de documento conocidos ─────────────────────────────────────────────
 

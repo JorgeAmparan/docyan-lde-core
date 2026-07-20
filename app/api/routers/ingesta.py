@@ -29,6 +29,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.ingesta import providers
 from app.ingesta.text_extract import contar_figuras, contar_paginas, extraer_texto
 from app.jobs.job_models import CotizacionSnapshot, IngestJob, JobStatus
@@ -100,97 +101,103 @@ async def cotizar_documento(
     """
     tenant_id = ctx["org_id"]
 
-    # B13 §1.2/§1.5 — Gate de LÍMITE DE DOCUMENTOS VIVOS del plan (freemium = 3).
-    # Antes del gate financiero: una cuenta en su límite no debe poder cotizar otra
-    # ingesta. Fail-open ante incertidumbre (org sin formalizar / grafo inalcanzable):
-    # el gate financiero del cotizador sigue protegiendo el costo.
-    _chequear_limite_documentos(tenant_id)
-
+    # `file.read()` es async (I/O de la request): se queda en el loop. TODO lo demás
+    # (extracción CPU + gates a store/grafo + cotizador + store.put + encolar) es
+    # SÍNCRONO y bloqueante → se descarga a thread con corte duro (ED-0 §3.1).
     data = await file.read()
 
-    texto, confiable = extraer_texto(data, file.filename)
+    def _procesar() -> dict:
+        # B13 §1.2/§1.5 — Gate de LÍMITE DE DOCUMENTOS VIVOS del plan (freemium = 3).
+        # Antes del gate financiero: una cuenta en su límite no debe poder cotizar otra
+        # ingesta. Fail-open ante incertidumbre (org sin formalizar / grafo inalcanzable):
+        # el gate financiero del cotizador sigue protegiendo el costo.
+        _chequear_limite_documentos(tenant_id)
 
-    # B13 — Gate de TAMAÑO freemium: documentos de >100 páginas se rechazan en
-    # cuentas freemium con un payload de conversión (no un "saldo insuficiente"
-    # seco). Planes pagados: sin tope de páginas. Antes del gate financiero.
-    paginas = contar_paginas(data, file.filename, texto=texto)
-    _chequear_tamano_freemium(tenant_id, paginas)
+        texto, confiable = extraer_texto(data, file.filename)
 
-    # Clasificación SOLO heurística en el backend (sin generación dinámica: esa usa
-    # litellm/Gemini y vive en el worker, para mantener el backend <1 GB y sin
-    # litellm). Si no hay match de catálogo, el tipo queda tentativo y el worker
-    # resuelve/genera el schema definitivo al procesar.
-    selector = providers.get_selector()
-    tipo_heuristico, _conf = selector.clasificar_heuristica(texto[:8000], file.filename)
-    tipo_tentativo = tipo_forzado or tipo_heuristico  # puede ser None → worker genera
+        # B13 — Gate de TAMAÑO freemium: documentos de >100 páginas se rechazan en
+        # cuentas freemium con un payload de conversión (no un "saldo insuficiente"
+        # seco). Planes pagados: sin tope de páginas. Antes del gate financiero.
+        paginas = contar_paginas(data, file.filename, texto=texto)
+        _chequear_tamano_freemium(tenant_id, paginas)
 
-    # Figuras (Pieza 3): conteo ligero pre-ingesta para sumar el costo de VISIÓN al
-    # gate. Cota previa (sin Docling); el worker re-mide con Docling y aplica el tope.
-    num_figuras = contar_figuras(data, file.filename)
+        # Clasificación SOLO heurística en el backend (sin generación dinámica: esa usa
+        # litellm/Gemini y vive en el worker, para mantener el backend <1 GB y sin
+        # litellm). Si no hay match de catálogo, el tipo queda tentativo y el worker
+        # resuelve/genera el schema definitivo al procesar.
+        selector = providers.get_selector()
+        tipo_heuristico, _conf = selector.clasificar_heuristica(texto[:8000], file.filename)
+        tipo_tentativo = tipo_forzado or tipo_heuristico  # puede ser None → worker genera
 
-    # Cotización (mide tokens + figuras, estima costo/tiempo, verifica presupuesto). El
-    # costo NO depende del schema: se mide por tokens del documento + costo de visión.
-    cotizador = providers.get_cotizador()
-    cotizacion = cotizador.cotizar(
-        tenant_id=tenant_id,
-        texto_documento=texto,
-        tipo_documento=tipo_tentativo,
-        num_figuras=num_figuras,
-    )
+        # Figuras (Pieza 3): conteo ligero pre-ingesta para sumar el costo de VISIÓN al
+        # gate. Cota previa (sin Docling); el worker re-mide con Docling y aplica el tope.
+        num_figuras = contar_figuras(data, file.filename)
 
-    # Guarda el binario y referencia (worker lo leerá si se confirma).
-    store = providers.get_document_store()
-    documento_ref = store.put(tenant_id, file.filename, data)
+        # Cotización (mide tokens + figuras, estima costo/tiempo, verifica presupuesto). El
+        # costo NO depende del schema: se mide por tokens del documento + costo de visión.
+        cotizador = providers.get_cotizador()
+        cotizacion = cotizador.cotizar(
+            tenant_id=tenant_id,
+            texto_documento=texto,
+            tipo_documento=tipo_tentativo,
+            num_figuras=num_figuras,
+        )
 
-    # SHA-256 del contenido al subir (F1.5/A.3): habilita cortar la idempotencia
-    # ANTES de reservar en /confirm (mismo contenido ya liquidado → no re-cobra).
-    # El worker lo recalcula de los bytes descargados como defensa en profundidad.
-    content_sha256 = hashlib.sha256(data).hexdigest()
+        # Guarda el binario y referencia (worker lo leerá si se confirma).
+        store = providers.get_document_store()
+        documento_ref = store.put(tenant_id, file.filename, data)
 
-    job = IngestJob(
-        job_id=uuid.uuid4().hex,
-        tenant_id=tenant_id,
-        documento_ref=documento_ref,
-        nombre_archivo=file.filename,
-        tipo_documento=tipo_tentativo,
-        tipo_forzado=tipo_forzado,
-        usuario_id=ctx.get("user_id"),
-        content_sha256=content_sha256,
-        bytes_originales=len(data),
-        cotizacion=CotizacionSnapshot(
-            costo_estimado_usd=cotizacion.costo_estimado_usd,
-            tiempo_estimado_seg=cotizacion.tiempo_estimado_seg,
-            tokens_documento=cotizacion.tokens_documento,
-            aprobado=cotizacion.aprobado,
-            decision=cotizacion.decision.value,
-            precio_setup_usd=cotizacion.precio_setup_usd,
-            dentro_de_cupo=cotizacion.dentro_de_cupo,
-        ),
-    )
+        # SHA-256 del contenido al subir (F1.5/A.3): habilita cortar la idempotencia
+        # ANTES de reservar en /confirm (mismo contenido ya liquidado → no re-cobra).
+        # El worker lo recalcula de los bytes descargados como defensa en profundidad.
+        content_sha256 = hashlib.sha256(data).hexdigest()
 
-    dispatcher = providers.get_dispatcher()
-    dispatcher.crear_job(job)
+        job = IngestJob(
+            job_id=uuid.uuid4().hex,
+            tenant_id=tenant_id,
+            documento_ref=documento_ref,
+            nombre_archivo=file.filename,
+            tipo_documento=tipo_tentativo,
+            tipo_forzado=tipo_forzado,
+            usuario_id=ctx.get("user_id"),
+            content_sha256=content_sha256,
+            bytes_originales=len(data),
+            cotizacion=CotizacionSnapshot(
+                costo_estimado_usd=cotizacion.costo_estimado_usd,
+                tiempo_estimado_seg=cotizacion.tiempo_estimado_seg,
+                tokens_documento=cotizacion.tokens_documento,
+                aprobado=cotizacion.aprobado,
+                decision=cotizacion.decision.value,
+                precio_setup_usd=cotizacion.precio_setup_usd,
+                dentro_de_cupo=cotizacion.dentro_de_cupo,
+            ),
+        )
 
-    return {
-        "job_id": job.job_id,
-        "status": job.status.value,
-        "tipo_documento": tipo_tentativo,
-        "tipo_resuelto_por": "usuario" if tipo_forzado else (
-            "heuristica" if tipo_heuristico else "worker_generara"
-        ),
-        "cotizacion": cotizacion.to_dict(),
-        # Conversión a moneda local de la banda del tenant (decisión Jorge): SOLO la
-        # cotización variable de ingesta usa FX en vivo (Banxico FIX + 3 % + ceil $10),
-        # congelado aquí. Banda A → MXN; B/C → None (la tarjeta muestra USD).
-        "cotizacion_local": _cotizacion_local(tenant_id, cotizacion.precio_setup_usd),
-        "paginas_estimadas": paginas,
-        "extraccion_confiable": confiable,
-        "advertencia": None if confiable else (
-            "El extractor ligero pudo subestimar el texto (¿PDF escaneado?). "
-            "El worker re-medirá con OCR; el costo real puede variar."
-        ),
-        "requiere_confirmacion": job.status == JobStatus.pending_confirmation,
-    }
+        dispatcher = providers.get_dispatcher()
+        dispatcher.crear_job(job)
+
+        return {
+            "job_id": job.job_id,
+            "status": job.status.value,
+            "tipo_documento": tipo_tentativo,
+            "tipo_resuelto_por": "usuario" if tipo_forzado else (
+                "heuristica" if tipo_heuristico else "worker_generara"
+            ),
+            "cotizacion": cotizacion.to_dict(),
+            # Conversión a moneda local de la banda del tenant (decisión Jorge): SOLO la
+            # cotización variable de ingesta usa FX en vivo (Banxico FIX + 3 % + ceil $10),
+            # congelado aquí. Banda A → MXN; B/C → None (la tarjeta muestra USD).
+            "cotizacion_local": _cotizacion_local(tenant_id, cotizacion.precio_setup_usd),
+            "paginas_estimadas": paginas,
+            "extraccion_confiable": confiable,
+            "advertencia": None if confiable else (
+                "El extractor ligero pudo subestimar el texto (¿PDF escaneado?). "
+                "El worker re-medirá con OCR; el costo real puede variar."
+            ),
+            "requiere_confirmacion": job.status == JobStatus.pending_confirmation,
+        }
+
+    return await run_blocking(_procesar, endpoint="/ingesta/documents")
 
 
 def _cotizacion_local(tenant_id: str, precio_setup_usd: float) -> dict | None:
@@ -226,16 +233,18 @@ async def confirmar_ingesta(
 ):
     """Confirma e encola un job aprobado hacia el worker. Sin esto, no hay ingesta."""
     tenant_id = ctx["org_id"]
-    reader = providers.get_status_reader()
-    job = reader.get(tenant_id, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
 
-    dispatcher = providers.get_dispatcher()
-    try:
-        job = dispatcher.confirmar(job_id)
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+    def _work():
+        reader = providers.get_status_reader()
+        job = reader.get(tenant_id, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job no encontrado.")
+        try:
+            return providers.get_dispatcher().confirmar(job_id)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+
+    job = await run_blocking(_work, endpoint="/ingesta/documents/{id}/confirm")
 
     # encolado=False si la idempotencia (A.3) lo resolvió sin reservar ni encolar
     # (mismo contenido ya liquidado): queda 'completed' marcado idempotente.
@@ -258,7 +267,8 @@ async def cupo_ingestas(
     cupo (freemium opera con su saldo de cortesía).
     """
     quota = providers.get_quota_manager()
-    return quota.estado(ctx["org_id"]).to_dict()
+    estado = await run_blocking(quota.estado, ctx["org_id"], endpoint="/ingesta/cupo")
+    return estado.to_dict()
 
 
 @router.get("/documents/{job_id}")
@@ -267,18 +277,21 @@ async def estado_job(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
 ):
     """Estado plano de un job (aislado por tenant). Compat B2."""
-    reader = providers.get_status_reader()
-    job = reader.get(ctx["org_id"], job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
-    return {
-        "job_id": job.job_id,
-        "status": job.status.value,
-        "tipo_documento": job.tipo_documento,
-        "resultado": job.resultado,
-        "error": job.error,
-        "documento_vivo": _documento_vivo(ctx["org_id"], job),
-    }
+    def _work() -> dict:
+        reader = providers.get_status_reader()
+        job = reader.get(ctx["org_id"], job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job no encontrado.")
+        return {
+            "job_id": job.job_id,
+            "status": job.status.value,
+            "tipo_documento": job.tipo_documento,
+            "resultado": job.resultado,
+            "error": job.error,
+            "documento_vivo": _documento_vivo(ctx["org_id"], job),
+        }
+
+    return await run_blocking(_work, endpoint="/ingesta/documents/{id}")
 
 
 def _consult_url_for(job) -> str | None:
@@ -313,12 +326,15 @@ async def progreso_job(
     cliente sondea este endpoint por job (cada 2-3 s) y agrega los N en su
     `BatchProgress`. Multi-tenant estricto: solo jobs del tenant del JWT (RLS).
     """
-    reader = providers.get_status_reader()
-    job = reader.get(ctx["org_id"], job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
-    pos = reader.backend.queue_position(job_id)
-    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job), documento_vivo=_documento_vivo(ctx["org_id"], job))
+    def _work() -> DocProgress:
+        reader = providers.get_status_reader()
+        job = reader.get(ctx["org_id"], job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job no encontrado.")
+        pos = reader.backend.queue_position(job_id)
+        return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job), documento_vivo=_documento_vivo(ctx["org_id"], job))
+
+    return await run_blocking(_work, endpoint="/ingesta/documents/{id}/status")
 
 
 @router.post("/documents/{job_id}/retry", response_model=DocProgress)
@@ -331,14 +347,16 @@ async def reintentar_job(
     encola sin re-cotizar; la idempotencia por SHA-256 evita duplicar si el
     contenido ya quedó ingerido. ('Omitir' es acción de cliente, no toca backend.)
     """
-    reader = providers.get_status_reader()
-    job = reader.get(ctx["org_id"], job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
-    dispatcher = providers.get_dispatcher()
-    try:
-        job = dispatcher.reintentar(job_id)
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    pos = reader.backend.queue_position(job_id)
-    return build_doc_progress(job, queue_position=pos, consult_url=_consult_url_for(job), documento_vivo=_documento_vivo(ctx["org_id"], job))
+    def _work() -> DocProgress:
+        reader = providers.get_status_reader()
+        job = reader.get(ctx["org_id"], job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job no encontrado.")
+        try:
+            job2 = providers.get_dispatcher().reintentar(job_id)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+        pos = reader.backend.queue_position(job_id)
+        return build_doc_progress(job2, queue_position=pos, consult_url=_consult_url_for(job2), documento_vivo=_documento_vivo(ctx["org_id"], job2))
+
+    return await run_blocking(_work, endpoint="/ingesta/documents/{id}/retry")

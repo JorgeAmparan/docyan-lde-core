@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# Socket timeouts (ED-0 §3.2): sin ellos un `recv`/`connect` estancado a Redis
+# congela el thread indefinidamente. Cortos porque Redis vive en la red privada
+# de Fly (respuesta inmediata o falla). Configurables por entorno.
+REDIS_SOCKET_TIMEOUT = float(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
+REDIS_SOCKET_CONNECT_TIMEOUT = float(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "3"))
 
 
 class RedisClient:
@@ -18,7 +23,12 @@ class RedisClient:
     def _get_client(self):
         if self._client is None:
             import redis
-            self._client = redis.from_url(self.url, decode_responses=True)
+            self._client = redis.from_url(
+                self.url,
+                decode_responses=True,
+                socket_timeout=REDIS_SOCKET_TIMEOUT,
+                socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
+            )
         return self._client
 
     def get(self, key: str) -> str | None:

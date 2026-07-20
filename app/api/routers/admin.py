@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.embeddings.bge_client import bge_client
 from app.graph.dkg_client import dkg_client
 from app.graph.schemas.dkg_ontology import graph_name_for
@@ -36,7 +37,7 @@ def get_pcl():
 @router.get("/dkg/health")
 async def dkg_health(ctx: dict = Depends(requiere_rol("admin"))):
     """PING a FalkorDB (docyan-lde-graph)."""
-    ok = dkg_client.health()
+    ok = await run_blocking(dkg_client.health, endpoint="/admin/dkg/health")
     if not ok:
         raise HTTPException(status_code=503, detail="FalkorDB (docyan-lde-graph) no responde.")
     return {"status": "healthy", "component": "docyan-lde-graph"}
@@ -50,15 +51,22 @@ async def tenants_test(ctx: dict = Depends(requiere_rol("admin"))):
     """
     org_id = ctx["org_id"]
     test_tenant = f"{org_id}__selftest"
-    try:
-        dkg_client.drop_tenant_graph(test_tenant)
-        created = dkg_client.create_tenant(
-            test_tenant,
-            {"nombre": f"selftest-{org_id}", "tipo": "cliente_final_directo"},
-        )
-        readback = dkg_client.get_tenant(test_tenant)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=503, detail=f"DKG no disponible: {type(exc).__name__}: {exc}")
+
+    def _work() -> tuple[dict, dict | None]:
+        try:
+            dkg_client.drop_tenant_graph(test_tenant)
+            created = dkg_client.create_tenant(
+                test_tenant,
+                {"nombre": f"selftest-{org_id}", "tipo": "cliente_final_directo"},
+            )
+            readback = dkg_client.get_tenant(test_tenant)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503, detail=f"DKG no disponible: {type(exc).__name__}: {exc}"
+            )
+        return created, readback
+
+    created, readback = await run_blocking(_work, endpoint="/admin/tenants/test")
     return {
         "ok": readback is not None,
         "graph_name": graph_name_for(test_tenant),
@@ -74,13 +82,16 @@ async def embedding_test(ctx: dict = Depends(requiere_rol("admin"))):
     Pide un embedding del texto 'hola' al servicio BGE-M3 (docyan-lde-embedder)
     y verifica que la dimensión sea 1024 (BGE-M3) y NO 1536 (OpenAI).
     """
-    try:
-        vectors = bge_client.get_embeddings(["hola"])
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=503,
-            detail=f"Embedder (docyan-lde-embedder) no disponible: {type(exc).__name__}: {exc}",
-        )
+    def _work() -> list[list[float]]:
+        try:
+            return bge_client.get_embeddings(["hola"])
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"Embedder (docyan-lde-embedder) no disponible: {type(exc).__name__}: {exc}",
+            )
+
+    vectors = await run_blocking(_work, endpoint="/admin/embedding/test")
     vector = vectors[0]
     dim = len(vector)
     return {
@@ -106,14 +117,18 @@ async def fat_integrity(ctx: dict = Depends(requiere_rol("admin"))):
     from app.audit.stores import HybridFATStore
 
     org_id = ctx["org_id"]
-    try:
-        fat = FATExtendido(HybridFATStore())
-        resultado = verificar_tenant(fat, org_id)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=503,
-            detail=f"FAT no disponible: {type(exc).__name__}: {exc}",
-        )
+
+    def _work():
+        try:
+            fat = FATExtendido(HybridFATStore())
+            return verificar_tenant(fat, org_id)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"FAT no disponible: {type(exc).__name__}: {exc}",
+            )
+
+    resultado = await run_blocking(_work, endpoint="/admin/fat/integrity")
     return resultado.to_dict()
 
 
@@ -136,10 +151,14 @@ async def pcl_metrics(
     # fecha UTC, coherente con los timestamps del FAT).
     hasta = hasta or datetime.now(timezone.utc).date()
     desde = desde or (hasta - timedelta(days=30))
-    try:
-        return pcl.metricas(org_id, (desde, hasta))
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(
-            status_code=503,
-            detail=f"Métricas PCL no disponibles: {type(exc).__name__}: {exc}",
-        )
+
+    def _work():
+        try:
+            return pcl.metricas(org_id, (desde, hasta))
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=503,
+                detail=f"Métricas PCL no disponibles: {type(exc).__name__}: {exc}",
+            )
+
+    return await run_blocking(_work, endpoint="/admin/pcl/metrics")

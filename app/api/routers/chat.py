@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.core.ri import ResponseIntelligence
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -22,4 +23,7 @@ async def chat_ask(
     Usa el pipeline completo: EDB (Intent-B + vector) → RI (análisis + síntesis).
     """
     ri = ResponseIntelligence(org_id=ctx["org_id"])
-    return ri.responder(query=request.query, limit=request.limit)
+    return await run_blocking(
+        ri.responder, endpoint="/chat/ask",
+        query=request.query, limit=request.limit,
+    )
