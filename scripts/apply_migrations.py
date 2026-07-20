@@ -49,6 +49,9 @@ MIGRATIONS_DIR = os.path.join(REPO, "migrations")
 # las 2 de la CCP/PCL (015). 001 crea 2 (users, refresh_tokens); 013 crea 2
 # (fat_retention_policy, configuracion_grg) además de extender audit_trail (004)
 # de forma aditiva; 015 crea pcl_metrics_daily + pcl_cache_config (B8.5).
+# NOTA (022): `tenant_budget` (008) NO figura aquí a propósito — la 022 retiró el
+# wallet prepagado (modelo comercial v2.1); su presencia sería un ERROR, no un OK.
+# La verificación de su AUSENCIA vive en DROPPED_TABLES.
 EXPECTED_TABLES = {
     "001a": "users",
     "001b": "refresh_tokens",
@@ -58,7 +61,6 @@ EXPECTED_TABLES = {
     "005": "governance_rules",
     "006": "quarantine",
     "007": "api_keys",
-    "008": "tenant_budget",
     "009": "tenant_schemas",
     "010": "dtm_projects",
     "011": "sessions_completed",
@@ -72,6 +74,13 @@ EXPECTED_TABLES = {
     "016c": "access_codes",
     "020a": "orgs",
     "020b": "invitations",
+}
+
+# Tablas que una migración ELIMINÓ a propósito: su AUSENCIA es el estado correcto
+# (su presencia sería drift al revés). `tenant_budget` la dropea la 022 (retiro
+# del wallet prepagado v2.1); las RPC `budget_*` se van con ella.
+DROPPED_TABLES = {
+    "022": "tenant_budget",
 }
 
 # Errores de "ya existe" que tratamos como idempotentes.
@@ -121,6 +130,11 @@ def verify(conn) -> bool:
             exists = _table_exists(cur, table)
             print(f"  verify {num}: public.{table} → {'OK' if exists else 'MISSING'}")
             ok = ok and exists
+        # Tablas retiradas a propósito: la AUSENCIA es OK; PRESENTE es drift.
+        for num, table in DROPPED_TABLES.items():
+            exists = _table_exists(cur, table)
+            print(f"  verify {num}: public.{table} ausente → {'OK' if not exists else 'PRESENT (drift)'}")
+            ok = ok and not exists
     return ok
 
 
