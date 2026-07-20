@@ -16,6 +16,7 @@ determinista — no se llama a la API en CI; el smoke prod usa el real.
 from __future__ import annotations
 
 import json
+import os
 from typing import Callable
 
 from app.orchestrator.clasificacion.tipos import RUTA_POR_TIPO, TipoIntencion
@@ -24,6 +25,10 @@ LlmCaller = Callable[[str], str]
 
 # Modelo de QA/consulta (Adenda): barato, suficiente para clasificar intención.
 CLASIFICADOR_MODEL = "gpt-4o-mini"
+
+# Timeout explícito de la llamada LLM (ED-0 §3.2): ningún cliente de red sin
+# timeout. Corre dentro del pipeline de consulta (fallback del clasificador).
+CLASIFICADOR_LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 
 _DESCRIPCIONES = {
     TipoIntencion.INFORMATIVA: "pide un dato, valor, especificación, definición o parámetro puntual",
@@ -78,6 +83,7 @@ def _default_llm_caller(prompt: str) -> str:
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0,
         response_format={"type": "json_object"},
+        timeout=CLASIFICADOR_LLM_TIMEOUT,
     )
     return str(resp["choices"][0]["message"]["content"])
 
