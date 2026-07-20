@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.core.grg import GovernanceGuardrails
 
 router = APIRouter(prefix="/governance", tags=["governance"])
@@ -23,11 +24,12 @@ async def crear_regla(
 ):
     """Crea una nueva regla de gobernanza para la organización."""
     grg = GovernanceGuardrails(org_id=ctx["org_id"])
-    rule_id = grg.crear_regla(
+    rule_id = await run_blocking(
+        grg.crear_regla, endpoint="/governance/rules",
         entity_class=request.entity_class,
         rule_type=request.rule_type,
         action=request.action,
-        condition=request.condition
+        condition=request.condition,
     )
 
     return {
@@ -53,8 +55,11 @@ async def listar_reglas(ctx: dict = Depends(requiere_rol("admin", "editor", "vie
     _url, _key = require_supabase_config("governance", service=True)
     supabase = create_client(_url, _key)
 
-    resultado = supabase.table("governance_rules").select("*").eq(
-        "org_id", ctx["org_id"]
-    ).eq("is_active", True).execute()
+    def _work():
+        return supabase.table("governance_rules").select("*").eq(
+            "org_id", ctx["org_id"]
+        ).eq("is_active", True).execute()
+
+    resultado = await run_blocking(_work, endpoint="/governance/rules (list)")
 
     return {"reglas": resultado.data}

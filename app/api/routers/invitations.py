@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.onboarding import providers, service
 from app.onboarding.models import (
     AcceptInvitationRequest,
@@ -46,8 +47,10 @@ async def crear_invitacion(
     """
     invited_by = ctx.get("email") or ctx.get("user_id") or ctx["org_id"]
     try:
-        inv = service.crear_invitacion(
+        inv = await run_blocking(
+            service.crear_invitacion,
             providers.get_store(), providers.get_audit(), providers.get_email_sender(),
+            endpoint="/invitations",
             org_id=ctx["org_id"], invited_by=invited_by, invited_by_role=ctx.get("role"),
             email=str(req.email), role=req.role,
         )
@@ -62,7 +65,10 @@ async def listar_invitaciones(
     ctx: dict = Depends(requiere_rol("admin")),
 ) -> InvitationList:
     """Lista las invitaciones de la org (pendientes / aceptadas / etc.)."""
-    rows = service.listar_invitaciones(providers.get_store(), ctx["org_id"], status)
+    rows = await run_blocking(
+        service.listar_invitaciones, providers.get_store(), ctx["org_id"], status,
+        endpoint="/invitations (list)",
+    )
     return InvitationList(items=[_inv_out(r) for r in rows], total=len(rows))
 
 
@@ -70,8 +76,10 @@ async def listar_invitaciones(
 async def aceptar_invitacion(req: AcceptInvitationRequest) -> AcceptInvitationResponse:
     """El invitado acepta: establece contraseña → entra como usuario de la org (público)."""
     try:
-        out = service.aceptar_invitacion(
+        out = await run_blocking(
+            service.aceptar_invitacion,
             providers.get_store(), providers.get_audit(), providers.get_token_issuer(),
+            endpoint="/invitations/accept",
             token=req.token, password=req.password, name=req.name,
         )
     except OnboardingError as e:

@@ -6,10 +6,21 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 
 load_dotenv()
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+# Timeout de red del SDK de Stripe (ED-0 §3.2): ninguna llamada externa sin corte.
+# El SDK aplica este techo por request (connect+read); run_blocking añade el corte
+# duro del endpoint como defensa en profundidad.
+stripe.max_network_retries = 1
+try:
+    stripe.default_http_client = stripe.http_client.new_default_http_client(
+        timeout=float(os.getenv("STRIPE_TIMEOUT_SECONDS", "20"))
+    )
+except Exception:  # noqa: BLE001 — si el SDK no expone el cliente, run_blocking basta.
+    pass
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -91,7 +102,9 @@ async def crear_checkout(request: CheckoutRequest, ctx: dict = Depends(requiere_
         )
 
     try:
-        session = stripe.checkout.Session.create(
+        session = await run_blocking(
+            stripe.checkout.Session.create,
+            endpoint="/billing/checkout",
             payment_method_types=["card"],
             mode="subscription",
             customer_email=request.email,
@@ -125,7 +138,9 @@ async def portal_cliente(request: PortalRequest, ctx: dict = Depends(requiere_ro
     Permite al cliente gestionar su suscripción, facturas y método de pago.
     """
     try:
-        session = stripe.billing_portal.Session.create(
+        session = await run_blocking(
+            stripe.billing_portal.Session.create,
+            endpoint="/billing/portal",
             customer=request.customer_id,
             return_url=request.return_url
         )
@@ -206,15 +221,18 @@ async def _activar_suscripcion(session: dict):
 
     # Crear tabla api_keys si no existe — o insertar
     try:
-        supabase.table("api_keys").insert({
-            "org_id": org_id,
-            "api_key": api_key,
-            "email": email,
-            "org_name": org_name,
-            "plan": plan,
-            "stripe_customer_id": customer_id,
-            "is_active": True
-        }).execute()
+        await run_blocking(
+            supabase.table("api_keys").insert({
+                "org_id": org_id,
+                "api_key": api_key,
+                "email": email,
+                "org_name": org_name,
+                "plan": plan,
+                "stripe_customer_id": customer_id,
+                "is_active": True
+            }).execute,
+            endpoint="/billing/webhook (activar)",
+        )
     except Exception as e:
         print(f"  [Billing] Error guardando API Key: {e}")
 
@@ -235,9 +253,12 @@ async def _cancelar_suscripcion(subscription: dict):
     supabase = create_client(_url, _key)
 
     try:
-        supabase.table("api_keys").update({
-            "is_active": False
-        }).eq("stripe_customer_id", customer_id).execute()
+        await run_blocking(
+            supabase.table("api_keys").update({
+                "is_active": False
+            }).eq("stripe_customer_id", customer_id).execute,
+            endpoint="/billing/webhook (cancelar)",
+        )
         print(f"  [Billing] ❌ Suscripción cancelada: {customer_id}")
     except Exception as e:
         print(f"  [Billing] Error cancelando suscripción: {e}")

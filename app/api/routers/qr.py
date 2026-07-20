@@ -20,6 +20,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.orchestrator import providers
 from app.qr.qr_generator import QrGenerator
 from app.qr.qr_resolver import QrResolutionError, QrResolver
@@ -61,7 +62,8 @@ async def generar_qr(
     generator: QrGenerator = Depends(get_qr_generator),
 ):
     """Genera y registra un QR para una entidad del tenant autenticado."""
-    qr = generator.generar(
+    qr = await run_blocking(
+        generator.generar, endpoint="/qr/generate",
         tenant_id=ctx["org_id"],
         entidad_id=body.entidad_id,
         created_by=ctx.get("user_id"),
@@ -78,7 +80,9 @@ async def revocar_qr(
     generator: QrGenerator = Depends(get_qr_generator),
 ):
     """Revoca un token QR del tenant (por nonce). Tras esto, no resuelve."""
-    ok = generator.revocar(ctx["org_id"], body.nonce)
+    ok = await run_blocking(
+        generator.revocar, ctx["org_id"], body.nonce, endpoint="/qr/revoke"
+    )
     if not ok:
         raise HTTPException(status_code=404, detail="Token no encontrado o ya revocado.")
     return {"revocado": True, "nonce": body.nonce}
@@ -96,7 +100,7 @@ async def resolver_qr(
     existencia: aislamiento multi-tenant absoluto).
     """
     try:
-        resuelto = resolver.resolve(token)
+        resuelto = await run_blocking(resolver.resolve, token, endpoint="/qr/{token}")
     except QrResolutionError:
         raise HTTPException(status_code=404, detail="Recurso no encontrado.")
 

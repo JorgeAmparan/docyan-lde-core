@@ -219,5 +219,11 @@ async def demo_codo_documentos(
             headers={"Retry-After": str(rl.retry_after)},
         )
 
-    docs = dkg_codos.documentos_tenant(onb.get_dkg(), tenant_demo)
+    # Descarga a thread + corte duro (9s del demo): el grafo no bloquea el loop.
+    from app.api.blocking import run_blocking
+
+    docs = await run_blocking(
+        dkg_codos.documentos_tenant, onb.get_dkg(), tenant_demo,
+        timeout=DEMO_QUERY_TIMEOUT_S, endpoint="/demo/codo/{key}",
+    )
     return DemoCodoDocumentosOut(documentos=[DocumentoRefOut(**d) for d in docs])

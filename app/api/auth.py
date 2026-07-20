@@ -157,10 +157,20 @@ async def verificar_credenciales(
 
         # Produccion — tabla api_keys
         try:
+            # ED-0 §3.1: la verificación por API-Key hace una lectura a Supabase.
+            # `verificar_credenciales` es una dependencia async que corre en el
+            # event loop ANTES del cuerpo de CADA endpoint autenticado; una lectura
+            # bloqueante aquí congela el loop igual que en el pipeline. Se descarga
+            # a thread con corte duro (importe perezoso: evita ciclo de importación).
+            from app.api.blocking import run_blocking
+
             sb = _supabase()
-            resultado = sb.table("api_keys").select(
-                "org_id, plan, email, org_name, is_active"
-            ).eq("api_key", api_key).eq("is_active", True).execute()
+            resultado = await run_blocking(
+                sb.table("api_keys").select(
+                    "org_id, plan, email, org_name, is_active"
+                ).eq("api_key", api_key).eq("is_active", True).execute,
+                endpoint="auth:api_key",
+            )
 
             if resultado.data:
                 cliente = resultado.data[0]
