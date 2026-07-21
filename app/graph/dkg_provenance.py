@@ -186,7 +186,23 @@ def bridge_and_normalize(
     try:
         from app.alerts.generador import generar_alertas_vencimiento
 
-        alert_counters = generar_alertas_vencimiento(client, tenant_id)
+        # ED-1 §2.4.5: la creación de :Alerta dispara notificación (ruta ingesta).
+        # Best-effort y con default seguro: la ReglaAlerta default no trae
+        # destinatarios, así que hasta que el admin configure el Directorio la
+        # notificación de ingesta no envía nada (solo persiste la alerta).
+        notificador = None
+        fat = None
+        try:
+            from app.eventos_dirigidos.fat import get_fat
+            from app.eventos_dirigidos.notificador import build_notificador
+
+            notificador = build_notificador(dkg=client)
+            fat = get_fat()
+        except Exception:  # noqa: BLE001 — sin notificador, solo se persiste la alerta.
+            notificador = None
+        alert_counters = generar_alertas_vencimiento(
+            client, tenant_id, notificador=notificador, fat=fat
+        )
         counters["alertas_creadas"] = alert_counters.get("creadas", 0)
         counters["alertas_cuarentena"] = alert_counters.get("cuarentena", 0)
     except Exception as exc:  # noqa: BLE001 — generación de alertas no es gate

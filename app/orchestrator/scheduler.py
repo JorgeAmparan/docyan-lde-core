@@ -41,11 +41,15 @@ def cleanup_expired_sessions_job() -> int:
 def evaluate_vencimientos_job() -> dict:
     """
     Evalúa vencimientos administrativos (Tipo 7 — SOLO administrativos, línea
-    ABSOLUTA CLAUDE.md §11.1). Diario por default. La lógica de reglas de alerta
-    por tenant se completa con EDB/AIM; aquí queda el punto de ejecución y el FAT.
+    ABSOLUTA CLAUDE.md §11.1). Diario (cron 6am). ED-1: barrido REAL sobre el grafo
+    de cada tenant (`:CertificadoVigencia`/`:CertificadoCalibracion`/
+    `:FechaVencimiento`) evaluando los thresholds de su `ReglaAlerta` y creando/
+    notificando `:Alerta` al cruzar una banda (idempotente por threshold). Incluye la
+    escalación automática. Registra FAT de la corrida (familia F10).
     """
-    logger.info("evaluate_vencimientos: barrido administrativo ejecutado")
-    return {"evaluado": True, "tipo": "vencimientos_administrativos"}
+    from app.alerts.barrido import evaluar_vencimientos_todos
+
+    return evaluar_vencimientos_todos()
 
 
 def mantenimiento_indices_job() -> dict:
