@@ -68,8 +68,14 @@ primary_region = "dfw"
     grace_period = "60s"
 
 # Perfil de recursos (§4.1): la ingesta carga Docling+TableFormer+torch CPU y es
-# intensiva en CPU/RAM. Recomendación inicial shared-cpu-4x / 4 GB; ajustar según
-# el peso real de la imagen y el consumo observado (reporte §11).
+# intensiva en CPU/RAM. ED-0e (jul 2026): 4 GB era insuficiente para docs
+# image-heavy — LS-400 (88pp, 85 dibujos) OOM-mataba al worker en Docling
+# layout+TableFormer+generate_picture_images AUN con OCR apagado (segundo driver
+# de memoria, independiente del OCR ya resuelto por el gate). Pico observado con
+# OCR ~3.78 GB anon-rss; sin OCR superaba 4 GB igual. Subido a 8 GB con evidencia.
+# NOTA DE COSTO: el worker es consumidor de cola con auto_stop OFF + min 1 (arriba,
+# B2.2) → SIEMPRE vivo → los 8 GB se pagan 24/7, no solo durante ingesta. Rehacer
+# el patrón a auto-start/stop es decisión aparte (PENDIENTE DE JORGE).
 [[vm]]
   size = "shared-cpu-4x"
-  memory = "4gb"
+  memory = "8gb"
