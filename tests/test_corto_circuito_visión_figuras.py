@@ -14,7 +14,7 @@ _SALIDA = '{"titulo":"X","etiquetas":[{"texto":"Tapa","x":0.3,"y":0.2}],"leyenda
 
 
 def _figuras(n: int) -> list[FiguraExtraida]:
-    return [FiguraExtraida(titulo=f"F{i}", png_bytes=b"PNG") for i in range(n)]
+    return [FiguraExtraida(titulo=f"F{i}", png_bytes=b"PNG" + bytes([i % 256])) for i in range(n)]
 
 
 def test_almacen_caido_no_llama_vision_ni_una_vez():
@@ -24,7 +24,7 @@ def test_almacen_caido_no_llama_vision_ni_una_vez():
         calls["n"] += 1
         return _SALIDA
 
-    drafts = extraer_diagramas(
+    drafts, _fid = extraer_diagramas(
         "t", _figuras(30),
         complete_vision=vision,
         put_asset=lambda *_: "u",
@@ -41,7 +41,7 @@ def test_almacen_ok_si_procesa():
         calls["n"] += 1
         return _SALIDA
 
-    drafts = extraer_diagramas(
+    drafts, _fid = extraer_diagramas(
         "t", _figuras(3),
         complete_vision=vision,
         put_asset=lambda *_: "https://assets/x.png",
@@ -54,7 +54,7 @@ def test_almacen_ok_si_procesa():
 def test_put_asset_inyectado_no_exige_storage_ok():
     # Compat: los tests/llamadores que inyectan put_asset (store propio) NO se
     # cortocircuitan aunque no pasen storage_ok (el store inyectado = disponible).
-    drafts = extraer_diagramas(
+    drafts, _fid = extraer_diagramas(
         "t", _figuras(1),
         complete_vision=lambda _p, _i: _SALIDA,
         put_asset=lambda *_: "u",

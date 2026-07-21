@@ -445,6 +445,33 @@ class IngestPipeline:
             "metadata": getattr(ingest_result, "metadata", {}),
         }
 
+    def _hashes_visuales_previos(self, tenant_id: str) -> dict:
+        """
+        §5bis — mapa {hash_imagen → DraftDiagrama de referencia} de las figuras YA
+        portadas en el tenant (otras ingestas), para deduplicar cross-documento.
+        Best-effort: ante cualquier fallo del grafo devuelve {} (dedup intra-doc).
+        """
+        try:
+            from worker.extraction.models import DraftDiagrama
+
+            rows = self.dkg_client.query(
+                tenant_id,
+                "MATCH (r:RecursoVisual) WHERE r.hash_imagen IS NOT NULL "
+                "RETURN r.hash_imagen AS h, r.url AS url, r.titulo AS titulo",
+            )
+            previos: dict[str, DraftDiagrama] = {}
+            for row in rows or []:
+                h = row.get("h")
+                url = row.get("url")
+                if h and url:
+                    previos[h] = DraftDiagrama(
+                        titulo=row.get("titulo") or "", recurso_url=url, hash_imagen=h,
+                    )
+            return previos
+        except Exception as exc:  # noqa: BLE001 — la dedup cross-doc no es gate
+            logger.debug("no se pudieron leer hashes visuales previos: %s", type(exc).__name__)
+            return {}
+
     def _auto_materializar_visuales(self, schema, markdown, docling_doc, job, doc_id) -> dict:
         """
         Auto-extrae y materializa DIRECTO al grafo según los tipos de visualización
@@ -452,9 +479,11 @@ class IngestPipeline:
         revisión manual — el resultado queda vivo para la consulta, con procedencia
         (`doc_id`/`entidad_id`). Best-effort: nunca rompe la ingesta.
 
-        Devuelve contadores {arboles, diagramas}.
+        Devuelve contadores {arboles, diagramas, fidelidad_visual}. La `fidelidad_visual`
+        (ED-0c) es el QA de ingesta: figuras detectadas por Docling vs realmente
+        portadas como recurso renderable, para que la degradación NO sea silenciosa.
         """
-        counters = {"arboles": 0, "diagramas": 0}
+        counters: dict = {"arboles": 0, "diagramas": 0}
         tipos = set(getattr(schema, "tipos_intencion_visualizacion", []) or []) if schema else set()
         entidad_id = job.contexto.get("entidad_id")
 
@@ -472,23 +501,57 @@ class IngestPipeline:
             except Exception as exc:  # noqa: BLE001 — extracción no es gate
                 logger.warning("auto-extracción de árbol falló: %s", type(exc).__name__)
 
-        # T3 — diagramas (figuras + visión) → grafo.
+        # T3 — diagramas (figuras + visión) → grafo. ED-0c: porta TODA figura con
+        # imagen (sin tope, sin gate de callouts) y mide la fidelidad detectadas-vs-portadas.
         if 3 in tipos and docling_doc is not None:
             try:
                 from worker.extraction.diagram_extractor import extraer_diagramas
                 from worker.extraction.docling_figures import extraer_figuras
                 from worker.extraction.materializar import materializar_diagrama
 
-                figuras = extraer_figuras(docling_doc)
-                drafts = extraer_diagramas(job.tenant_id, figuras)
+                # Docling detectó estas figuras (algunas pueden no dar imagen raster
+                # utilizable → vectoriales/fallidas: eso es parte de la fidelidad).
+                detectadas = len(getattr(docling_doc, "pictures", None) or [])
+                figuras = extraer_figuras(docling_doc)  # las que sí dieron PNG usable
+                con_imagen = len(figuras)
+
+                # §5bis: siembra los hashes de figuras YA portadas en el tenant (otras
+                # ingestas) para deduplicar cross-documento — una figura idéntica no se
+                # re-almacena ni se re-visiona. Best-effort: si el grafo no responde,
+                # la dedup queda intra-documento (igual de correcta, menos alcance).
+                hashes_previos = self._hashes_visuales_previos(job.tenant_id)
+
+                drafts, fid = extraer_diagramas(
+                    job.tenant_id, figuras, hashes_previos=hashes_previos,
+                )
                 for d in drafts:
                     materializar_diagrama(self.dkg_client, job.tenant_id, d,
                                           doc_id=doc_id, entidad_id=entidad_id)
                 counters["diagramas"] = len(drafts)
+                counters["fidelidad_visual"] = {
+                    "figuras_detectadas": detectadas,             # Docling pictures
+                    "con_imagen_utilizable": con_imagen,          # dieron PNG raster
+                    "sin_imagen_utilizable": max(0, detectadas - con_imagen),  # vectorial/no-raster
+                    "portadas": fid["portadas"],                  # :RecursoVisual con url
+                    "con_callouts": fid["con_callouts"],          # + etiquetas de visión
+                    "figuras_deduplicadas": fid["figuras_deduplicadas"],  # §5bis: mismo hash
+                    "store_fallo": fid["store_fallo"],
+                    "vision_fallo": fid["vision_fallo"],
+                    "omitidas_por_tope": fid["omitidas_por_tope"],
+                }
+                # QA: si no se portaron TODAS las detectadas, avísalo fuerte (no silencioso).
+                if fid["portadas"] < detectadas:
+                    logger.warning(
+                        "FIDELIDAD VISUAL job %s: %d/%d figuras portadas — "
+                        "sin_imagen=%d store_fallo=%d tope=%d (revisar en QA de ingesta)",
+                        job.job_id, fid["portadas"], detectadas,
+                        max(0, detectadas - con_imagen), fid["store_fallo"],
+                        fid["omitidas_por_tope"],
+                    )
             except Exception as exc:  # noqa: BLE001 — extracción no es gate
                 logger.warning("auto-extracción de diagramas falló: %s", type(exc).__name__)
 
-        if counters["arboles"] or counters["diagramas"]:
+        if counters["arboles"] or counters["diagramas"] or counters.get("fidelidad_visual"):
             logger.info("visuales materializados | tenant=%s | %s", job.tenant_id, counters)
         return counters
 

@@ -79,7 +79,7 @@ def test_recorrido_t3_autoextrae_confirma_consulta_con_coordenadas(client):
         "leyenda_simbolica": [{"simbolo": "⚠", "significado": "Punto caliente"}],
     })
     figuras = [FiguraExtraida(titulo="Fig 1", png_bytes=b"\x89PNG-fake")]
-    drafts = extraer_diagramas(
+    drafts, _fid = extraer_diagramas(
         TENANT, figuras,
         complete_vision=lambda _p, _img: vision_out,
         put_asset=lambda t, n, b: f"https://assets/{t}/{n}",
@@ -94,6 +94,9 @@ def test_recorrido_t3_autoextrae_confirma_consulta_con_coordenadas(client):
         ContextoPipeline(tenant_id=TENANT, pregunta="rotor", params={"termino": "rotor"}),
         DKGReader(client),
     ).payload
-    assert pay.recurso_url == f"https://assets/{TENANT}/figura_0.png"
+    # ED-0c §5bis: el asset se nombra por hash de la imagen; la consulta sirve la
+    # MISMA url que se materializó.
+    assert pay.recurso_url == drafts[0].recurso_url
+    assert pay.recurso_url.startswith(f"https://assets/{TENANT}/figura_")
     et = next(e for e in pay.etiquetas if e.texto == "Tapa del rotor")
     assert et.x == 0.33 and et.y == 0.26 and et.w == 0.10 and et.h == 0.06

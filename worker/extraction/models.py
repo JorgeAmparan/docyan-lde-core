@@ -45,6 +45,10 @@ class DraftDiagrama(_Base):
     recurso_id: str | None = None
     titulo: str
     recurso_url: str | None = None  # asset de imagen (storage)
+    # ED-0c §5bis: SHA-256 del PNG. Deduplica figuras idénticas (membrete/logo por
+    # página): mismo hash ⇒ 1 solo almacenamiento + 1 sola visión; el `:RecursoVisual`
+    # se materializa una vez (MERGE por hash) y se referencia desde cada aparición.
+    hash_imagen: str | None = None
     etiquetas: list[EtiquetaBorrador] = Field(default_factory=list)
     leyenda_simbolica: list[LeyendaBorrador] = Field(default_factory=list)
 
