@@ -1,120 +1,74 @@
 """
-Sprint ED-0f — batching de conversión por páginas para acotar el pico de memoria.
+Sprint ED-0f — acota el pico de memoria de la conversión Docling SIN cambiar el output.
 
-Regresión: LS-400 (88pp, 244 figuras) en UNA sola convert() con
-`generate_picture_images=True` escalaba monótono a 9.7 GB (los rásters PIL no se
-liberan por página) → OOM hasta en 16 GB. Fix: DOS pasadas —
-  P1 markdown sin imágenes (idéntico al golden), P2 figuras por `page_range` en
-  lotes, liberando entre lotes.
+LS-400 (88pp, 244 figuras) escalaba a 9.7 GB en convert() → OOM hasta en 16 GB.
+Medición en prod: NO eran los rásters de figura (con generate_picture_images=False
+el pico apenas bajó, 9.63 vs 9.70 GB; los crops pesan ~70 MB). El driver real es la
+COLA de páginas de Docling (`queue_max_size`, default 100): un doc de 88pp entra
+completo y sus rásters de página se acumulan. Fix: bajar `queue_max_size` →
+backpressure, ~N páginas en vuelo, con OUTPUT BYTE-IDÉNTICO (profundidad de pipeline,
+no contenido). UNA sola convert(), sin page_range, sin bordes de lote.
 
-Estos tests NO requieren docling: ejercitan la lógica de lotes (pura) y el wiring
-de `extraer_figuras_batched` con un DocumentConverter mockeado que registra los
-`page_range` recibidos. El diff byte-idéntico contra el golden lo cubre el Paso 3
-sobre el worker real.
+Estos tests NO requieren docling: verifican el env-wiring de `DOCLING_QUEUE_MAX_SIZE`
+y que `_pdf_pipeline_options` FIJA `queue_max_size` en las opciones (con un docling
+falso inyectado). El pico <4 GB y el diff byte-idéntico se validan en el worker real.
 """
 from __future__ import annotations
 
 import importlib
+import sys
+import types
 
 pipeline = importlib.import_module("worker.ingest_pipeline")
 
 
-# ── Lógica de lotes (pura) ────────────────────────────────────────────────────
-def test_rangos_de_lote_particiona_inclusivo():
-    assert pipeline._rangos_de_lote(10, 4) == [(1, 4), (5, 8), (9, 10)]
-    assert pipeline._rangos_de_lote(8, 8) == [(1, 8)]
-    assert pipeline._rangos_de_lote(88, 8) == [
-        (1, 8), (9, 16), (17, 24), (25, 32), (33, 40), (41, 48),
-        (49, 56), (57, 64), (65, 72), (73, 80), (81, 88),
-    ]
+def test_queue_max_size_default_acotado_y_por_env(monkeypatch):
+    # default acotado (≠ 100 de Docling): un valor pequeño = pocas páginas en vuelo.
+    assert pipeline.DOCLING_QUEUE_MAX_SIZE <= 16
+    # configurable por env (se re-evalúa al recargar el módulo).
+    monkeypatch.setenv("DOCLING_QUEUE_MAX_SIZE", "6")
+    importlib.reload(pipeline)
+    assert pipeline.DOCLING_QUEUE_MAX_SIZE == 6
+    monkeypatch.delenv("DOCLING_QUEUE_MAX_SIZE", raising=False)
+    importlib.reload(pipeline)  # restaura el default para el resto de la suite
 
 
-def test_rangos_de_lote_bordes():
-    assert pipeline._rangos_de_lote(1, 8) == [(1, 1)]      # 1 página
-    assert pipeline._rangos_de_lote(0, 8) == [(1, 1)]      # degrada seguro
-    assert pipeline._rangos_de_lote(9, 100) == [(1, 9)]    # lote > documento
-    # batch<1 se satura a 1 (una convert por página)
-    assert pipeline._rangos_de_lote(3, 0) == [(1, 1), (2, 2), (3, 3)]
-
-
-# ── Wiring: extraer_figuras_batched invoca convert() UNA vez por lote, con page_range
-def test_extraer_figuras_batched_llama_por_lote(monkeypatch):
-    llamadas = []
-
-    class _FakeDoc:
+def _inyectar_docling_falso(monkeypatch):
+    """Inyecta un docling mínimo en sys.modules para probar `_pdf_pipeline_options`
+    sin el stack real (worker-only)."""
+    class _Opts:
         pass
 
-    class _FakeResult:
-        document = _FakeDoc()
+    class _Tess:
+        def __init__(self, lang=None):
+            self.lang = lang
 
-    class _FakeConverter:
-        def convert(self, path, page_range=None):
-            llamadas.append(page_range)
-            return _FakeResult()
-
-    # el converter se crea por lote (para poder liberar entre lotes)
-    monkeypatch.setattr(pipeline, "_nuevo_converter", lambda *_a, **_k: _FakeConverter())
-    # cada lote "extrae" 2 figuras (rótulo = su page_range para verificar cobertura)
-    import worker.extraction.docling_figures as df
-    monkeypatch.setattr(df, "extraer_figuras",
-                        lambda _doc: ["figA", "figB"])
-    monkeypatch.setattr(pipeline, "DOCLING_PAGE_BATCH", 8)
-    # PDF por magic bytes (no toca disco real): forzamos _es_pdf=True
-    monkeypatch.setattr(pipeline, "_es_pdf", lambda _p: True)
-
-    figs = pipeline.extraer_figuras_batched("x.pdf", {"do_ocr": False}, total_paginas=20)
-
-    # 20 páginas / 8 → 3 lotes con page_range 1-indexado inclusivo
-    assert llamadas == [(1, 8), (9, 16), (17, 20)]
-    # todas las figuras de todos los lotes se acumulan (3 lotes × 2 = 6)
-    assert figs == ["figA", "figB", "figA", "figB", "figA", "figB"]
+    mod = types.ModuleType("docling.datamodel.pipeline_options")
+    mod.PdfPipelineOptions = _Opts
+    mod.TesseractCliOcrOptions = _Tess
+    # los paquetes padre deben existir para resolver el import
+    for name in ("docling", "docling.datamodel"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    monkeypatch.setitem(sys.modules, "docling.datamodel.pipeline_options", mod)
 
 
-def test_extraer_figuras_batched_un_lote_fallido_no_tumba(monkeypatch):
-    class _FakeConverter:
-        def __init__(self, boom):
-            self.boom = boom
+def test_pdf_options_fija_queue_max_size_e_imagenes(monkeypatch):
+    _inyectar_docling_falso(monkeypatch)
+    monkeypatch.setattr(pipeline, "DOCLING_QUEUE_MAX_SIZE", 3)
 
-        def convert(self, path, page_range=None):
-            if self.boom:
-                raise RuntimeError("lote reventó")
-            class R:
-                document = object()
-            return R()
+    opts = pipeline._pdf_pipeline_options({"do_ocr": False})
 
-    estado = {"n": 0}
-
-    def _mk(*_a, **_k):
-        estado["n"] += 1
-        return _FakeConverter(boom=(estado["n"] == 2))  # el 2º lote falla
-
-    monkeypatch.setattr(pipeline, "_nuevo_converter", _mk)
-    import worker.extraction.docling_figures as df
-    monkeypatch.setattr(df, "extraer_figuras", lambda _doc: ["f"])
-    monkeypatch.setattr(pipeline, "DOCLING_PAGE_BATCH", 8)
-    monkeypatch.setattr(pipeline, "_es_pdf", lambda _p: True)
-
-    figs = pipeline.extraer_figuras_batched("x.pdf", {"do_ocr": False}, total_paginas=24)
-    # 3 lotes; el 2º falla → se conservan las figuras de los otros 2 (best-effort)
-    assert figs == ["f", "f"]
+    # el acote de memoria: queue_max_size llega a las opciones (una sola pasada)
+    assert opts.queue_max_size == 3
+    # figuras con raster en la MISMA pasada (T3), sin degradar
+    assert opts.generate_picture_images is True
+    assert opts.do_table_structure is True
+    # gate de OCR (ED-0e) respetado
+    assert opts.do_ocr is False
 
 
-def test_extraer_figuras_batched_no_pdf_una_sola_pasada(monkeypatch):
-    llamadas = []
-
-    class _FakeConverter:
-        def convert(self, path, page_range=None):
-            llamadas.append(page_range)
-            class R:
-                document = object()
-            return R()
-
-    monkeypatch.setattr(pipeline, "_nuevo_converter", lambda *_a, **_k: _FakeConverter())
-    import worker.extraction.docling_figures as df
-    monkeypatch.setattr(df, "extraer_figuras", lambda _doc: ["f"])
-    monkeypatch.setattr(pipeline, "_es_pdf", lambda _p: False)  # docx/xlsx
-
-    figs = pipeline.extraer_figuras_batched("x.docx", {"do_ocr": False}, total_paginas=None)
-    # no-PDF → UNA convert() sin page_range (el driver de rásters masivos es de PDF)
-    assert llamadas == [None]
-    assert figs == ["f"]
+def test_pdf_options_respeta_do_ocr_true(monkeypatch):
+    _inyectar_docling_falso(monkeypatch)
+    opts = pipeline._pdf_pipeline_options({"do_ocr": True})
+    assert opts.do_ocr is True
+    assert opts.queue_max_size == pipeline.DOCLING_QUEUE_MAX_SIZE

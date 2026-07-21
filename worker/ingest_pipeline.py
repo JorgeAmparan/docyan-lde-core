@@ -139,34 +139,25 @@ def analizar_ocr_paginas(path: str) -> dict:
 # ── Conversión Docling ────────────────────────────────────────────────────────
 
 
-# ED-0f — batching de conversión por páginas para acotar el pico de memoria.
-# LS-400 (88pp, 244 figuras) escalaba monótono a 9.7 GB en UNA sola convert() con
-# `generate_picture_images=True` (los rásters PIL no se liberan por página) → OOM
-# hasta en 16 GB. Solución: DOS pasadas que separan los dos drivers de memoria.
-#   Pasada 1 (markdown): una sola convert() con `generate_picture_images=False`.
-#     El flag NO cambia el markdown (los placeholders de imagen son iguales) → el
-#     texto/chunks/spans/citas son IDÉNTICOS a la corrida con imágenes. Sin los 244
-#     rásters, la memoria baja drásticamente.
-#   Pasada 2 (figuras): convert() por LOTES de páginas (`page_range`, docling 2.96.0)
-#     con imágenes, extrae los rásters del lote y libera antes del siguiente → el pico
-#     queda acotado a ~N páginas, no al documento entero. Los `png_bytes` son
-#     deterministas → mismos SHA-256 (misma dedup §5bis, mismas figuras por hash).
-DOCLING_PAGE_BATCH = max(1, int(os.getenv("DOCLING_PAGE_BATCH", "8")))
+# ED-0f — acota el pico de memoria de la conversión SIN cambiar el output.
+# LS-400 (88pp, 244 figuras) escalaba a 9.7 GB en convert() → OOM hasta en 16 GB.
+# Diagnóstico (medido en prod): NO eran los rásters de figura — con
+# `generate_picture_images=False` el pico apenas bajó (9.63 vs 9.70 GB; los 244
+# crops pesan ~70 MB). El driver real es la COLA de páginas de Docling
+# (`queue_max_size`, default 100): un doc de 88pp entra COMPLETO en la cola y sus
+# rásters de página + parsed-data se acumulan. Bajar `queue_max_size` aplica
+# backpressure → solo ~N páginas en vuelo, con OUTPUT BYTE-IDÉNTICO (es profundidad
+# de pipeline, no contenido): mismo markdown, mismos chunks, mismas citas, mismas
+# figuras. UNA sola convert() — sin page_range, sin bordes de lote, sin riesgo de
+# divergencia de chunks. (El intento de 2 pasadas + page_range se descartó: partía
+# de que los rásters eran el driver, que la medición refutó.)
+DOCLING_QUEUE_MAX_SIZE = max(1, int(os.getenv("DOCLING_QUEUE_MAX_SIZE", "4")))
 
 
-def _rangos_de_lote(n_paginas: int, batch: int) -> list[tuple[int, int]]:
-    """Parte [1..n_paginas] en rangos (inicio, fin) 1-indexados inclusivos de tamaño
-    `batch` — el contrato de `page_range` de Docling. Ej: (10, 4) → [(1,4),(5,8),(9,10)]."""
-    if n_paginas < 1:
-        return [(1, 1)]
-    b = max(1, batch)
-    return [(s, min(s + b - 1, n_paginas)) for s in range(1, n_paginas + 1, b)]
-
-
-def _pdf_pipeline_options(ocr_gate: dict, *, generate_images: bool):
-    """Construye las `PdfPipelineOptions` compartidas por ambas pasadas. Idénticas
-    salvo `generate_picture_images` — mismos modelos, mismo OCR, mismo images_scale
-    (default): cero degradación entre la corrida batched y la de referencia."""
+def _pdf_pipeline_options(ocr_gate: dict):
+    """`PdfPipelineOptions` del worker. `queue_max_size` acotado (ED-0f) limita las
+    páginas en vuelo → pico de memoria acotado con output IDÉNTICO. Mismos modelos y
+    mismo `images_scale` (default): cero degradación."""
     from docling.datamodel.pipeline_options import (
         PdfPipelineOptions,
         TesseractCliOcrOptions,
@@ -177,7 +168,8 @@ def _pdf_pipeline_options(ocr_gate: dict, *, generate_images: bool):
     # ED-0e — OCR SOLO si alguna página carece de texto nativo; idiomas acotados.
     opts.do_ocr = ocr_gate["do_ocr"]
     opts.ocr_options = TesseractCliOcrOptions(lang=_ocr_langs_list())
-    opts.generate_picture_images = generate_images  # ED-0f: False en P1, True en P2
+    opts.generate_picture_images = True  # B9.5 T3: figuras con imagen (auto-extracción)
+    opts.queue_max_size = DOCLING_QUEUE_MAX_SIZE  # ED-0f — backpressure de páginas
     # artifacts_path: modelos precargados en build (layout+tableformer). Sin esto,
     # convert() intenta snapshot_download y con HF_HUB_OFFLINE=1 falla (B2.2).
     artifacts = os.getenv("DOCLING_ARTIFACTS_PATH")
@@ -186,36 +178,33 @@ def _pdf_pipeline_options(ocr_gate: dict, *, generate_images: bool):
     return opts
 
 
-def _nuevo_converter(ocr_gate: dict, *, generate_images: bool):
-    from docling.datamodel.base_models import InputFormat
-    from docling.document_converter import DocumentConverter, PdfFormatOption
-
-    opts = _pdf_pipeline_options(ocr_gate, generate_images=generate_images)
-    return DocumentConverter(
-        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
-    )
-
-
-def convertir_markdown(path: str):
+def convertir(path: str):
     """
-    ED-0f Pasada 1 — Markdown (una sola convert(), SIN rásters de figura).
-    Devuelve `(markdown, detectadas, ocr_gate)`: el markdown global (idéntico a la
-    corrida con imágenes), el número de figuras DETECTADAS (structure, sin raster)
-    y la señal de QA del gate de OCR. `detectadas` alimenta la fidelidad visual.
+    Convierte un documento con Docling → `(markdown, docling_document, ocr_gate)`.
+    UNA sola convert() con `generate_picture_images=True` (figuras con raster para
+    T3) y `queue_max_size` acotado (ED-0f) para no acumular todas las páginas en
+    memoria. `ocr_gate` (ED-0e) trae la señal de QA del gate de OCR.
 
     Pipeline OFFLINE (HF_HUB_OFFLINE): modelos layout+TableFormer precargados + OCR
     vía el binario `tesseract`. Para formatos no-PDF, Docling usa su pipeline default.
     """
+    from docling.datamodel.base_models import InputFormat
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+
     ocr_gate = analizar_ocr_paginas(path)
     # Log ANTES de convert(): si la conversión OOM-mata al proceso, la decisión del
     # gate queda registrada igual (regresión ED-0e).
     logger.info(
-        "gate OCR | %s | do_ocr=%s | paginas=%s texto_nativo=%s ocr=%s | langs=%s umbral=%d",
+        "gate OCR | %s | do_ocr=%s | paginas=%s texto_nativo=%s ocr=%s | langs=%s umbral=%d queue=%d",
         path, ocr_gate["do_ocr"], ocr_gate.get("paginas_totales"),
         ocr_gate.get("paginas_texto_nativo"), ocr_gate.get("paginas_ocr"),
-        OCR_LANGS, OCR_MIN_CHARS_POR_PAGINA,
+        OCR_LANGS, OCR_MIN_CHARS_POR_PAGINA, DOCLING_QUEUE_MAX_SIZE,
     )
-    converter = _nuevo_converter(ocr_gate, generate_images=False)
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=_pdf_pipeline_options(ocr_gate))
+        }
+    )
     result = converter.convert(path)
     doc = result.document
     if ocr_gate.get("paginas_totales") is None:
@@ -223,48 +212,12 @@ def convertir_markdown(path: str):
             ocr_gate = {**ocr_gate, "paginas_totales": len(doc.pages) or None}
         except Exception:  # noqa: BLE001 — el conteo es señal, no gate
             pass
-    detectadas = len(getattr(doc, "pictures", None) or [])
-    return doc.export_to_markdown(), detectadas, ocr_gate
-
-
-def extraer_figuras_batched(path: str, ocr_gate: dict, total_paginas: int | None):
-    """
-    ED-0f Pasada 2 — extrae los rásters de TODAS las figuras del PDF por LOTES de
-    páginas (`page_range`), liberando cada lote antes del siguiente. Devuelve la
-    lista global de `FiguraExtraida` (mismos PNG → mismos hashes que la corrida de
-    una sola pasada). Acota el pico de memoria a ~`DOCLING_PAGE_BATCH` páginas.
-
-    Solo aplica a PDF (page_range es de PDF). Para no-PDF cae a UNA convert() con
-    imágenes (el memory-driver de rásters masivos es específico de PDF escaneables).
-    """
-    from worker.extraction.docling_figures import extraer_figuras
-
-    if not _es_pdf(path):
-        # no-PDF: una sola pasada con imágenes (sin page_range).
-        conv = _nuevo_converter(ocr_gate, generate_images=True)
-        return extraer_figuras(conv.convert(path).document)
-
-    n = total_paginas or _contar_paginas(path) or 1
-    rangos = _rangos_de_lote(n, DOCLING_PAGE_BATCH)
-    figuras: list = []
-    for (inicio, fin) in rangos:
-        conv = _nuevo_converter(ocr_gate, generate_images=True)
-        try:
-            res = conv.convert(path, page_range=(inicio, fin))
-            lote = extraer_figuras(res.document)
-            figuras.extend(lote)
-        except Exception as exc:  # noqa: BLE001 — un lote fallido no tumba la ingesta
-            logger.warning("ED-0f: lote de figuras [%d-%d] falló: %s", inicio, fin, type(exc).__name__)
-        finally:
-            del conv  # libera el converter (y su DoclingDocument con rásters) del lote
-    logger.info("ED-0f figuras batched | %s | %d lotes de %d pp | %d figuras",
-                path, len(rangos), DOCLING_PAGE_BATCH, len(figuras))
-    return figuras
+    return doc.export_to_markdown(), doc, ocr_gate
 
 
 def convertir_a_markdown(path: str) -> str:
     """Compat: solo el Markdown (GraphRAG-SDK lo ingiere nativamente)."""
-    return convertir_markdown(path)[0]
+    return convertir(path)[0]
 
 
 def _contar_paginas(path: str) -> int | None:
@@ -398,10 +351,9 @@ class IngestPipeline:
         # FASE conversion — Docling convierte (opaco): inicio y, al terminar, el
         # conteo de páginas real.
         _emit("conversion", 0.0, {})
-        # ED-0f Pasada 1 — markdown SIN rásters (memoria acotada); las figuras se
-        # extraen por lotes en Pasada 2 dentro de _auto_materializar_visuales, solo
-        # si el schema las necesita (viz T3). `detectadas` = figuras vistas por Docling.
-        markdown, figuras_detectadas, ocr_gate = convertir_markdown(local_path)
+        # ED-0f — una sola convert() con queue_max_size acotado (memoria acotada,
+        # output byte-idéntico). El docling_doc trae las figuras con raster (T3).
+        markdown, docling_doc, ocr_gate = convertir(local_path)
         paginas = ocr_gate.get("paginas_totales") or _contar_paginas(local_path)
         pg_counters = {"pages": paginas, "page": paginas} if paginas else {}
         _emit("conversion", 1.0, pg_counters)
@@ -568,9 +520,7 @@ class IngestPipeline:
         # T5 árboles). DOCYAN extrae del documento y escribe el resultado al grafo sin
         # revisión manual (la extracción del stack es de calidad suficiente).
         # Best-effort: no es gate del cobro.
-        visuales = self._auto_materializar_visuales(
-            schema, markdown, local_path, figuras_detectadas, ocr_gate, paginas, job, doc_id
-        )
+        visuales = self._auto_materializar_visuales(schema, markdown, docling_doc, job, doc_id)
 
         # Marca uso del schema (señal de utilidad para el registry vivo).
         if self.schema_registry is not None and schema is not None:
@@ -670,18 +620,12 @@ class IngestPipeline:
             logger.debug("no se pudieron leer hashes visuales previos: %s", type(exc).__name__)
             return {}
 
-    def _auto_materializar_visuales(
-        self, schema, markdown, local_path, figuras_detectadas, ocr_gate, paginas, job, doc_id
-    ) -> dict:
+    def _auto_materializar_visuales(self, schema, markdown, docling_doc, job, doc_id) -> dict:
         """
         Auto-extrae y materializa DIRECTO al grafo según los tipos de visualización
         del schema: T5 (árbol) desde el texto, T3 (diagrama) desde las figuras. Sin
         revisión manual — el resultado queda vivo para la consulta, con procedencia
         (`doc_id`/`entidad_id`). Best-effort: nunca rompe la ingesta.
-
-        ED-0f: las figuras (T3) se extraen AQUÍ por lotes (`extraer_figuras_batched`),
-        no en la conversión, y SOLO si el schema las necesita — así la Pasada 2 (rásters)
-        ni siquiera corre para documentos sin visualización de diagramas.
 
         Devuelve contadores {arboles, diagramas, fidelidad_visual}. La `fidelidad_visual`
         (ED-0c) es el QA de ingesta: figuras detectadas por Docling vs realmente
@@ -707,17 +651,16 @@ class IngestPipeline:
 
         # T3 — diagramas (figuras + visión) → grafo. ED-0c: porta TODA figura con
         # imagen (sin tope, sin gate de callouts) y mide la fidelidad detectadas-vs-portadas.
-        if 3 in tipos:
+        if 3 in tipos and docling_doc is not None:
             try:
                 from worker.extraction.diagram_extractor import extraer_diagramas
+                from worker.extraction.docling_figures import extraer_figuras
                 from worker.extraction.materializar import materializar_diagrama
 
-                # Docling detectó estas figuras en la Pasada 1 (structure, sin raster);
-                # algunas pueden no dar imagen raster utilizable → eso es fidelidad.
-                detectadas = figuras_detectadas
-                # ED-0f Pasada 2 — rásters por lotes (memoria acotada). Mismos PNG →
-                # mismos hashes que una sola pasada.
-                figuras = extraer_figuras_batched(local_path, ocr_gate, paginas)
+                # Docling detectó estas figuras (algunas pueden no dar imagen raster
+                # utilizable → vectoriales/fallidas: eso es parte de la fidelidad).
+                detectadas = len(getattr(docling_doc, "pictures", None) or [])
+                figuras = extraer_figuras(docling_doc)  # las que sí dieron PNG usable
                 con_imagen = len(figuras)
 
                 # §5bis: siembra los hashes de figuras YA portadas en el tenant (otras

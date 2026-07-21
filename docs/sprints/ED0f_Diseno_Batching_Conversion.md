@@ -71,3 +71,26 @@ misma firma de chunks, misma cita) con **pico <4 GB**. Luego Paso 4 revierte a 4
 ## Pendiente de confirmar antes de codificar
 - `page_range` en `DocumentConverter.convert()` de docling 2.96.0 (pilar del diseño)
   — verificar en el worker (`inspect.signature`) antes de implementar.
+
+---
+
+## PIVOTE (medido en prod) — el driver NO eran los rásters; era la cola de páginas
+
+El diseño de dos pasadas partía de que los 244 rásters de figura eran el driver del
+pico. **La medición lo refutó:** con `generate_picture_images=False` (Pasada 1 sola)
+el pico apenas bajó de **9.70 → 9.63 GB** — los 244 crops pesan **~70 MB**. El 2-pass
+además re-convierte el layout N veces (lento). El verdadero driver, medido con las
+opciones reales de Docling, es **`queue_max_size` (default 100)**: un PDF de 88 pp
+entra COMPLETO en la cola y sus rásters de página + parsed-data se acumulan.
+
+**Fix definitivo (más simple y más seguro que el batching):** bajar
+`queue_max_size` (env `DOCLING_QUEUE_MAX_SIZE`, default 4). Es **backpressure de
+pipeline, no contenido** → solo ~N páginas en vuelo a la vez, con **UNA sola
+convert()** y **output byte-idéntico** (mismo markdown, chunks, citas, figuras).
+Disuelve por completo el riesgo de identidad de chunks: no hay page_range, ni bordes
+de lote, ni concatenación. El 2-pass + page_range se **descartó**. `layout/table/ocr
+_batch_size` ya venían en 4 (no eran el problema); `generate_page_images`/
+`generate_parsed_pages` ya en False.
+
+Validación (Paso 3): re-ingesta de LS-400 con `queue_max_size` acotado → diff
+byte-idéntico contra el golden + **pico < 4 GB** en una sola pasada.
