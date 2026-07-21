@@ -52,6 +52,7 @@ async def signup(req: SignupRequest) -> SignupResponse:
             providers.get_token_issuer(), req,
             endpoint="/onboarding/signup",
             quota=providers.get_quota_manager(),
+            dkg=providers.get_dkg(),
         )
     except OnboardingError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)

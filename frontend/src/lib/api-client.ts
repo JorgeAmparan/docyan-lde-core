@@ -82,5 +82,6 @@ export const api = {
   post: <T = unknown>(path: string, json?: unknown, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "POST", json }),
   postForm: <T = unknown>(path: string, form: FormData, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "POST", form }),
   patch: <T = unknown>(path: string, json?: unknown, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "PATCH", json }),
+  put: <T = unknown>(path: string, json?: unknown, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "PUT", json }),
   del: <T = unknown>(path: string, opts?: ApiOptions) => apiFetch<T>(path, { ...opts, method: "DELETE" }),
 };

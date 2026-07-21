@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/icon";
+import { useAuth } from "@/lib/auth";
+import {
+  createDestinatario,
+  listDestinatarios,
+  listReglas,
+  saveRegla,
+  type ReglaAlertaOut,
+} from "@/lib/alertas";
 
 /**
  * Alertas administrativas (Capa A admin desktop). Ported PIXEL-PERFECT from the
@@ -16,10 +24,17 @@ import { Icon } from "@/components/icon";
  *  - Severities are `warn` / `caution` ONLY — NEVER an ANSI danger red border.
  *  - Each alert cites its source via the corner-bracket `.cite-mini` cinnabar chip.
  *
- * Data: the admin alert list mirrors the prototype's canned `ADMIN_ALERTS` (this
- * admin view has no dedicated alerts endpoint yet — the consult-flow
- * `AlertsDashboardPayload` is a separate renderer). Grouping is by urgencia
- * (Por vencer ≤ 7 días / Próximas ≤ 30 días) exactly as the prototype.
+ * ED-1 §2.6 — DATA WIRING ONLY (zero visual change): the configuración panel now
+ * reads/persists the real `ReglaAlerta` (`GET/PUT /alertas/reglas`) and the email
+ * recipients resolve against the real Directorio de Destinatarios (`/destinatarios`):
+ * los correos que el admin agrega se dan de alta como `proveedor_externo` y la regla
+ * referencia sus `destinatario_id` (guardrail §2.5: el admin da de alta). El markup,
+ * clases y copy NO cambian — el porteo visual de esta vista pertenece al Mapa §2.3.
+ * Delta reportado para §2.3 (no se diseña UI nueva aquí): la vista NO expone urgencia
+ * por threshold, canal in_app, ni la regla de escalación; y los toggles de días fijos
+ * [10,5,3,2,1] no representan thresholds fuera de ese conjunto (p. ej. el default
+ * [30,15,7]). La lista de alertas de abajo sigue siendo el mock del prototipo (su
+ * conexión al listado real `/alertas` es porteo del Mapa, no lógica de datos de ED-1).
  */
 
 type Sev = "warn" | "caution";
@@ -37,11 +52,57 @@ const DIAS_OPTS = [10, 5, 3, 2, 1] as const;
 export default function AlertasPage() {
   const groups = [...new Set(ADMIN_ALERTS.map((a) => a[1]))];
 
+  const token = useAuth((s) => s.token);
+
   const [cfg, setCfg] = useState(false);
   const [dias, setDias] = useState<Record<number, boolean>>({ 10: true, 5: true, 3: true, 2: false, 1: true });
   const [mails, setMails] = useState<string[]>(["jorge@lab-estandar.mx", "rosa@lab-estandar.mx"]);
   const [mailVal, setMailVal] = useState("");
   const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Mapa correo → destinatario_id del Directorio (para referenciar la regla, §2.5).
+  const [emailToId, setEmailToId] = useState<Record<string, string>>({});
+  // Regla cargada: preserva campos que esta vista no expone (escalación) al guardar.
+  const [reglaBase, setReglaBase] = useState<ReglaAlertaOut | null>(null);
+
+  // Carga los datos REALES (regla global + directorio) y rehidrata los controles.
+  useEffect(() => {
+    if (!token) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        const [reglas, dests] = await Promise.all([listReglas(token), listDestinatarios(token)]);
+        if (cancelado) return;
+        const idByEmail: Record<string, string> = {};
+        const emailById: Record<string, string> = {};
+        for (const d of dests) {
+          if (d.email) {
+            idByEmail[d.email] = d.id;
+            emailById[d.id] = d.email;
+          }
+        }
+        setEmailToId(idByEmail);
+        const regla = reglas[0];
+        if (regla) {
+          setReglaBase(regla);
+          setDias(() => {
+            const next: Record<number, boolean> = {};
+            for (const d of DIAS_OPTS) next[d] = regla.thresholds.includes(d);
+            return next;
+          });
+          const emails = (regla.destinatarios ?? [])
+            .map((id) => emailById[id])
+            .filter((e): e is string => Boolean(e));
+          setMails(emails);
+        }
+      } catch {
+        // Sin datos aún (o error de red): la vista conserva sus valores por defecto.
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [token]);
 
   const toggleDia = (d: number) => setDias((s) => ({ ...s, [d]: !s[d] }));
   const delMail = (m: string) => setMails((list) => list.filter((x) => x !== m));
@@ -62,15 +123,57 @@ export default function AlertasPage() {
     .map(Number)
     .sort((a, b) => b - a);
 
-  const guardar = () => {
-    toast.success("Avisos guardados", {
-      description:
-        "Los avisos se enviarán a " +
-        mails.length +
-        " destinatarios, " +
-        (diasActivos.join(", ") || "—") +
-        " días hábiles antes de cada vencimiento.",
-    });
+  const guardar = async () => {
+    if (!token || saving) return;
+    setSaving(true);
+    try {
+      // Guardrail §2.5: el admin da de alta. Cada correo se asegura como
+      // `proveedor_externo` en el Directorio; la regla referencia sus IDs.
+      const nextMap = { ...emailToId };
+      const ids: string[] = [];
+      for (const email of mails) {
+        let id = nextMap[email];
+        if (!id) {
+          const creado = await createDestinatario(
+            { tipo: "proveedor_externo", nombre: email, email, activo: true },
+            token,
+          );
+          id = creado.id;
+          nextMap[email] = id;
+        }
+        ids.push(id);
+      }
+      setEmailToId(nextMap);
+      await saveRegla(
+        {
+          tipo: "*",
+          thresholds: diasActivos,
+          destinatarios: ids,
+          // Correos = proveedores externos → canal email (in_app requiere usuario
+          // interno; su toggle es delta del Mapa §2.3, no se diseña aquí).
+          canales: ["email"],
+          // Preserva la escalación configurada por otra vía (no se expone aquí).
+          escalacion_dias: reglaBase?.escalacion_dias ?? 7,
+          escalacion_destinatario_id: reglaBase?.escalacion_destinatario_id ?? null,
+          activo: reglaBase?.activo ?? true,
+        },
+        token,
+      );
+      toast.success("Avisos guardados", {
+        description:
+          "Los avisos se enviarán a " +
+          mails.length +
+          " destinatarios, " +
+          (diasActivos.join(", ") || "—") +
+          " días hábiles antes de cada vencimiento.",
+      });
+    } catch {
+      toast.error("No se pudieron guardar los avisos", {
+        description: "Revisa tu conexión e inténtalo de nuevo.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

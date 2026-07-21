@@ -53,6 +53,10 @@ class RedisClient:
     def delete(self, key: str):
         self._get_client().delete(key)
 
+    def raw(self):
+        """Cliente `redis-py` subyacente (para SET NX EX del lock del scheduler)."""
+        return self._get_client()
+
     def health(self) -> bool:
         try:
             return self._get_client().ping()

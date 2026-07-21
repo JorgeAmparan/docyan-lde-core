@@ -7,11 +7,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
+from app.api.lifespan import lifespan
 from app.api.routers import (
     admin,
+    alertas,
     billing,
     chat,
     demo,
+    destinatarios,
     documents,
     governance,
     ingest_sources,
@@ -19,6 +22,7 @@ from app.api.routers import (
     invitations,
     mis_documentos,
     mo,
+    notificaciones,
     observations,
     onboarding,
     platform,
@@ -37,7 +41,8 @@ app = FastAPI(
     description="Intelligent Middleware for Enterprise AI | DOCYAN LDE™",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "")
@@ -87,6 +92,9 @@ app.include_router(onboarding.router)
 app.include_router(invitations.router)
 app.include_router(mis_documentos.router)
 app.include_router(demo.router)
+app.include_router(destinatarios.router)
+app.include_router(alertas.router)
+app.include_router(notificaciones.router)
 
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

@@ -53,6 +53,22 @@ def _hash_token(token: str) -> str:
 # ════════════════════════════════════════════════════════════════════════════
 
 
+def _sembrar_reglas_alerta(dkg: Any, org_id: str) -> None:
+    """
+    Siembra la `ReglaAlerta` default del tenant al onboarding (ED-1 §2.3). Fail-open:
+    un fallo del grafo NO bloquea el alta de cuenta (la regla se re-siembra en el
+    backfill). Idempotente (no toca si ya hay reglas).
+    """
+    if dkg is None:
+        return
+    try:
+        from app.alerts.reglas import sembrar_reglas_default
+
+        sembrar_reglas_default(dkg, org_id)
+    except Exception:  # noqa: BLE001 — fail-open
+        pass
+
+
 def canjear_codigo(
     store: Any,
     audit: Any,
@@ -63,6 +79,7 @@ def canjear_codigo(
     name: str,
     org_name: str | None,
     quota: Any = None,
+    dkg: Any = None,
 ) -> dict:
     """
     Valida y canjea un código de acceso: provisiona una org NUEVA con plan piloto,
@@ -121,6 +138,7 @@ def canjear_codigo(
             quota.ensure_quota(org_id, row["tipo"])
         except Exception:  # noqa: BLE001 — fail-open
             pass
+    _sembrar_reglas_alerta(dkg, org_id)
     audit.record("access_code_redeemed", email, {
         "code": code, "org_id": org_id, "plan": row["tipo"],
     }, org_id=org_id)
@@ -142,7 +160,7 @@ def canjear_codigo(
 # ════════════════════════════════════════════════════════════════════════════
 
 
-def signup(store: Any, audit: Any, token_issuer: Any, req: Any, quota: Any = None) -> dict:
+def signup(store: Any, audit: Any, token_issuer: Any, req: Any, quota: Any = None, dkg: Any = None) -> dict:
     """
     Crea la cuenta (Fase 1). Sin `codigo_acceso` → Freemium (admin de org nueva,
     3 docs / 30 días). Con `codigo_acceso` → canje de piloto. En ambos casos el
@@ -152,6 +170,7 @@ def signup(store: Any, audit: Any, token_issuer: Any, req: Any, quota: Any = Non
         prov = canjear_codigo(
             store, audit, code=req.codigo_acceso, email=str(req.email),
             password=req.password, name=req.name, org_name=req.org_name, quota=quota,
+            dkg=dkg,
         )
         user = prov["user"]
         org = store.get_org(prov["org_id"]) or {}
@@ -192,6 +211,7 @@ def signup(store: Any, audit: Any, token_issuer: Any, req: Any, quota: Any = Non
         freemium_inicio=inicio.isoformat(),
         freemium_expira=expira.isoformat(),
     )
+    _sembrar_reglas_alerta(dkg, org_id)
     audit.record("signup_freemium", str(req.email), {
         "org_id": org_id, "plan": "freemium", "doc_limit": FREEMIUM_DOC_LIMIT,
     }, org_id=org_id)

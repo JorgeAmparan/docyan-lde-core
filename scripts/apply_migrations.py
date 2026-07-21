@@ -74,6 +74,9 @@ EXPECTED_TABLES = {
     "016c": "access_codes",
     "020a": "orgs",
     "020b": "invitations",
+    # ED-1 (Eventos Dirigidos — Pilar 2 Alertas):
+    "023": "destinatarios",
+    "024": "notificaciones",
 }
 
 # Tablas que una migración ELIMINÓ a propósito: su AUSENCIA es el estado correcto
