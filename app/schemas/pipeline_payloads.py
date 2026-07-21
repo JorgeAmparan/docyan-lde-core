@@ -70,6 +70,12 @@ class EspecificacionItem(_Base):
     valor: str | None = None
     unidad: str | None = None
     cita: Cita | None = None
+    # ED-2 §2.4: marcado de dato accionable (determinístico por (intención,
+    # tipo_documento) — NUNCA el LLM). El front muestra "Solicitar" solo aquí; el
+    # `tipo_sugerido` preselecciona el tipo en el formulario (§2.3). Ausencia de
+    # mapeo ⇒ accionable=False (sin sobre-marcado, evidencia §5.4).
+    accionable: bool = False
+    tipo_sugerido: str | None = None
 
 
 class InfoCardPayload(_Base):
@@ -231,6 +237,10 @@ class AlertaItem(_Base):
     # B13.3 §2.4: cita verbatim del documento de origen del vencimiento (cuando el
     # nodo fuente tiene span anclable). None ⇒ sin fragmento, atribución honesta.
     cita: Cita | None = None
+    # ED-2 §2.4: marcado de dato accionable (determinístico). Un vencimiento sobre
+    # equipo (calibración/manual) sugiere "mantenimiento"; sin mapeo ⇒ sin flag.
+    accionable: bool = False
+    tipo_sugerido: str | None = None
 
 
 class AlertsDashboardPayload(_Base):

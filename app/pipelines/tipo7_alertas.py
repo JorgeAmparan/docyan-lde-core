@@ -17,6 +17,7 @@ from app.pipelines import cruces
 from app.pipelines.base import ContextoPipeline, ResultadoPipeline
 from app.pipelines.dkg_reader import PipelineGraphReader
 from app.schemas.pipeline_payloads import AlertaItem, AlertsDashboardPayload, Cita
+from app.solicitudes import inferencia as _inferencia
 
 
 def _cita_alerta(a: dict) -> Cita | None:
@@ -38,18 +39,23 @@ def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPip
     crudas = reader.alertas(ctx.tenant_id, ctx.entidad_id)
     admisibles, cuarentena = particionar_alertas(crudas)
 
-    alertas = [
-        AlertaItem(
+    alertas = []
+    for a in admisibles:
+        cita = _cita_alerta(a)
+        doc_tipo = cita.documento_tipo if cita else None
+        # ED-2 §2.4: marcado accionable determinístico (ALERTAS + tipo_documento).
+        tipo_sugerido = _inferencia.inferir_tipo("ALERTAS", doc_tipo)
+        alertas.append(AlertaItem(
             alerta_id=a.get("alerta_id"),
             descripcion=a.get("descripcion") or "",
             fecha_vencimiento=a.get("fecha_vencimiento"),
             urgencia=a.get("urgencia") or "media",
             entidad_id=a.get("entidad_id"),
             administrativa=True,
-            cita=_cita_alerta(a),
-        )
-        for a in admisibles
-    ]
+            cita=cita,
+            accionable=tipo_sugerido is not None,
+            tipo_sugerido=tipo_sugerido,
+        ))
 
     payload = AlertsDashboardPayload(
         titulo="Alertas administrativas",

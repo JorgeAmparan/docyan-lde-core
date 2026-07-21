@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { Icon } from "@/components/icon";
 import { CitedFragment } from "./cited-fragment";
+import { SolicitarBtn } from "./solicitar-btn";
 import type { AlertsDashboardPayload } from "../consult-data";
+import type { SolicitarPrefill } from "./solicitud-modal";
 
 /**
  * Tipo 7 · Alertas administrativas. REGULATORY ABSOLUTE (CLAUDE.md §11.1):
@@ -24,7 +26,13 @@ function grupoOf(urgencia: string | undefined): string {
   return "Programadas";
 }
 
-function AnsAlertCard({ a }: { a: AlertaItem }) {
+function AnsAlertCard({
+  a,
+  onSolicitar,
+}: {
+  a: AlertaItem;
+  onSolicitar?: (p: SolicitarPrefill) => void;
+}) {
   const [state, setState] = useState<"read" | "snooze" | null>(null);
   return (
     <div className={"al-card alert-card s-" + sevOf(a.urgencia) + (state ? " done" : "")}>
@@ -42,6 +50,18 @@ function AnsAlertCard({ a }: { a: AlertaItem }) {
             <button type="button" onClick={() => setState("snooze")}>
               Posponer
             </button>
+            {/* ED-2 §2.4: "Solicitar" SOLO si el backend marcó la alerta accionable. */}
+            {a.accionable && onSolicitar ? (
+              <SolicitarBtn
+                onClick={() =>
+                  onSolicitar({
+                    cita: a.cita ?? null,
+                    tipoSugerido: a.tipo_sugerido ?? null,
+                    entidadId: a.entidad_id ?? undefined,
+                  })
+                }
+              />
+            ) : null}
           </div>
         )}
       </div>
@@ -53,11 +73,14 @@ export function AlertasDashboard({
   payload,
   saved,
   onSave,
+  onSolicitar,
 }: {
   payload: AlertsDashboardPayload;
   saved: boolean;
   onSave: () => void;
   onCite: () => void;
+  /** PROVISIONAL-ED2: abre el formulario de solicitud (solo en sesión autenticada). */
+  onSolicitar?: (p: SolicitarPrefill) => void;
 }) {
   const alertas = payload.alertas ?? [];
   const grupos = Array.from(new Set(alertas.map((a) => grupoOf(a.urgencia))));
@@ -82,7 +105,7 @@ export function AlertasDashboard({
           {alertas
             .filter((a) => grupoOf(a.urgencia) === g)
             .map((a, i) => (
-              <AnsAlertCard key={i} a={a} />
+              <AnsAlertCard key={i} a={a} onSolicitar={onSolicitar} />
             ))}
         </div>
       ))}

@@ -2,7 +2,9 @@
 
 import type { SourceSpan } from "@/components/brand/consulta-span-overlay";
 import { CitedFragment } from "./cited-fragment";
+import { SolicitarBtn } from "./solicitar-btn";
 import { citaToSource, type InfoCardPayload } from "../consult-data";
+import type { SolicitarPrefill } from "./solicitud-modal";
 
 /** Tipo 1 · Informativa — big value + unit + nota, from the real payload. */
 export function InformativaCard({
@@ -10,15 +12,20 @@ export function InformativaCard({
   saved,
   onSave,
   onCite,
+  onSolicitar,
 }: {
   payload: InfoCardPayload;
   saved: boolean;
   onSave: () => void;
   onCite: (s: SourceSpan | null) => void;
+  /** PROVISIONAL-ED2: abre el formulario de solicitud (solo en sesión autenticada). */
+  onSolicitar?: (p: SolicitarPrefill) => void;
 }) {
   const especs = payload.especificaciones ?? [];
   const primary = especs[0];
   const cita = primary?.cita ?? (payload.citas ?? [])[0] ?? null;
+  // ED-2 §2.4: el botón aparece SOLO si el backend marcó el dato accionable.
+  const accionable = !!primary?.accionable;
 
   // El slot `.big` (display gigante) es SOLO para un valor corto tipo "85 N·m" o "SAE-30".
   // Una frase NUNCA va en `.big`: se lee como nota. Heurística: hay unidad, o el valor es un
@@ -55,6 +62,16 @@ export function InformativaCard({
         onSave={onSave}
         onOpenDoc={() => onCite(citaToSource(cita))}
       />
+
+      {accionable && onSolicitar ? (
+        <div style={{ marginTop: 10, display: "flex" }}>
+          <SolicitarBtn
+            onClick={() =>
+              onSolicitar({ cita, tipoSugerido: primary?.tipo_sugerido ?? null })
+            }
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

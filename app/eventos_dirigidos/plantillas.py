@@ -112,6 +112,74 @@ _PLANTILLAS: dict[str, dict[str, dict[str, str]]] = {
             ),
         },
     },
+    # ── Solicitudes (ED-2 §2.6) ───────────────────────────────────────────────
+    # Externa: al proveedor sin cuenta DOCYAN. Incluye la cita de origen (fragmento
+    # verbatim, NO el documento), datos de contacto del solicitante y branding. La
+    # respuesta va al solicitante (reply-to). `descripcion` = mensaje del formulario.
+    "solicitud_externa": {
+        "es": {
+            "titulo": "Nueva solicitud",
+            "asunto": "DOCYAN · Solicitud de {tipo_solicitud}: {descripcion}",
+            "cuerpo": (
+                "Hola {nombre_destinatario}:\n\n"
+                "{solicitante_nombre} le hace llegar una solicitud de "
+                "{tipo_solicitud} a través de DOCYAN LDE.\n\n"
+                "Mensaje:\n{descripcion}\n\n"
+                "Dato de referencia (cita del documento «{documento_nombre}»):\n"
+                "«{fragmento}»\n\n"
+                "Para responder, conteste directamente a este correo "
+                "({solicitante_email}).\n\n"
+                "— DOCYAN LDE by XCID"
+            ),
+        },
+        "en": {
+            "titulo": "New request",
+            "asunto": "DOCYAN · {tipo_solicitud} request: {descripcion}",
+            "cuerpo": (
+                "Hello {nombre_destinatario}:\n\n"
+                "{solicitante_nombre} is sending you a {tipo_solicitud} request "
+                "through DOCYAN LDE.\n\n"
+                "Message:\n{descripcion}\n\n"
+                "Reference (quote from «{documento_nombre}»):\n"
+                "«{fragmento}»\n\n"
+                "To reply, respond directly to this email "
+                "({solicitante_email}).\n\n"
+                "— DOCYAN LDE by XCID"
+            ),
+        },
+    },
+    # Interna: a un usuario/departamento del tenant. Mismo contenido, sin datos de
+    # contacto externos (el destinatario ya está en el tenant y ve la bandeja).
+    "solicitud_interna": {
+        "es": {
+            "titulo": "Nueva solicitud",
+            "asunto": "DOCYAN · Solicitud de {tipo_solicitud}: {descripcion}",
+            "cuerpo": (
+                "Hola {nombre_destinatario}:\n\n"
+                "{solicitante_nombre} creó una solicitud de {tipo_solicitud} y la "
+                "dirigió a usted.\n\n"
+                "Mensaje:\n{descripcion}\n\n"
+                "Dato de referencia (cita del documento «{documento_nombre}»):\n"
+                "«{fragmento}»\n\n"
+                "Puede darle seguimiento en su bandeja de solicitudes en DOCYAN LDE.\n\n"
+                "— DOCYAN LDE by XCID"
+            ),
+        },
+        "en": {
+            "titulo": "New request",
+            "asunto": "DOCYAN · {tipo_solicitud} request: {descripcion}",
+            "cuerpo": (
+                "Hello {nombre_destinatario}:\n\n"
+                "{solicitante_nombre} created a {tipo_solicitud} request addressed "
+                "to you.\n\n"
+                "Message:\n{descripcion}\n\n"
+                "Reference (quote from «{documento_nombre}»):\n"
+                "«{fragmento}»\n\n"
+                "You can follow up in your requests inbox in DOCYAN LDE.\n\n"
+                "— DOCYAN LDE by XCID"
+            ),
+        },
+    },
 }
 
 # Familia de plantilla por defecto cuando el tipo no está catalogado.

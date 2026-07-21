@@ -158,8 +158,113 @@ class Notificador:
 
         return res
 
+    # ── Solicitudes (ED-2 §2.6): mismo motor, un destinatario del Directorio ───
+    def notificar_solicitud(
+        self,
+        tenant_id: str,
+        *,
+        solicitud: dict,
+        destinatario_id: str,
+        reply_to: str | None = None,
+        variables_extra: dict | None = None,
+    ) -> ResultadoNotificacion:
+        """
+        Entrega una solicitud a UN destinatario del Directorio (interno o externo).
+
+        Reutiliza íntegramente el motor de alertas: gate `safety_validator`,
+        resolución vía Directorio (jamás email libre), reintento/backoff, canal
+        in-app + email, arista `[:NOTIFICADO_DE]` sobre `:Solicitud` y FAT F10
+        (`evento_tipo="solicitud"`). El externo recibe la cita de origen (fragmento
+        verbatim) y `reply_to = solicitante`; el interno además la ve en su bandeja.
+
+        `solicitud`: dict con `id`, `mensaje`, `tipo_solicitud`, `fragmento`,
+        `documento_nombre`, `solicitante_nombre`, `solicitante_email`.
+        """
+        res = ResultadoNotificacion()
+        mensaje = str(solicitud.get("mensaje") or "")
+
+        # Gate absoluto: el mensaje del formulario nunca puede sugerir una decisión
+        # clínica/operativa (misma línea §11.1 que las alertas).
+        veredicto = validar_alerta(mensaje)
+        if not veredicto.admisible:
+            res.bloqueada_por_safety = True
+            res.motivo_bloqueo = veredicto.motivo
+            logger.warning(
+                "solicitud BLOQUEADA por safety_validator (tenant=%s solicitud=%s): %s",
+                tenant_id, solicitud.get("id"), veredicto.motivo,
+            )
+            self._fat_notif(tenant_id, "solicitud", str(solicitud.get("id")), "safety",
+                            destinatario_id, exito=False,
+                            error="safety_validator: " + veredicto.motivo,
+                            evento_tipo_fat="solicitud")
+            return res
+
+        destinos = resolver_destinos(
+            self.directorio, tenant_id, [destinatario_id],
+            usuario_resolver=self.usuario_resolver,
+        )
+        res.destinos = len(destinos)
+
+        base_vars = {
+            "descripcion": mensaje,
+            "tipo_solicitud": solicitud.get("tipo_solicitud") or "solicitud",
+            "fragmento": solicitud.get("fragmento") or "(sin cita de origen)",
+            "documento_nombre": solicitud.get("documento_nombre") or "—",
+            "solicitante_nombre": solicitud.get("solicitante_nombre") or "Un usuario",
+            "solicitante_email": solicitud.get("solicitante_email") or "",
+        }
+        if variables_extra:
+            base_vars.update(variables_extra)
+
+        # dict compatible con los helpers de entrega (esperan `.get("id")`).
+        evento = {"id": solicitud.get("id")}
+
+        for destino in destinos:
+            interno = bool(destino.usuario_id)
+            tipo_evento = "solicitud_interna" if interno else "solicitud_externa"
+            render = plantillas.render(
+                tipo_evento, destino.idioma,
+                {**base_vars, "nombre_destinatario": destino.nombre},
+            )
+            if not validar_alerta(f"{render.asunto}\n{render.cuerpo_texto}").admisible:
+                logger.warning("mensaje de solicitud no admisible; se omite destino %s",
+                               destino.destinatario_id)
+                continue
+
+            # Canal in-app (solo destinatario interno con cuenta DOCYAN).
+            if interno:
+                notif = self.inapp.crear(NotificacionInApp(
+                    org_id=tenant_id,
+                    usuario_id=destino.usuario_id,
+                    tipo_evento=tipo_evento,
+                    evento_ref=str(solicitud.get("id")),
+                    destinatario_id=destino.destinatario_id,
+                    canal="in_app",
+                    titulo=render.titulo,
+                    cuerpo=render.cuerpo_texto,
+                    estado="enviada",
+                ))
+                res.inapp_creadas += 1
+                res.entregada = True
+                res.notif_ids.append(notif.id)
+                self._edge_notificado(tenant_id, str(solicitud.get("id")),
+                                      destino.destinatario_id, "in_app", label="Solicitud")
+                self._fat_notif(tenant_id, tipo_evento, str(solicitud.get("id")), "in_app",
+                                destino.destinatario_id, exito=True, evento_tipo_fat="solicitud")
+
+            # Canal email (interno con email + externo). Reply-to = solicitante.
+            if destino.email:
+                self._entregar_email(
+                    tenant_id, evento, tipo_evento, destino, render, res,
+                    reply_to=reply_to, evento_label="Solicitud", evento_tipo_fat="solicitud",
+                )
+
+        return res
+
     # ── Canal email con reintento/backoff ─────────────────────────────────────
-    def _entregar_email(self, tenant_id, alerta, tipo_evento, destino, render, res: ResultadoNotificacion) -> None:
+    def _entregar_email(self, tenant_id, alerta, tipo_evento, destino, render,
+                        res: ResultadoNotificacion, *, reply_to: str | None = None,
+                        evento_label: str = "Alerta", evento_tipo_fat: str = "alerta") -> None:
         if self.email_sender is None:
             logger.info("canal email deshabilitado (sin proveedor); se omite %s", destino.email)
             return
@@ -168,6 +273,7 @@ class Notificador:
             subject=render.asunto,
             body_text=render.cuerpo_texto,
             body_html=render.cuerpo_html,
+            reply_to=reply_to,
         )
         exito, error = self._enviar_con_reintento(msg)
         # Fila in-app del envío por email (visible en el listado admin; fallida si aplica).
@@ -187,15 +293,16 @@ class Notificador:
         if exito:
             res.email_enviados += 1
             res.entregada = True
-            self._edge_notificado(tenant_id, str(alerta.get("id")), destino.destinatario_id, "email")
+            self._edge_notificado(tenant_id, str(alerta.get("id")), destino.destinatario_id,
+                                  "email", label=evento_label)
             self._fat_notif(tenant_id, tipo_evento, str(alerta.get("id")), "email",
-                            destino.destinatario_id, exito=True)
+                            destino.destinatario_id, exito=True, evento_tipo_fat=evento_tipo_fat)
         else:
             res.email_fallidos += 1
             logger.error("email a %s falló definitivamente: %s", destino.email, error)
             self._fat_notif(tenant_id, tipo_evento, str(alerta.get("id")), "email",
                             destino.destinatario_id, exito=False, error=error,
-                            intento=self.max_intentos)
+                            intento=self.max_intentos, evento_tipo_fat=evento_tipo_fat)
 
     def _enviar_con_reintento(self, msg: EmailMessage) -> tuple[bool, str | None]:
         ultimo_error: str | None = None
@@ -210,31 +317,33 @@ class Notificador:
         return False, ultimo_error
 
     # ── Registro (arista grafo + FAT) ─────────────────────────────────────────
-    def _edge_notificado(self, tenant_id: str, alerta_id: str, destinatario_id: str, canal: str) -> None:
+    def _edge_notificado(self, tenant_id: str, evento_id: str, destinatario_id: str,
+                         canal: str, *, label: str = "Alerta") -> None:
         if self.dkg is None:
             return
         try:
             self.dkg.query(
                 tenant_id,
-                """
-                MATCH (a:Alerta {id: $aid})
-                MERGE (d:Destinatario {id: $did})
-                MERGE (a)-[r:NOTIFICADO_DE {canal: $canal}]->(d)
+                f"""
+                MATCH (a:{label} {{id: $aid}})
+                MERGE (d:Destinatario {{id: $did}})
+                MERGE (a)-[r:NOTIFICADO_DE {{canal: $canal}}]->(d)
                 SET r.timestamp = $ts
                 """,
-                {"aid": alerta_id, "did": destinatario_id, "canal": canal,
+                {"aid": evento_id, "did": destinatario_id, "canal": canal,
                  "ts": datetime.now(timezone.utc).isoformat()},
             )
         except Exception as exc:  # noqa: BLE001 — el registro nunca tumba la entrega.
             logger.warning("no se pudo registrar arista NOTIFICADO_DE: %s", type(exc).__name__)
 
     def _fat_notif(self, tenant_id, tipo_evento, evento_id, canal, destinatario_id, *,
-                   exito: bool, error: str | None = None, intento: int = 1) -> None:
+                   exito: bool, error: str | None = None, intento: int = 1,
+                   evento_tipo_fat: str = "alerta") -> None:
         if self.fat is None:
             return
         try:
             registrar_notificacion(
-                self.fat, tenant_id, evento_tipo="alerta", evento_id=evento_id,
+                self.fat, tenant_id, evento_tipo=evento_tipo_fat, evento_id=evento_id,
                 canal=canal, destinatario_id=destinatario_id, exito=exito,
                 intento=intento, error=error,
             )
