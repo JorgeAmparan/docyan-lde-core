@@ -45,6 +45,11 @@ httpx==0.28.1
 falkordb>=1.0.0
 redis>=5.0.0
 
+# Scheduler (ED-1 §2.2): el DocyanScheduler arranca en el lifespan del BACKEND
+# (docyan-lde-api) bajo lock Redis. APScheduler es pure-python (+ tzlocal), no
+# arrastra torch — cabe en la imagen <1 GB. RedisJobStore reusa `redis` (arriba).
+apscheduler==3.11.2
+
 # Cotizador pre-ingesta B2 (corre en el BACKEND, gate sin bypass):
 #  - tiktoken: medición de tokens del documento (app/ingesta/cotizador.py).
 #  - pdfminer.six: extracción de texto LIGERA para cotizar PDF (sin torch; el
@@ -82,7 +87,8 @@ email-validator==2.2.0
 
 # ============================================================
 # DIFERIDO A B1+ (NO en imagen B0.5) — re-incorporar al cablear ingesta:
-#   graphrag-sdk, litellm, apscheduler            (B1/B3)
+#   graphrag-sdk, litellm                         (B1/B3)
+#   (apscheduler ya NO está diferido: se incluyó arriba para el scheduler ED-1)
 #   docling, langextract, llama-index(-core)      (B1, arrastran torch)
 #   transformers, sentence-transformers           (BGE como servicio aparte)
 #   tiktoken                                       (B3 cotizador)
