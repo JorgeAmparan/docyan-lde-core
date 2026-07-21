@@ -1995,6 +1995,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tipos-solicitud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar */
+        get: operations["listar_tipos_solicitud_get"];
+        put?: never;
+        /** Crear */
+        post: operations["crear_tipos_solicitud_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tipos-solicitud/propuestas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Propuestas
+         * @description Etiquetas libres repetidas (>= umbral) que el sistema PROPONE promover a tipo.
+         *     Aceptar = crear el tipo con POST /tipos-solicitud (el sistema propone, no actúa).
+         */
+        get: operations["propuestas_tipos_solicitud_propuestas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tipos-solicitud/{tipo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borrar */
+        delete: operations["borrar_tipos_solicitud__tipo_id__delete"];
+        options?: never;
+        head?: never;
+        /** Actualizar */
+        patch: operations["actualizar_tipos_solicitud__tipo_id__patch"];
+        trace?: never;
+    };
+    "/solicitudes/mapeo-inferencia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mapeo Inferencia */
+        get: operations["mapeo_inferencia_solicitudes_mapeo_inferencia_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/solicitudes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar */
+        get: operations["listar_solicitudes_get"];
+        put?: never;
+        /** Crear */
+        post: operations["crear_solicitudes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/solicitudes/{solicitud_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle */
+        get: operations["detalle_solicitudes__solicitud_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/solicitudes/{solicitud_id}/transicion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transicionar */
+        post: operations["transicionar_solicitudes__solicitud_id__transicion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -2261,6 +2387,13 @@ export interface components {
              */
             administrativa: boolean;
             cita?: components["schemas"]["Cita"] | null;
+            /**
+             * Accionable
+             * @default false
+             */
+            accionable: boolean;
+            /** Tipo Sugerido */
+            tipo_sugerido?: string | null;
         };
         /** AlertaListado */
         AlertaListado: {
@@ -2394,6 +2527,24 @@ export interface components {
              * Format: binary
              */
             file: string;
+        };
+        /** CampoTipado */
+        CampoTipado: {
+            /** Clave */
+            clave: string;
+            /** Etiqueta */
+            etiqueta: string;
+            /**
+             * Tipo
+             * @default text
+             * @enum {string}
+             */
+            tipo: "text" | "number" | "date" | "textarea";
+            /**
+             * Requerido
+             * @default false
+             */
+            requerido: boolean;
         };
         /**
          * Canal
@@ -2880,6 +3031,24 @@ export interface components {
             /** Freemium Expira */
             freemium_expira?: string | null;
         };
+        /**
+         * DatoOrigen
+         * @description Provenance heredado de la cita del dato de origen (§2.2).
+         */
+        DatoOrigen: {
+            /** Nodo Id */
+            nodo_id?: string | null;
+            /** Documento Id */
+            documento_id?: string | null;
+            /** Documento Nombre */
+            documento_nombre?: string | null;
+            /** Span Inicio */
+            span_inicio?: number | null;
+            /** Span Fin */
+            span_fin?: number | null;
+            /** Fragmento */
+            fragmento?: string | null;
+        };
         /** DeleteDocumentoResponse */
         DeleteDocumentoResponse: {
             /**
@@ -3232,6 +3401,13 @@ export interface components {
             /** Unidad */
             unidad?: string | null;
             cita?: components["schemas"]["Cita"] | null;
+            /**
+             * Accionable
+             * @default false
+             */
+            accionable: boolean;
+            /** Tipo Sugerido */
+            tipo_sugerido?: string | null;
         };
         /** EtiquetaDiagrama */
         EtiquetaDiagrama: {
@@ -3472,6 +3648,22 @@ export interface components {
              * @default false
              */
             todos: boolean;
+        };
+        /** MapeoInferencia */
+        MapeoInferencia: {
+            /** Version */
+            version: string;
+            /** Reglas */
+            reglas?: components["schemas"]["MapeoRegla"][];
+        };
+        /** MapeoRegla */
+        MapeoRegla: {
+            /** Tipo Intencion */
+            tipo_intencion: string;
+            /** Documento Tipo */
+            documento_tipo: string;
+            /** Tipo Sugerido */
+            tipo_sugerido: string;
         };
         /**
          * MetricasCCP
@@ -4021,6 +4213,20 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** PropuestaPromocion */
+        PropuestaPromocion: {
+            /** Etiqueta Libre */
+            etiqueta_libre: string;
+            /** Conteo */
+            conteo: number;
+        };
+        /** PropuestasListado */
+        PropuestasListado: {
+            /** Propuestas */
+            propuestas?: components["schemas"]["PropuestaPromocion"][];
+            /** Umbral */
+            umbral: number;
+        };
         /**
          * QueryResponse
          * @description Respuesta tipada de `POST /mo/query` (B8): clasificación + payload tipado.
@@ -4337,6 +4543,86 @@ export interface components {
             /** Significado */
             significado: string;
         };
+        /** SolicitudCreate */
+        SolicitudCreate: {
+            /** Tipo Id */
+            tipo_id?: string | null;
+            /** Etiqueta Libre */
+            etiqueta_libre?: string | null;
+            /** Destinatario Id */
+            destinatario_id: string;
+            /** Mensaje */
+            mensaje?: string | null;
+            /** Campos Tipados */
+            campos_tipados?: {
+                [key: string]: unknown;
+            };
+            dato_origen?: components["schemas"]["DatoOrigen"] | null;
+            /** Consulta Id */
+            consulta_id?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Codo Id */
+            codo_id?: string | null;
+        };
+        /** SolicitudListado */
+        SolicitudListado: {
+            /** Solicitudes */
+            solicitudes?: components["schemas"]["SolicitudOut"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /** SolicitudOut */
+        SolicitudOut: {
+            /** Id */
+            id: string;
+            /** Tipo Id */
+            tipo_id?: string | null;
+            /** Tipo Nombre */
+            tipo_nombre?: string | null;
+            /** Etiqueta Libre */
+            etiqueta_libre?: string | null;
+            /**
+             * Estado
+             * @default creado
+             */
+            estado: string;
+            /** Documento Id */
+            documento_id?: string | null;
+            /** Span Inicio */
+            span_inicio?: number | null;
+            /** Span Fin */
+            span_fin?: number | null;
+            /** Fragmento */
+            fragmento?: string | null;
+            /** Consulta Id */
+            consulta_id?: string | null;
+            /** Solicitante Id */
+            solicitante_id?: string | null;
+            /** Solicitante Nombre */
+            solicitante_nombre?: string | null;
+            /** Solicitante Email */
+            solicitante_email?: string | null;
+            /** Destinatario Id */
+            destinatario_id: string;
+            /** Mensaje */
+            mensaje?: string | null;
+            /** Campos Tipados */
+            campos_tipados?: {
+                [key: string]: unknown;
+            };
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Codo Id */
+            codo_id?: string | null;
+            /** Fecha Creacion */
+            fecha_creacion?: string | null;
+            /** Fecha Resolucion */
+            fecha_resolucion?: string | null;
+        };
         /**
          * SourceConfigRequest
          * @description Configuración de conexión a un repositorio documental del cliente.
@@ -4494,6 +4780,54 @@ export interface components {
             /** Citas */
             citas?: components["schemas"]["Cita"][];
         };
+        /** TipoSolicitudCreate */
+        TipoSolicitudCreate: {
+            /** Nombre */
+            nombre: string;
+            /** Campos */
+            campos?: components["schemas"]["CampoTipado"][];
+            /** Destinatarios Sugeridos */
+            destinatarios_sugeridos?: ("proveedor_externo" | "departamento_interno" | "colaborador")[];
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
+        };
+        /** TipoSolicitudOut */
+        TipoSolicitudOut: {
+            /** Id */
+            id: string;
+            /** Clave */
+            clave?: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Campos */
+            campos?: components["schemas"]["CampoTipado"][];
+            /** Destinatarios Sugeridos */
+            destinatarios_sugeridos?: string[];
+            /**
+             * Es Base
+             * @default false
+             */
+            es_base: boolean;
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
+        };
+        /** TipoSolicitudUpdate */
+        TipoSolicitudUpdate: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Campos */
+            campos?: components["schemas"]["CampoTipado"][] | null;
+            /** Destinatarios Sugeridos */
+            destinatarios_sugeridos?: ("proveedor_externo" | "departamento_interno" | "colaborador")[] | null;
+            /** Activo */
+            activo?: boolean | null;
+        };
         /** TokenBundle */
         TokenBundle: {
             /** Access Token */
@@ -4514,6 +4848,14 @@ export interface components {
         /** TransferirSesionRequest */
         TransferirSesionRequest: {
             canal: components["schemas"]["Canal"];
+        };
+        /** TransicionRequest */
+        TransicionRequest: {
+            /**
+             * Accion
+             * @enum {string}
+             */
+            accion: "marcar_leida" | "iniciar_proceso" | "resolver" | "cancelar";
         };
         /**
          * TrendPoint
@@ -7985,6 +8327,306 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificacionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_tipos_solicitud_get: {
+        parameters: {
+            query?: {
+                solo_activos?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipoSolicitudOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_tipos_solicitud_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipoSolicitudCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipoSolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propuestas_tipos_solicitud_propuestas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropuestasListado"];
+                };
+            };
+        };
+    };
+    borrar_tipos_solicitud__tipo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_tipos_solicitud__tipo_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipoSolicitudUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipoSolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mapeo_inferencia_solicitudes_mapeo_inferencia_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapeoInferencia"];
+                };
+            };
+        };
+    };
+    listar_solicitudes_get: {
+        parameters: {
+            query?: {
+                buzon?: string;
+                estado?: string | null;
+                tipo_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudListado"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_solicitudes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_solicitudes__solicitud_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transicionar_solicitudes__solicitud_id__transicion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransicionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"];
                 };
             };
             /** @description Validation Error */

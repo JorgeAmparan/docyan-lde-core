@@ -31,6 +31,8 @@ from app.api.routers import (
     qr,
     recursos,
     search,
+    solicitudes,
+    tipos_solicitud,
     trail,
 )
 
@@ -95,6 +97,8 @@ app.include_router(demo.router)
 app.include_router(destinatarios.router)
 app.include_router(alertas.router)
 app.include_router(notificaciones.router)
+app.include_router(tipos_solicitud.router)
+app.include_router(solicitudes.router)
 
 static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")

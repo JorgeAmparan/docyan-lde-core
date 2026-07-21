@@ -77,6 +77,9 @@ EXPECTED_TABLES = {
     # ED-1 (Eventos Dirigidos — Pilar 2 Alertas):
     "023": "destinatarios",
     "024": "notificaciones",
+    # ED-2 (Solicitudes — Pilar 3, Data Accionable):
+    "026": "tipos_solicitud",
+    "027": "solicitudes",
 }
 
 # Tablas que una migración ELIMINÓ a propósito: su AUSENCIA es el estado correcto

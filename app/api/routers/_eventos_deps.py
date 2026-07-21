@@ -40,3 +40,18 @@ def dep_notificador():
     from app.graph.dkg_client import dkg_client
 
     return build_notificador(dkg=dkg_client)
+
+
+# ── ED-2 (Solicitudes) ────────────────────────────────────────────────────────
+
+
+def dep_tipo_solicitud_store():
+    from app.solicitudes.tipos import SupabaseTipoSolicitudStore
+
+    return SupabaseTipoSolicitudStore()
+
+
+def dep_solicitud_store():
+    from app.solicitudes.modelo import SupabaseSolicitudStore
+
+    return SupabaseSolicitudStore()

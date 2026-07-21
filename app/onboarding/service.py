@@ -69,6 +69,20 @@ def _sembrar_reglas_alerta(dkg: Any, org_id: str) -> None:
         pass
 
 
+def _sembrar_tipos_solicitud(org_id: str) -> None:
+    """
+    Siembra los 5 tipos base de solicitud al onboarding (ED-2 §2.1). Fail-open e
+    idempotente (por (org, clave)); también sirve al backfill de tenants existentes
+    (el listado del catálogo re-asegura la semilla). No bloquea el alta de cuenta.
+    """
+    try:
+        from app.solicitudes.tipos import SupabaseTipoSolicitudStore, asegurar_semilla
+
+        asegurar_semilla(SupabaseTipoSolicitudStore(), org_id)
+    except Exception:  # noqa: BLE001 — fail-open
+        pass
+
+
 def canjear_codigo(
     store: Any,
     audit: Any,
@@ -139,6 +153,7 @@ def canjear_codigo(
         except Exception:  # noqa: BLE001 — fail-open
             pass
     _sembrar_reglas_alerta(dkg, org_id)
+    _sembrar_tipos_solicitud(org_id)
     audit.record("access_code_redeemed", email, {
         "code": code, "org_id": org_id, "plan": row["tipo"],
     }, org_id=org_id)
@@ -212,6 +227,7 @@ def signup(store: Any, audit: Any, token_issuer: Any, req: Any, quota: Any = Non
         freemium_expira=expira.isoformat(),
     )
     _sembrar_reglas_alerta(dkg, org_id)
+    _sembrar_tipos_solicitud(org_id)
     audit.record("signup_freemium", str(req.email), {
         "org_id": org_id, "plan": "freemium", "doc_limit": FREEMIUM_DOC_LIMIT,
     }, org_id=org_id)

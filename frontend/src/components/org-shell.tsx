@@ -36,6 +36,8 @@ const NAV_PRO: NavEntry[] = [
   { icon: "folder-tree", label: "CoDos", href: "/admin/codos" },
   { icon: "scan-line", label: "Consultar", href: "/consult" },
   { icon: "bell", label: "Alertas", href: "/admin/alertas" },
+  // PROVISIONAL-ED2 (§2.8): bandeja de solicitudes; superficie definitiva en ED-4.
+  { icon: "send", label: "Solicitudes", href: "/solicitudes" },
   { group: "Administración" },
   { icon: "files", label: "Documentos", href: "/documentos" },
   { icon: "upload", label: "Ingesta", href: "/admin/ingesta" },

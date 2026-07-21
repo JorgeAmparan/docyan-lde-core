@@ -37,6 +37,7 @@ import { HistorialTimeline } from "./renderers/historial-timeline";
 import { AlertasDashboard } from "./renderers/alertas-dashboard";
 import { ComparativaView } from "./renderers/comparativa-view";
 import { BilingualAlignment } from "./renderers/bilingual-alignment";
+import { SolicitudModal, type SolicitarPrefill } from "./renderers/solicitud-modal";
 
 /** Lookup tipo documental (id de schema) → schema, para el chip `.doc-tipo` del
  *  prototipo (consult.jsx). Espejo de `SCHEMA_BY_ID` del design system. */
@@ -139,16 +140,18 @@ function AnswerBody({
   onSave,
   onCite,
   onNavigate,
+  onSolicitar,
 }: {
   a: Answer;
   saved: boolean;
   onSave: () => void;
   onCite: (s: SourceSpan | null) => void;
   onNavigate: (nodoId: string) => void;
+  onSolicitar?: (p: SolicitarPrefill) => void;
 }) {
   switch (a.kind) {
     case "info":
-      return <InformativaCard payload={a.payload as InfoCardPayload} saved={saved} onSave={onSave} onCite={onCite} />;
+      return <InformativaCard payload={a.payload as InfoCardPayload} saved={saved} onSave={onSave} onCite={onCite} onSolicitar={onSolicitar} />;
     case "steps":
       return <GuiaPasoAPaso payload={a.payload as ProcedureCardPayload} saved={saved} onSave={onSave} onCite={onCite} />;
     case "troubleshoot":
@@ -168,7 +171,7 @@ function AnswerBody({
     case "history":
       return <HistorialTimeline payload={a.payload as TimelinePayload} saved={saved} onSave={onSave} />;
     case "alerts":
-      return <AlertasDashboard payload={a.payload as AlertsDashboardPayload} saved={saved} onSave={onSave} onCite={() => {}} />;
+      return <AlertasDashboard payload={a.payload as AlertsDashboardPayload} saved={saved} onSave={onSave} onCite={() => {}} onSolicitar={onSolicitar} />;
     case "compare":
       return <ComparativaView payload={a.payload as ComparativeViewPayload} saved={saved} onSave={onSave} onCite={onCite} />;
     case "bilingual":
@@ -212,12 +215,14 @@ function AnswerCard({
   onSave,
   onCite,
   onNavigate,
+  onSolicitar,
 }: {
   a: Answer;
   saved: boolean;
   onSave: () => void;
   onCite: (s: SourceSpan | null) => void;
   onNavigate: (nodoId: string) => void;
+  onSolicitar?: (p: SolicitarPrefill) => void;
 }) {
   if (a.kind === "error") {
     return <AnswerBody a={a} saved={saved} onSave={onSave} onCite={onCite} onNavigate={onNavigate} />;
@@ -234,7 +239,7 @@ function AnswerCard({
           </span>
         )}
       </div>
-      <AnswerBody a={a} saved={saved} onSave={onSave} onCite={onCite} onNavigate={onNavigate} />
+      <AnswerBody a={a} saved={saved} onSave={onSave} onCite={onCite} onNavigate={onNavigate} onSolicitar={onSolicitar} />
     </div>
   );
 }
@@ -290,6 +295,9 @@ export function ConsultView({
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // PROVISIONAL-ED2 (§2.8): estado del formulario de solicitud. Solo en sesión
+  // autenticada (con token); el demo público no crea solicitudes reales.
+  const [solicitarPrefill, setSolicitarPrefill] = useState<SolicitarPrefill | null>(null);
   // Chat persistente (Pieza 6): una SESIÓN por CoDo. El backend acumula el historial
   // por session_id (multi-turno nativo del SDK); sin enviarlo, cada consulta sería
   // stateless y el seguimiento perdería el contexto. Se crea al montar / al cambiar
@@ -496,6 +504,27 @@ export function ConsultView({
   };
   const delObs = (i: number) => persistObs(obs.filter((_, k) => k !== i));
 
+  // Solo autenticado: el botón "Solicitar" abre el formulario prellenado con la cita
+  // y el contexto de CoDo. Sin token (demo público) queda undefined → sin botón.
+  const onSolicitar = token
+    ? (p: SolicitarPrefill) =>
+        setSolicitarPrefill({
+          ...p,
+          entidadId: p.entidadId ?? ctx.entityId,
+          codoId: ctx.codo,
+          consultaId: sessionId ?? undefined,
+        })
+    : undefined;
+
+  const solicitudModalEl = (
+    <SolicitudModal
+      open={solicitarPrefill !== null}
+      onOpenChange={(o) => !o && setSolicitarPrefill(null)}
+      prefill={solicitarPrefill}
+      token={token}
+    />
+  );
+
   const renderAnswer = (m: Message) =>
     m.role === "user" ? (
       <div className="bubble" key={m.id}>
@@ -509,6 +538,7 @@ export function ConsultView({
         onSave={() => onSave(m.id, m.answer!)}
         onCite={(s) => s && setSource(s)}
         onNavigate={navigateNode}
+        onSolicitar={onSolicitar}
       />
     );
 
@@ -586,6 +616,7 @@ export function ConsultView({
           onOpenChange={(o) => !o && setSource(null)}
           source={source}
         />
+        {solicitudModalEl}
       </div>
     );
   }
@@ -843,6 +874,7 @@ export function ConsultView({
         onOpenChange={(o) => !o && setSource(null)}
         source={source}
       />
+      {solicitudModalEl}
     </div>
   );
 }
