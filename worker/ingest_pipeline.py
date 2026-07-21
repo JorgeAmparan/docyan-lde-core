@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 
 from app.graph.schemas.dkg_ontology import graph_name_for
 from app.jobs.job_models import IngestJob
@@ -38,6 +39,78 @@ logger = logging.getLogger("docyan.worker.pipeline")
 FALKOR_HOST = os.getenv("FALKOR_HOST") or os.getenv("FALKORDB_HOST", "localhost")
 FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT", "6379"))
 
+# ── ED-0e — Gate de OCR POR PÁGINA ────────────────────────────────────────────
+# Correr Tesseract OCR de página completa en 4 idiomas sobre un PDF que YA trae
+# capa de texto nativa es desperdicio de CPU/RAM: fue la causa del OOM del worker
+# (4 GB) con el manual LS-400 (88 pp de texto nativo + 85 imágenes, OCR fra+deu+
+# spa+eng en cada una). El gate corre OCR SOLO en páginas SIN texto extraíble
+# suficiente — cubre docs MIXTOS (texto nativo + anexos escaneados). Las figuras/
+# callouts se extraen aparte por visión (ED-0c), así que apagar el OCR de página
+# NO pierde el texto de los dibujos.
+OCR_MIN_CHARS_POR_PAGINA = int(os.getenv("OCR_MIN_CHARS_POR_PAGINA", "100"))
+# Idiomas de OCR (default acotado: español + inglés — corredor T-MEC). El default
+# de Docling es fra+deu+spa+eng: 4 pasadas de Tesseract por página = parte del gasto.
+OCR_LANGS = os.getenv("OCR_LANGS", "spa+eng")
+
+
+def _ocr_langs_list() -> list[str]:
+    """`"spa+eng"` / `"spa, eng"` → `["spa", "eng"]` para TesseractCliOcrOptions."""
+    return [x for x in re.split(r"[+,\s]+", OCR_LANGS.strip()) if x]
+
+
+def _clasificar_paginas(textos_por_pagina: list[str | None]) -> dict:
+    """
+    Gate de OCR POR PÁGINA (ED-0e). Dada la lista de texto extraíble por página,
+    clasifica cada una: 'texto nativo' (≥ OCR_MIN_CHARS_POR_PAGINA caracteres) vs
+    'sin texto' (candidata a OCR). Devuelve los contadores de QA y la decisión
+    doc-level `do_ocr` (True si ALGUNA página carece de texto nativo).
+    """
+    total = len(textos_por_pagina)
+    nativas = sum(
+        1 for t in textos_por_pagina if t and len(t.strip()) >= OCR_MIN_CHARS_POR_PAGINA
+    )
+    ocr = total - nativas
+    return {
+        "aplica": True,
+        "paginas_totales": total,
+        "paginas_texto_nativo": nativas,
+        "paginas_ocr": ocr,          # páginas sin capa de texto suficiente → OCR
+        "do_ocr": ocr > 0,           # doc-level: si NINGUNA lo necesita, OCR OFF
+        "umbral_chars": OCR_MIN_CHARS_POR_PAGINA,
+        "ocr_langs": OCR_LANGS,
+    }
+
+
+def analizar_ocr_paginas(path: str) -> dict:
+    """
+    Escanea un PDF página por página (pypdf) para decidir el OCR (ED-0e). Para
+    no-PDF o si el escaneo falla devuelve `aplica=False` → se deja el default de
+    Docling (do_ocr=True): postura segura, no suprimir OCR cuando hay duda.
+    """
+    no_aplica = {
+        "aplica": False, "paginas_totales": None, "paginas_texto_nativo": 0,
+        "paginas_ocr": 0, "do_ocr": True, "umbral_chars": OCR_MIN_CHARS_POR_PAGINA,
+        "ocr_langs": OCR_LANGS,
+    }
+    if not path.lower().endswith(".pdf"):
+        return no_aplica
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(path)
+        textos: list[str] = []
+        for pg in reader.pages:
+            try:
+                textos.append(pg.extract_text() or "")
+            except Exception:  # noqa: BLE001 — página ilegible cuenta como sin texto (OCR)
+                textos.append("")
+        return _clasificar_paginas(textos)
+    except Exception as exc:  # noqa: BLE001 — el gate es optimización, no gate del cobro
+        logger.warning(
+            "gate OCR: no se pudo escanear %s (%s) — OCR por default", path, type(exc).__name__
+        )
+        return no_aplica
+
 
 # ── Conversión Docling ────────────────────────────────────────────────────────
 
@@ -45,14 +118,19 @@ FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT", "6379")
 def convertir(path: str):
     """
     Convierte un documento (PDF/docx/xlsx/pptx/imagen/...) con Docling y devuelve
-    `(markdown, docling_document)`. El `docling_document` permite extraer figuras
-    para la auto-extracción de diagramas (B9.5 T3); `generate_picture_images=True`
-    hace que las figuras lleven su imagen.
+    `(markdown, docling_document, ocr_gate)`. El `docling_document` permite extraer
+    figuras para la auto-extracción de diagramas (B9.5 T3); `generate_picture_images
+    =True` hace que las figuras lleven su imagen. `ocr_gate` (ED-0e) trae la señal
+    de QA del gate de OCR (páginas totales / con texto nativo / a OCR / decisión).
 
     Pipeline OFFLINE (HF_HUB_OFFLINE en la imagen del worker): usa los modelos
     layout + TableFormer precargados en build y OCR vía el binario `tesseract`
     (apt, sin modelo HF) — así convert() no requiere red. Para formatos no-PDF,
     Docling usa su pipeline por defecto.
+
+    ED-0e — el OCR es CONDICIONAL: solo corre si el PDF tiene páginas SIN capa de
+    texto nativa suficiente, y en los idiomas acotados de `OCR_LANGS` (default
+    spa+eng). Evita el OOM del worker por OCR redundante sobre PDF con texto nativo.
     """
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import (
@@ -61,9 +139,15 @@ def convertir(path: str):
     )
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
+    ocr_gate = analizar_ocr_paginas(path)
+
     pdf_opts = PdfPipelineOptions()
     pdf_opts.do_table_structure = True  # TableFormer (tablas complejas, núcleo PoC)
-    pdf_opts.ocr_options = TesseractCliOcrOptions()  # OCR con el tesseract de apt
+    # ED-0e — OCR SOLO si alguna página carece de texto nativo (gate por página);
+    # idiomas acotados (default spa+eng, no fra+deu+spa+eng). Las figuras/callouts
+    # se extraen aparte por visión (ED-0c): apagar el OCR NO pierde texto de dibujos.
+    pdf_opts.do_ocr = ocr_gate["do_ocr"]
+    pdf_opts.ocr_options = TesseractCliOcrOptions(lang=_ocr_langs_list())
     pdf_opts.generate_picture_images = True  # B9.5 T3: figuras con imagen (auto-extracción)
     # artifacts_path: directorio donde `docling-tools models download` dejó los
     # modelos en build (layout + tableformer). Sin esto, convert() intenta
@@ -77,7 +161,19 @@ def convertir(path: str):
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)}
     )
     result = converter.convert(path)
-    return result.document.export_to_markdown(), result.document
+    # no-PDF / escaneo fallido: cierra el contador de páginas con lo que Docling vio.
+    if ocr_gate.get("paginas_totales") is None:
+        try:
+            ocr_gate = {**ocr_gate, "paginas_totales": len(result.document.pages) or None}
+        except Exception:  # noqa: BLE001 — el conteo es señal, no gate
+            pass
+    logger.info(
+        "gate OCR | %s | do_ocr=%s | paginas=%s texto_nativo=%s ocr=%s | langs=%s umbral=%d",
+        path, pdf_opts.do_ocr, ocr_gate.get("paginas_totales"),
+        ocr_gate.get("paginas_texto_nativo"), ocr_gate.get("paginas_ocr"),
+        OCR_LANGS, OCR_MIN_CHARS_POR_PAGINA,
+    )
+    return result.document.export_to_markdown(), result.document, ocr_gate
 
 
 def convertir_a_markdown(path: str) -> str:
@@ -216,8 +312,8 @@ class IngestPipeline:
         # FASE conversion — Docling convierte (opaco): inicio y, al terminar, el
         # conteo de páginas real.
         _emit("conversion", 0.0, {})
-        markdown, docling_doc = convertir(local_path)
-        paginas = _contar_paginas(local_path)
+        markdown, docling_doc, ocr_gate = convertir(local_path)
+        paginas = ocr_gate.get("paginas_totales") or _contar_paginas(local_path)
         pg_counters = {"pages": paginas, "page": paginas} if paginas else {}
         _emit("conversion", 1.0, pg_counters)
         schema = self._resolver_schema(job, muestra=markdown[:8000])
@@ -440,6 +536,17 @@ class IngestPipeline:
             "cache_invalidadas": invalidadas,
             "bridge": bridge_counters,
             "visuales_materializados": visuales,
+            # ED-0e — señal de QA del gate de OCR: cuántas páginas se OCR-earon vs
+            # se leyeron por su capa de texto nativa (evita el OCR redundante que
+            # OOM-mató al worker). do_ocr=False ⇒ ninguna página necesitó OCR.
+            "ocr_gate": {
+                "paginas_totales": ocr_gate.get("paginas_totales"),
+                "paginas_ocr": ocr_gate.get("paginas_ocr"),
+                "paginas_texto_nativo": ocr_gate.get("paginas_texto_nativo"),
+                "do_ocr": ocr_gate.get("do_ocr"),
+                "ocr_langs": ocr_gate.get("ocr_langs"),
+                "umbral_chars": ocr_gate.get("umbral_chars"),
+            },
             # F1.5: peso del resultado almacenado (markdown convertido) en bytes.
             "markdown_bytes": len(markdown.encode("utf-8")),
             "metadata": getattr(ingest_result, "metadata", {}),
