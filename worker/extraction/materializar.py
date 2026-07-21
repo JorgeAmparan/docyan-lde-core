@@ -45,12 +45,23 @@ def materializar_diagrama(
     client: Any, tenant_id: str, draft: DraftDiagrama, *,
     doc_id: str | None = None, entidad_id: str | None = None,
 ) -> str:
-    """Escribe un `:RecursoVisual` con sus etiquetas (x,y,w,h) y leyenda. Devuelve el id."""
-    recurso_id = draft.recurso_id or f"rv_{abs(hash((tenant_id, draft.titulo))) & 0xFFFFFFFF:x}"
+    """Escribe un `:RecursoVisual` con sus etiquetas (x,y,w,h) y leyenda. Devuelve el id.
+
+    ED-0c §5bis: si el draft trae `hash_imagen`, el id del `:RecursoVisual` se deriva
+    de ese hash → figuras idénticas (mismo binario en varias páginas/documentos)
+    MERGE-an al MISMO nodo (1 recurso, N vínculos de aparición), sin duplicar imagen.
+    """
+    if draft.recurso_id:
+        recurso_id = draft.recurso_id
+    elif draft.hash_imagen:
+        recurso_id = f"rv_{draft.hash_imagen[:24]}"           # estable por imagen (dedup)
+    else:
+        recurso_id = f"rv_{abs(hash((tenant_id, draft.titulo))) & 0xFFFFFFFF:x}"
     client.query(
         tenant_id,
-        "MERGE (r:RecursoVisual {id:$id}) SET r.titulo = $titulo, r.url = $url",
-        {"id": recurso_id, "titulo": draft.titulo, "url": draft.recurso_url},
+        "MERGE (r:RecursoVisual {id:$id}) SET r.titulo = $titulo, r.url = $url, r.hash_imagen = $h",
+        {"id": recurso_id, "titulo": draft.titulo, "url": draft.recurso_url,
+         "h": draft.hash_imagen},
     )
     for i, et in enumerate(draft.etiquetas):
         eid = f"{recurso_id}_et{i}"

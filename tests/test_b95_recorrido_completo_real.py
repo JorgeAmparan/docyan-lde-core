@@ -79,7 +79,7 @@ def test_recorrido_t3_autoextrae_confirma_consulta_con_coordenadas(client):
         "leyenda_simbolica": [{"simbolo": "⚠", "significado": "Punto caliente"}],
     })
     figuras = [FiguraExtraida(titulo="Fig 1", png_bytes=b"\x89PNG-fake")]
-    drafts = extraer_diagramas(
+    drafts, _fid = extraer_diagramas(
         TENANT, figuras,
         complete_vision=lambda _p, _img: vision_out,
         put_asset=lambda t, n, b: f"https://assets/{t}/{n}",

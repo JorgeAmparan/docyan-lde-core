@@ -15,6 +15,7 @@ Inyectables para test sin claves/stack:
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 from typing import Callable
 
@@ -53,42 +54,51 @@ def extraer_diagramas(
     complete_vision: Callable[[str, str], str] | None = None,
     put_asset: Callable[[str, str, bytes], str] | None = None,
     storage_ok: Callable[[], bool] | None = None,
-) -> list[DraftDiagrama]:
+    hashes_previos: dict[str, DraftDiagrama] | None = None,
+) -> tuple[list[DraftDiagrama], dict]:
     """
-    Extrae un `DraftDiagrama` por figura con rótulos. Best-effort: figuras sin
-    etiquetas se omiten; nunca lanza (la auto-extracción no es gate).
+    Porta CADA figura con imagen usable como recurso renderable (ED-0c).
 
-    CORTO-CIRCUITO DE COSTO (decisión Jorge 15-jun-2026): si el almacén de assets
-    NO está disponible (p. ej. el bucket `docyan-assets` no existe), se OMITE la
-    extracción entera — NO se llama a la visión de Gemini por figura, porque el
-    resultado (DiagramViewer servible) no se podría guardar. No se paga lo que no se
-    puede usar. El gate COMPLETO de figuras (estimar el costo de visión ANTES, en el
-    cotizador, + tope por documento) es el sprint de costo siguiente.
+    Cambio de contrato (ED-0c): se guarda el PNG de TODA figura y se devuelve un
+    `DraftDiagrama` con su `recurso_url` **tenga o no callouts**. La visión de Gemini
+    ENRIQUECE con etiquetas/leyenda donde las detecta, pero su ausencia YA NO descarta
+    el dibujo (antes las fotos/planos sin rótulos se perdían por completo — el bug de
+    fidelidad que rompía la promesa en manuales técnicos). Sin tope de figuras por
+    default (el gate de costo es el cotizador + confirmación, no un tope ciego).
+
+    Best-effort: nunca lanza. Si el almacén de assets no está disponible NO se porta
+    nada (no se puede servir la imagen) y se reporta en la fidelidad.
+
+    Devuelve `(drafts, fidelidad)`:
+      · drafts: recursos renderables (con `recurso_url`; etiquetas opcionales).
+      · fidelidad: contadores del QA de ingesta — `procesadas`, `portadas`,
+        `con_callouts`, `sin_imagen_utilizable`, `store_fallo`, `vision_fallo`,
+        `omitidas_por_tope`. Base para verificar detectadas-vs-portadas.
     """
+    fidelidad = {
+        "procesadas": 0, "portadas": 0, "con_callouts": 0,
+        "sin_imagen_utilizable": 0, "store_fallo": 0, "vision_fallo": 0,
+        "omitidas_por_tope": 0, "figuras_deduplicadas": 0,
+    }
     if not figuras:
-        return []
+        return [], fidelidad
 
-    # Cap de figuras por documento (Pieza 3): el cotizador solo cotizó el costo de
-    # visión hasta este tope; el worker extrae el MISMO tope para que el gasto real no
-    # exceda lo cotizado. Top-N por TAMAÑO de imagen (proxy de "figura informativa":
-    # un diagrama rotulado pesa más que un ícono/logo). Aviso honesto si se excede.
-    from app.ingesta.pricing_table import MAX_FIGURAS_POR_DOCUMENTO
+    # Tope de EMERGENCIA solo si se configuró `MAX_FIGURAS_POR_DOCUMENTO`>0 (default
+    # ED-0c = 0 = sin tope → se portan TODAS). No se descartan dibujos por default.
+    from app.ingesta.pricing_table import figuras_a_procesar
 
-    if len(figuras) > MAX_FIGURAS_POR_DOCUMENTO:
-        excedidas = len(figuras) - MAX_FIGURAS_POR_DOCUMENTO
+    total = len(figuras)
+    n_proc = figuras_a_procesar(total)
+    if n_proc < total:
+        fidelidad["omitidas_por_tope"] = total - n_proc
         logger.warning(
-            "documento con %d figuras excede el tope de %d; se extraen las %d mayores "
-            "y se OMITEN %d (aviso honesto, gasto de visión acotado a lo cotizado)",
-            len(figuras), MAX_FIGURAS_POR_DOCUMENTO, MAX_FIGURAS_POR_DOCUMENTO, excedidas,
+            "tope de emergencia MAX_FIGURAS activo: se procesan %d de %d figuras "
+            "(top-N por tamaño); %d omitidas", n_proc, total, total - n_proc,
         )
-        figuras = sorted(figuras, key=lambda f: len(f.png_bytes or b""), reverse=True)[
-            :MAX_FIGURAS_POR_DOCUMENTO
-        ]
+        figuras = sorted(figuras, key=lambda f: len(f.png_bytes or b""), reverse=True)[:n_proc]
+    fidelidad["procesadas"] = len(figuras)
 
-    # Corto-circuito de costo: se prueba el MISMO almacén que se va a usar. Con
-    # `put_asset` inyectado (test/custom), el caller garantiza el store → no se
-    # prueba. En prod (store por defecto), se prueba el bucket: si no está, se omite
-    # la extracción ENTERA antes de pagar visión por figura.
+    # Sin almacén servible no se puede renderizar la imagen → no se porta nada.
     usa_store_default = put_asset is None
     if storage_ok is None:
         if usa_store_default:
@@ -97,11 +107,11 @@ def extraer_diagramas(
             storage_ok = lambda: True  # noqa: E731 — store inyectado ⇒ disponible
     if not storage_ok():
         logger.warning(
-            "almacenamiento de assets no disponible (bucket %s); se OMITE la "
-            "extracción de %d figura(s) para no gastar visión sin poder guardar el resultado",
-            "docyan-assets", len(figuras),
+            "almacenamiento de assets no disponible (bucket %s); NO se portan %d "
+            "figura(s) (no se pueden servir para renderizar)", "docyan-assets", len(figuras),
         )
-        return []
+        fidelidad["store_fallo"] = len(figuras)
+        return [], fidelidad
 
     if complete_vision is None:
         from worker import llm_config
@@ -112,56 +122,95 @@ def extraer_diagramas(
 
         put_asset = _put
 
+    # ED-0c §5bis — dedup por hash SHA-256 del PNG. `vistos` arranca con los hashes
+    # ya presentes en el tenant (`hashes_previos`, cross-documento) para no re-almacenar
+    # ni re-visionar una figura idéntica ya portada en otra ingesta del mismo tenant.
+    vistos: dict[str, DraftDiagrama] = dict(hashes_previos or {})
+
     drafts: list[DraftDiagrama] = []
     for i, fig in enumerate(figuras):
+        if not fig.png_bytes:
+            fidelidad["sin_imagen_utilizable"] += 1
+            continue
+
+        h = hashlib.sha256(fig.png_bytes).hexdigest()
+
+        # §5bis DEDUP: figura idéntica ya portada (esta ingesta o previa del tenant)
+        # → NO se re-almacena ni se re-visiona; se REFERENCIA el mismo recurso desde
+        # esta nueva aparición (preserva "aparece aquí también"). Cuenta como portada.
+        prev = vistos.get(h)
+        if prev is not None and prev.recurso_url:
+            fidelidad["figuras_deduplicadas"] += 1
+            fidelidad["portadas"] += 1
+            drafts.append(
+                DraftDiagrama(
+                    titulo=prev.titulo,
+                    recurso_url=prev.recurso_url,
+                    hash_imagen=h,
+                    etiquetas=list(prev.etiquetas),
+                    leyenda_simbolica=list(prev.leyenda_simbolica),
+                )
+            )
+            continue
+
+        # 1) GUARDAR la imagen SIEMPRE (renderable), ANTES de la visión: el dibujo se
+        #    conserva aunque no tenga callouts o la visión falle. Una vez por hash.
+        try:
+            url = put_asset(tenant_id, f"figura_{h[:16]}.png", fig.png_bytes)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("no se pudo almacenar la figura %d: %s", i, type(exc).__name__)
+            fidelidad["store_fallo"] += 1
+            continue  # sin url no se puede renderizar
+
+        # 2) VISIÓN opcional — enriquece con callouts/leyenda donde existan. Su fallo
+        #    o ausencia NO descarta la figura (se porta la imagen sin rótulos).
+        titulo = fig.titulo or f"Figura {i + 1}"
+        etiquetas: list[EtiquetaBorrador] = []
+        leyenda: list[LeyendaBorrador] = []
         try:
             b64 = base64.b64encode(fig.png_bytes).decode("ascii")
-            raw = complete_vision(_PROMPT, b64)
-        except Exception as exc:  # noqa: BLE001 — la extracción no tumba la ingesta
-            logger.warning("visión falló en figura %d: %s", i, type(exc).__name__)
-            continue
-
-        data = parse_llm_json(raw)
-        if not isinstance(data, dict):
-            continue
-        etiquetas_raw = data.get("etiquetas") or []
-        if not etiquetas_raw:
-            continue  # figura sin rótulos → no es un diagrama señalable
-
-        # Almacena el asset servible (solo si hay etiquetas que valga la pena curar).
-        try:
-            url = put_asset(tenant_id, f"figura_{i}.png", fig.png_bytes)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("no se pudo almacenar el asset de la figura %d: %s", i, type(exc).__name__)
-            url = None
-
-        etiquetas = [
-            EtiquetaBorrador(
-                texto=str(e.get("texto", "")),
-                x=float(e.get("x") or 0.0),
-                y=float(e.get("y") or 0.0),
-                w=_opt_float(e.get("w")),
-                h=_opt_float(e.get("h")),
+            data = parse_llm_json(complete_vision(_PROMPT, b64))
+            if isinstance(data, dict):
+                titulo = data.get("titulo") or titulo
+                etiquetas = [
+                    EtiquetaBorrador(
+                        texto=str(e.get("texto", "")),
+                        x=float(e.get("x") or 0.0),
+                        y=float(e.get("y") or 0.0),
+                        w=_opt_float(e.get("w")),
+                        h=_opt_float(e.get("h")),
+                    )
+                    for e in (data.get("etiquetas") or [])
+                    if isinstance(e, dict) and e.get("texto")
+                ]
+                leyenda = [
+                    LeyendaBorrador(
+                        simbolo=str(s.get("simbolo", "")),
+                        significado=str(s.get("significado", "")),
+                    )
+                    for s in (data.get("leyenda_simbolica") or [])
+                    if isinstance(s, dict) and s.get("simbolo")
+                ]
+        except Exception as exc:  # noqa: BLE001 — la visión enriquece, no es gate
+            logger.warning(
+                "visión falló en figura %d (se porta la imagen sin callouts): %s",
+                i, type(exc).__name__,
             )
-            for e in etiquetas_raw
-            if isinstance(e, dict) and e.get("texto")
-        ]
-        leyenda = [
-            LeyendaBorrador(simbolo=str(s.get("simbolo", "")), significado=str(s.get("significado", "")))
-            for s in (data.get("leyenda_simbolica") or [])
-            if isinstance(s, dict) and s.get("simbolo")
-        ]
-        if not etiquetas:
-            continue
-        drafts.append(
-            DraftDiagrama(
-                titulo=data.get("titulo") or fig.titulo or f"Diagrama {i + 1}",
-                recurso_url=url,
-                etiquetas=etiquetas,
-                leyenda_simbolica=leyenda,
-            )
+            fidelidad["vision_fallo"] += 1
+
+        if etiquetas:
+            fidelidad["con_callouts"] += 1
+        fidelidad["portadas"] += 1
+        nuevo = DraftDiagrama(
+            titulo=titulo,
+            recurso_url=url,
+            hash_imagen=h,
+            etiquetas=etiquetas,
+            leyenda_simbolica=leyenda,
         )
-    return drafts
+        vistos[h] = nuevo  # §5bis: la próxima figura idéntica se deduplica
+        drafts.append(nuevo)
+    return drafts, fidelidad
 
 
 def _opt_float(v) -> float | None:

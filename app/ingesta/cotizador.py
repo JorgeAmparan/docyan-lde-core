@@ -201,9 +201,11 @@ class Cotizador:
             (dentro de cupo: setup $0; sobre cupo: fórmula). Sin rechazo por saldo/cap.
         """
         tokens = contar_tokens(texto_documento)
-        # Cap de figuras por documento: solo se cotiza (y se extraerá) hasta el tope.
+        # ED-0c: sin tope por default — se cotizan (y se extraerán) TODAS las figuras.
+        # El gate de costo es esta cotización + la confirmación, no un tope que descarta
+        # dibujos. `figuras_a_procesar` respeta un tope de emergencia solo si se configura.
         num_figuras = max(0, int(num_figuras or 0))
-        figuras_cotizadas = min(num_figuras, pt.MAX_FIGURAS_POR_DOCUMENTO)
+        figuras_cotizadas = pt.figuras_a_procesar(num_figuras)
         figuras_excedidas = num_figuras - figuras_cotizadas
         desglose, detalle = estimar_costo(tokens, figuras_cotizadas)
         costo = desglose.total_usd
