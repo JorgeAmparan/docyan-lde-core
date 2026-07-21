@@ -146,7 +146,8 @@ def test_worker_materializa_arbol_t5(monkeypatch):
             {"titulo": "T", "nodos": [{"id": "n1", "pregunta": "¿?", "orden": 0}]}))
     monkeypatch.setattr(te, "extraer_arbol_diagnostico", lambda *_a, **_k: draft)
 
-    counters = pipe._auto_materializar_visuales(_FakeSchema([5, 2]), "markdown", None, _job(), "doc1")
+    counters = pipe._auto_materializar_visuales(
+        _FakeSchema([5, 2]), "markdown", "d.pdf", 0, {"do_ocr": False}, 1, _job(), "doc1")
     assert counters["arboles"] == 1
     # Materializó al grafo: creó :ArbolDiagnostico + :NodoDecision y enlazó al doc.
     assert "ArbolDiagnostico" in dkg.labels_creadas()
@@ -155,13 +156,15 @@ def test_worker_materializa_arbol_t5(monkeypatch):
 
 def test_worker_materializa_diagrama_t3(monkeypatch):
     import worker.extraction.diagram_extractor as de
-    import worker.extraction.docling_figures as df
     from worker import ingest_pipeline as ip
     from worker.extraction.models import DraftDiagrama, EtiquetaBorrador
 
     dkg = _FakeDKG()
     pipe = ip.IngestPipeline(dkg_client=dkg)
-    monkeypatch.setattr(df, "extraer_figuras", lambda _doc: [FiguraExtraida("f", b"x")])
+    # ED-0f: las figuras se extraen por lotes (Pasada 2) dentro del materializador;
+    # se mockea `extraer_figuras_batched` (no `extraer_figuras`) — sin docling.
+    monkeypatch.setattr(ip, "extraer_figuras_batched",
+                        lambda *_a, **_k: [FiguraExtraida("f", b"x")])
     # ED-0c: extraer_diagramas devuelve (drafts, fidelidad).
     monkeypatch.setattr(de, "extraer_diagramas", lambda *_a, **_k: (
         [DraftDiagrama(titulo="D", recurso_url="u",
@@ -170,7 +173,9 @@ def test_worker_materializa_diagrama_t3(monkeypatch):
          "store_fallo": 0, "vision_fallo": 0, "omitidas_por_tope": 0, "figuras_deduplicadas": 0},
     ))
 
-    counters = pipe._auto_materializar_visuales(_FakeSchema([3]), "md", object(), _job(), "doc2")
+    # detectadas=1 (Pasada 1 vio 1 figura); local_path/ocr_gate/paginas para Pasada 2.
+    counters = pipe._auto_materializar_visuales(
+        _FakeSchema([3]), "md", "d.pdf", 1, {"do_ocr": False}, 1, _job(), "doc2")
     assert counters["diagramas"] == 1
     assert counters["fidelidad_visual"]["portadas"] == 1
     assert "RecursoVisual" in dkg.labels_creadas()
@@ -180,6 +185,7 @@ def test_worker_no_materializa_para_tipos_sin_t3_t5():
     from worker import ingest_pipeline as ip
     dkg = _FakeDKG()
     pipe = ip.IngestPipeline(dkg_client=dkg)
-    counters = pipe._auto_materializar_visuales(_FakeSchema([1, 8]), "md", None, _job(), "doc3")
+    counters = pipe._auto_materializar_visuales(
+        _FakeSchema([1, 8]), "md", "d.pdf", 0, {"do_ocr": False}, 1, _job(), "doc3")
     assert counters == {"arboles": 0, "diagramas": 0}
     assert dkg.queries == []
