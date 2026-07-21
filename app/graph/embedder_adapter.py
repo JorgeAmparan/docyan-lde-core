@@ -20,10 +20,47 @@ el SDK instalado; solo falla si realmente se instancia el adapter (camino B2).
 """
 from __future__ import annotations
 
+import logging
+import os
+import time
+
 from app.embeddings.bge_client import bge_client as default_bge_client
+
+logger = logging.getLogger("docyan.embedder_adapter")
 
 BGE_M3_DIMENSION = 1024  # decisión #1 — NO 1536 (OpenAI text-embedding-3).
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
+
+# Tolerancia al COLD-START del embedder (ED-0b §4, patrón ED-0). El
+# `docyan-lde-embedder` auto-stopea; el primer request tras el idle dispara el
+# arranque (~5 min). El `bge_client` ya tiene un connect timeout CORTO (ED-0), así
+# que un connect a un embedder frío falla rápido en vez de colgar el thread; aquí
+# se REINTENTA espaciado para darle tiempo a arrancar, en vez de fallar la ingesta.
+# EMBEDDER_MAX_RETRIES × EMBEDDER_RETRY_DELAY debe cubrir el arranque (~5 min):
+# default 10 × 30s = 5 min. Configurable por env.
+EMBEDDER_MAX_RETRIES = max(0, int(os.getenv("EMBEDDER_MAX_RETRIES", "10")))
+EMBEDDER_RETRY_DELAY = float(os.getenv("EMBEDDER_RETRY_DELAY_SECONDS", "30"))
+
+
+def _with_cold_start_retry(fn, *, sleep=time.sleep):
+    """Ejecuta `fn` reintentando espaciado ante fallos de red (cold-start del
+    embedder). Reintentos acotados: agotados, propaga (no oculta un embedder
+    genuinamente caído). ED-0b §4."""
+    last: Exception | None = None
+    for intento in range(EMBEDDER_MAX_RETRIES + 1):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 — connect/read timeout → reintento espaciado
+            last = exc
+            if intento < EMBEDDER_MAX_RETRIES:
+                logger.warning(
+                    "embedder no responde (intento %d/%d: %s); reintento en %.0fs "
+                    "(¿cold-start?)", intento + 1, EMBEDDER_MAX_RETRIES + 1,
+                    type(exc).__name__, EMBEDDER_RETRY_DELAY,
+                )
+                sleep(EMBEDDER_RETRY_DELAY)
+    assert last is not None
+    raise last
 
 
 def _embedder_base():
@@ -59,9 +96,14 @@ def make_bge_m3_adapter(bge_client=None):
             return BGE_M3_DIMENSION
 
         def embed_query(self, text: str, **kwargs) -> list[float]:
-            return self.bge_client.get_embeddings([text])[0]
+            return _with_cold_start_retry(
+                lambda: self.bge_client.get_embeddings([text])[0]
+            )
 
         def embed_documents(self, texts: list[str], **kwargs) -> list[list[float]]:
-            return self.bge_client.get_embeddings(list(texts))
+            textos = list(texts)
+            return _with_cold_start_retry(
+                lambda: self.bge_client.get_embeddings(textos)
+            )
 
     return BGE_M3_Adapter(client)

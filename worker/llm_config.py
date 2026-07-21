@@ -30,6 +30,31 @@ _log = logging.getLogger("docyan.worker.llm")
 # gasto sin gate). Fijamos un tope EXPLÍCITO y global de litellm. Configurable.
 LLM_NUM_RETRIES = max(0, int(os.getenv("INGEST_LLM_NUM_RETRIES", "2")))
 
+# ── Timeout de red de TODA llamada LLM del worker (ED-0b §2) ───────────────────
+# El default de litellm era insuficiente para PDFs reales: la extracción de un
+# chunk grande (Docling + tablas + visión) puede tardar minutos y expiraba con
+# `timed out` en las 3 capas (incidente de siembra demo-maxi). Se fija un timeout
+# GENEROSO y explícito, global a litellm (lo respetan también las llamadas
+# internas del GraphRAG-SDK). 600s = 10 min: holgado para el chunk más pesado sin
+# ser infinito. Configurable por env.
+LLM_TIMEOUT_SECONDS = float(os.getenv("INGEST_LLM_TIMEOUT_SECONDS", "600"))
+
+# ── Modelos que RECHAZAN el parámetro `temperature` (ED-0b §3) ─────────────────
+# `claude-opus-4-8` deprecó `temperature`: pasarlo da
+# `BadRequestError: 'temperature' is deprecated for this model` y tumba la capa
+# verify+rels. Se omite `temperature` para estos modelos (y `litellm.drop_params`
+# lo descarta también en las llamadas internas del SDK). Configurable por env (CSV).
+_MODELS_SIN_TEMPERATURE = {
+    m.strip().lower()
+    for m in os.getenv("INGEST_MODELOS_SIN_TEMPERATURE", "claude-opus-4-8").split(",")
+    if m.strip()
+}
+
+
+def acepta_temperature(model: str) -> bool:
+    """False si el modelo deprecó `temperature` (no se debe pasar). ED-0b §3."""
+    return (model or "").strip().lower() not in _MODELS_SIN_TEMPERATURE
+
 # Acumulador de USO REAL por job (Pieza 4b): un contextvar guarda los tokens/costo
 # reales que litellm reporta (`response.usage`) durante una corrida, para comparar
 # el gasto REAL vs el estimado — no solo el tier del modelo. Scoped por corrida con
@@ -86,12 +111,22 @@ def configure_litellm() -> None:
         import litellm
 
         litellm.num_retries = LLM_NUM_RETRIES
+        # ED-0b §2: timeout de red global (lo respetan las llamadas internas del SDK).
+        litellm.request_timeout = LLM_TIMEOUT_SECONDS
+        # ED-0b §3: descarta params no soportados por el modelo (p. ej. `temperature`
+        # en claude-opus-4-8) en vez de romper con BadRequestError. Defensa en
+        # profundidad además de omitirlo explícitamente al construir el LLM.
+        litellm.drop_params = True
         cbs = list(getattr(litellm, "callbacks", None) or [])
         if not any(isinstance(c, _UsageLogger) for c in cbs):
             cbs.append(_UsageLogger())
             litellm.callbacks = cbs
         _litellm_configured = True
-        _log.info("litellm configurado: num_retries=%d, medidor de uso activo", LLM_NUM_RETRIES)
+        _log.info(
+            "litellm configurado: num_retries=%d, request_timeout=%.0fs, "
+            "drop_params=True, medidor de uso activo",
+            LLM_NUM_RETRIES, LLM_TIMEOUT_SECONDS,
+        )
     except Exception as exc:  # noqa: BLE001 — sin litellm (tests) no es fatal
         _log.debug("no se pudo configurar litellm: %s", type(exc).__name__)
 
@@ -195,23 +230,32 @@ def _require_key_for_model(model: str) -> None:
     # Otros proveedores: dejar que LiteLLM emita su propio error de credenciales.
 
 
-def build_extraction_llm():
-    """LiteLLM para extracción. Import perezoso del SDK."""
+def _build_sdk_litellm(model: str):
+    """
+    Construye un `graphrag_sdk.LiteLLM` para `model`, omitiendo `temperature`
+    cuando el modelo lo deprecó (ED-0b §3: claude-opus-4-8). El timeout de red lo
+    fija `litellm.request_timeout` en `configure_litellm()` (ED-0b §2), global a
+    todas las llamadas — incluidas las internas del SDK.
+    """
     from graphrag_sdk import LiteLLM
 
+    configure_litellm()  # tope de reintentos + timeout + drop_params globales
+    if acepta_temperature(model):
+        return LiteLLM(model=model, temperature=0.0)
+    return LiteLLM(model=model)  # sin temperature (deprecado para este modelo)
+
+
+def build_extraction_llm():
+    """LiteLLM para extracción. Import perezoso del SDK."""
     model = extraction_model()
     _require_key_for_model(model)
-    configure_litellm()  # tope de reintentos global que el SDK también respeta
-    return LiteLLM(model=model, temperature=0.0)
+    return _build_sdk_litellm(model)
 
 
 def build_qa_llm():
     """LiteLLM para QA/consulta (gpt-4o-mini)."""
-    from graphrag_sdk import LiteLLM
-
     _require_env("OPENAI_API_KEY")
-    configure_litellm()  # tope de reintentos global que el SDK también respeta
-    return LiteLLM(model=LLM_CONFIG["qa_model"], temperature=0.0)
+    return _build_sdk_litellm(LLM_CONFIG["qa_model"])
 
 
 def build_resolution(embedder=None):
@@ -219,12 +263,11 @@ def build_resolution(embedder=None):
     Estrategia de resolución de entidades (LLMVerifiedResolution). Si se pasa el
     embedder BGE-M3, lo usa para el matching vectorial.
     """
-    from graphrag_sdk import LiteLLM, LLMVerifiedResolution
+    from graphrag_sdk import LLMVerifiedResolution
 
     model = resolution_model()
     _require_key_for_model(model)
-    llm = LiteLLM(model=model, temperature=0.0)
-    return LLMVerifiedResolution(llm=llm, embedder=embedder)
+    return LLMVerifiedResolution(llm=_build_sdk_litellm(model), embedder=embedder)
 
 
 def complete_text(prompt: str, *, model: str | None = None, temperature: float = 0.0) -> str:
@@ -238,12 +281,15 @@ def complete_text(prompt: str, *, model: str | None = None, temperature: float =
     model = model or extraction_model()
     _require_key_for_model(model)
     configure_litellm()
-    resp = litellm.completion(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=temperature,
-        num_retries=LLM_NUM_RETRIES,
-    )
+    kwargs = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "num_retries": LLM_NUM_RETRIES,
+        "timeout": LLM_TIMEOUT_SECONDS,  # ED-0b §2: timeout explícito por-llamada
+    }
+    if acepta_temperature(model):  # ED-0b §3: omitir si el modelo lo deprecó
+        kwargs["temperature"] = temperature
+    resp = litellm.completion(**kwargs)
     return resp["choices"][0]["message"]["content"] or ""
 
 
@@ -258,11 +304,11 @@ def complete_vision(prompt: str, image_b64: str, *, model: str | None = None) ->
     model = model or extraction_model()
     _require_key_for_model(model)
     configure_litellm()
-    resp = litellm.completion(
-        model=model,
-        temperature=0.0,
-        num_retries=LLM_NUM_RETRIES,
-        messages=[
+    kwargs = {
+        "model": model,
+        "num_retries": LLM_NUM_RETRIES,
+        "timeout": LLM_TIMEOUT_SECONDS,  # ED-0b §2: timeout explícito por-llamada
+        "messages": [
             {
                 "role": "user",
                 "content": [
@@ -271,7 +317,10 @@ def complete_vision(prompt: str, image_b64: str, *, model: str | None = None) ->
                 ],
             }
         ],
-    )
+    }
+    if acepta_temperature(model):  # ED-0b §3
+        kwargs["temperature"] = 0.0
+    resp = litellm.completion(**kwargs)
     return resp["choices"][0]["message"]["content"] or ""
 
 
@@ -298,14 +347,15 @@ def build_extractor_and_resolver(embedder=None, model: str | None = None):
     """
     from graphrag_sdk import (
         GraphExtraction,
-        LiteLLM,
         LLMExtractor,
         LLMVerifiedResolution,
     )
 
     model = model or extraction_model()
     _require_key_for_model(model)
-    llm_extraction = LiteLLM(model=model, temperature=0.0)
+    # ED-0b §3: verify+rels usa este LLM; con claude-opus-4-8 (capa 3) NO se pasa
+    # `temperature` (deprecado → BadRequestError que tumbaba el paso).
+    llm_extraction = _build_sdk_litellm(model)
     extractor = GraphExtraction(
         llm=llm_extraction,
         entity_extractor=LLMExtractor(llm_extraction),  # LLM-only (no GLiNER)
