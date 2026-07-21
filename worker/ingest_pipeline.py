@@ -151,7 +151,15 @@ def analizar_ocr_paginas(path: str) -> dict:
 # figuras. UNA sola convert() — sin page_range, sin bordes de lote, sin riesgo de
 # divergencia de chunks. (El intento de 2 pasadas + page_range se descartó: partía
 # de que los rásters eran el driver, que la medición refutó.)
-DOCLING_QUEUE_MAX_SIZE = max(1, int(os.getenv("DOCLING_QUEUE_MAX_SIZE", "4")))
+#
+# Curva de pico medida en prod con LS-400 (88pp, 244 figuras) — output byte-idéntico
+# en las tres (el diff contra el golden queda vacío: 244 figuras por hash + 11 chunks):
+#     queue=100 → 9.63 GB   ·   queue=4 → 7.06 GB   ·   queue=1 → 3.34 GB
+# Default=1 (UNA página en vuelo) para caber en el worker de 4 GB con margen. Es el
+# ajuste más conservador de memoria; a cambio la conversión procesa página a página
+# (throughput menor, irrelevante en ingesta asíncrona). Subir por env en workers con
+# más RAM si se quiere más paralelismo de páginas.
+DOCLING_QUEUE_MAX_SIZE = max(1, int(os.getenv("DOCLING_QUEUE_MAX_SIZE", "1")))
 
 
 def _pdf_pipeline_options(ocr_gate: dict):
