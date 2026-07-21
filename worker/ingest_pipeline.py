@@ -47,7 +47,14 @@ FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT", "6379")
 # suficiente — cubre docs MIXTOS (texto nativo + anexos escaneados). Las figuras/
 # callouts se extraen aparte por visión (ED-0c), así que apagar el OCR de página
 # NO pierde el texto de los dibujos.
-OCR_MIN_CHARS_POR_PAGINA = int(os.getenv("OCR_MIN_CHARS_POR_PAGINA", "100"))
+# Umbral: una página SIN capa de texto (escaneada/solo-imagen) da ~0 caracteres
+# extraíbles; una con capa de texto nativa da decenas+ — incluso una lámina/diagrama
+# con solo un pie de figura. El gate distingue "¿tiene capa de texto?" (no "¿tiene
+# MUCHO texto?"): 16 es el piso para considerarla nativa. Un umbral alto (p. ej. 100)
+# marcaría páginas de diagrama con texto escaso como "a OCR" y prendería el OCR de
+# todo el doc — justo lo que OOM-mató al worker con LS-400 (19/88 pp con <100 chars
+# pero mín. 59 → todas SÍ traen texto). Configurable por env.
+OCR_MIN_CHARS_POR_PAGINA = int(os.getenv("OCR_MIN_CHARS_POR_PAGINA", "16"))
 # Idiomas de OCR (default acotado: español + inglés — corredor T-MEC). El default
 # de Docling es fra+deu+spa+eng: 4 pasadas de Tesseract por página = parte del gasto.
 OCR_LANGS = os.getenv("OCR_LANGS", "spa+eng")
@@ -174,6 +181,14 @@ def convertir(path: str):
     artifacts = os.getenv("DOCLING_ARTIFACTS_PATH")
     if artifacts and os.path.isdir(artifacts):
         pdf_opts.artifacts_path = artifacts
+    # Log ANTES de convert(): si la conversión OOM-mata al proceso, la decisión del
+    # gate debe quedar registrada igual (regresión ED-0e: sin esto el log se perdía).
+    logger.info(
+        "gate OCR | %s | do_ocr=%s | paginas=%s texto_nativo=%s ocr=%s | langs=%s umbral=%d",
+        path, pdf_opts.do_ocr, ocr_gate.get("paginas_totales"),
+        ocr_gate.get("paginas_texto_nativo"), ocr_gate.get("paginas_ocr"),
+        OCR_LANGS, OCR_MIN_CHARS_POR_PAGINA,
+    )
     converter = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)}
     )
@@ -184,12 +199,6 @@ def convertir(path: str):
             ocr_gate = {**ocr_gate, "paginas_totales": len(result.document.pages) or None}
         except Exception:  # noqa: BLE001 — el conteo es señal, no gate
             pass
-    logger.info(
-        "gate OCR | %s | do_ocr=%s | paginas=%s texto_nativo=%s ocr=%s | langs=%s umbral=%d",
-        path, pdf_opts.do_ocr, ocr_gate.get("paginas_totales"),
-        ocr_gate.get("paginas_texto_nativo"), ocr_gate.get("paginas_ocr"),
-        OCR_LANGS, OCR_MIN_CHARS_POR_PAGINA,
-    )
     return result.document.export_to_markdown(), result.document, ocr_gate
 
 
