@@ -516,14 +516,18 @@ export function ConsultView({
         })
     : undefined;
 
-  const solicitudModalEl = (
-    <SolicitudModal
-      open={solicitarPrefill !== null}
-      onOpenChange={(o) => !o && setSolicitarPrefill(null)}
-      prefill={solicitarPrefill}
-      token={token}
-    />
-  );
+  // Se MONTA solo cuando hay un dato seleccionado (tras pulsar "Solicitar"). Así el
+  // uso de react-query del modal no exige un QueryClientProvider en superficies que
+  // nunca abren el formulario (p. ej. los tests unitarios de la vista, el demo sin token).
+  const solicitudModalEl =
+    solicitarPrefill !== null ? (
+      <SolicitudModal
+        open
+        onOpenChange={(o) => !o && setSolicitarPrefill(null)}
+        prefill={solicitarPrefill}
+        token={token}
+      />
+    ) : null;
 
   const renderAnswer = (m: Message) =>
     m.role === "user" ? (
