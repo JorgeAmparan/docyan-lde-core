@@ -130,10 +130,13 @@ class SupabaseUsuarioResolver:
         return self._sb
 
     def resolver(self, org_id: str, usuario_id: str) -> tuple[str | None, str] | None:
+        # La tabla `users` no tiene columna `idioma` (verificado en prod): se pide
+        # solo `email` y el idioma del destinatario se resuelve por default (es).
+        # Si en el futuro se añade `users.idioma`, se lee aquí sin cambiar el contrato.
         res = (
             self.sb()
             .table("users")
-            .select("email, idioma")
+            .select("email")
             .eq("id", usuario_id)
             .eq("org_id", org_id)
             .limit(1)
@@ -141,8 +144,7 @@ class SupabaseUsuarioResolver:
         )
         if not res.data:
             return None
-        row = res.data[0]
-        return row.get("email"), (row.get("idioma") or "es")
+        return res.data[0].get("email"), "es"
 
 
 # ── Almacenes ─────────────────────────────────────────────────────────────────
