@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 pipeline = importlib.import_module("worker.ingest_pipeline")
 
 
@@ -90,10 +92,10 @@ def test_no_pdf_deja_ocr_por_default():
 
 
 def test_pdf_ilegible_no_tumba_el_gate(monkeypatch):
+    pypdf = pytest.importorskip("pypdf")  # pypdf vive en el worker, no en el backend CI
+
     def _boom(*_a, **_k):
         raise ValueError("PDF corrupto")
-
-    import pypdf
 
     monkeypatch.setattr(pypdf, "PdfReader", _boom)
     g = pipeline.analizar_ocr_paginas("/tmp/roto.pdf")
@@ -102,6 +104,8 @@ def test_pdf_ilegible_no_tumba_el_gate(monkeypatch):
 
 # ── §5 (escáner real pypdf): PDF con capa de texto → 0 OCR ────────────────────
 def test_analizar_pdf_con_texto_nativo_via_pypdf(monkeypatch):
+    pypdf = pytest.importorskip("pypdf")  # pypdf vive en el worker, no en el backend CI
+
     class _Pg:
         def __init__(self, t):
             self._t = t
@@ -113,8 +117,6 @@ def test_analizar_pdf_con_texto_nativo_via_pypdf(monkeypatch):
         def __init__(self, _path):
             self.pages = [_Pg("Texto nativo suficiente " * 20) for _ in range(3)]
 
-    import pypdf
-
     monkeypatch.setattr(pypdf, "PdfReader", _Reader)
     g = pipeline.analizar_ocr_paginas("/tmp/nativo.pdf")
     assert g["aplica"] is True
@@ -124,6 +126,8 @@ def test_analizar_pdf_con_texto_nativo_via_pypdf(monkeypatch):
 
 
 def test_analizar_pdf_escaneado_via_pypdf(monkeypatch):
+    pypdf = pytest.importorskip("pypdf")  # pypdf vive en el worker, no en el backend CI
+
     class _Pg:
         def extract_text(self):
             return ""  # sin capa de texto
@@ -131,8 +135,6 @@ def test_analizar_pdf_escaneado_via_pypdf(monkeypatch):
     class _Reader:
         def __init__(self, _path):
             self.pages = [_Pg() for _ in range(5)]
-
-    import pypdf
 
     monkeypatch.setattr(pypdf, "PdfReader", _Reader)
     g = pipeline.analizar_ocr_paginas("/tmp/escaneado.pdf")
