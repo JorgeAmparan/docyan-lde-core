@@ -81,6 +81,23 @@ def _clasificar_paginas(textos_por_pagina: list[str | None]) -> dict:
     }
 
 
+def _es_pdf(path: str) -> bool:
+    """
+    ¿El archivo es un PDF? Se detecta por CONTENIDO (magic bytes `%PDF-`), no por
+    extensión: el worker descarga el documento a un temporal cuyo sufijo sale del
+    `nombre_archivo` del job, que a veces NO trae `.pdf` (p. ej. "Manual … LS-400"
+    → sufijo `.bin`). Detectar por extensión dejaba el gate ciego y el OCR corría
+    igual (regresión ED-0e verificada en prod: OOM del worker pese al gate).
+    """
+    if path.lower().endswith(".pdf"):
+        return True
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(5) == b"%PDF-"
+    except Exception:  # noqa: BLE001 — ilegible ⇒ que Docling decida (OCR default)
+        return False
+
+
 def analizar_ocr_paginas(path: str) -> dict:
     """
     Escanea un PDF página por página (pypdf) para decidir el OCR (ED-0e). Para
@@ -92,7 +109,7 @@ def analizar_ocr_paginas(path: str) -> dict:
         "paginas_ocr": 0, "do_ocr": True, "umbral_chars": OCR_MIN_CHARS_POR_PAGINA,
         "ocr_langs": OCR_LANGS,
     }
-    if not path.lower().endswith(".pdf"):
+    if not _es_pdf(path):
         return no_aplica
     try:
         from pypdf import PdfReader

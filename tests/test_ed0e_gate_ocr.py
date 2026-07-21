@@ -83,6 +83,21 @@ def test_idiomas_ocr_desde_env(monkeypatch):
     assert pipeline._ocr_langs_list() == ["spa"]
 
 
+# ── regresión prod: el temporal del worker es `.bin`, no `.pdf` ───────────────
+def test_es_pdf_por_magic_bytes_no_por_extension(tmp_path):
+    # El worker descarga a un temporal con sufijo del nombre_archivo del job, que
+    # a veces NO trae .pdf ("Manual … LS-400" → .bin). Debe detectarse por contenido.
+    binpdf = tmp_path / "descarga.bin"
+    binpdf.write_bytes(b"%PDF-1.7\n1 0 obj<<>>endobj\n")
+    assert pipeline._es_pdf(str(binpdf)) is True  # .bin PERO contenido PDF ⇒ SÍ
+
+    nopdf = tmp_path / "otro.bin"
+    nopdf.write_bytes(b"PK\x03\x04 esto es un zip/docx")
+    assert pipeline._es_pdf(str(nopdf)) is False  # .bin no-PDF ⇒ NO
+
+    assert pipeline._es_pdf("/no/existe/doc.pdf") is True  # .pdf por extensión (barato)
+
+
 # ── no-PDF / escaneo imposible → aplica=False, OCR por default (seguro) ───────
 def test_no_pdf_deja_ocr_por_default():
     g = pipeline.analizar_ocr_paginas("/tmp/algo.docx")
