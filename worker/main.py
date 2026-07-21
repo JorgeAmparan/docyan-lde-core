@@ -14,9 +14,13 @@ Dos responsabilidades:
 El consumidor corre como tarea de fondo de asyncio dentro del proceso uvicorn.
 
 F1 — resiliencia de procesamiento por lotes (decisiones rectoras 5/7/8):
-  · **Concurrencia acotada** a `INGEST_MAX_CONCURRENCY` (default 3) con tope duro
-    por semáforo — fluidez visible sin reabrir el patrón de concurrencia
-    descontrolada del incidente de $5,000.
+  · **Concurrencia acotada** a `INGEST_MAX_CONCURRENCY` (default 1 — ED-0b:
+    SERIALIZADO, un documento a la vez) con tope duro por semáforo. Serializar
+    es la solución correcta al cuello de botella del embedder BGE-M3 de una sola
+    máquina: 3 docs en paralelo lo saturaban y daban `timed out` (ED-0b §4). NO
+    se escala el embedder (costo); se serializa. Subible por env si algún día el
+    embedder escala. Sin reabrir el patrón de concurrencia descontrolada del
+    incidente de $5,000.
   · **Reintento automático** con backoff exponencial + jitter, tope duro
     `INGEST_MAX_RETRIES` (default 2 → hasta 3 intentos). Agotados → estado
     terminal `failed`. Nunca reintento infinito, nunca delay fijo.
@@ -43,8 +47,10 @@ logger = logging.getLogger("docyan.worker")
 
 # Tiempo de espera del BLPOP (s) antes de reintentar (permite shutdown limpio).
 POP_TIMEOUT = int(os.getenv("WORKER_POP_TIMEOUT", "5"))
-# Concurrencia acotada (decisión rectora #5): tope duro de jobs en paralelo.
-MAX_CONCURRENCY = max(1, int(os.getenv("INGEST_MAX_CONCURRENCY", "3")))
+# Concurrencia acotada (decisión rectora #5). ED-0b §4: default 1 (SERIALIZADO)
+# — el embedder BGE-M3 de una máquina se satura con >1 doc en paralelo. Subible
+# por env sólo si el embedder escala.
+MAX_CONCURRENCY = max(1, int(os.getenv("INGEST_MAX_CONCURRENCY", "1")))
 # Reintento automático (decisión rectora #7): reintentos tras el primer intento.
 MAX_RETRIES = max(0, int(os.getenv("INGEST_MAX_RETRIES", "2")))
 # Base del backoff exponencial en segundos (delay = base * 2**intento + jitter).
