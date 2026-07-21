@@ -37,6 +37,19 @@ def test_texto_nativo_cero_paginas_ocr():
     assert g["do_ocr"] is False  # NINGUNA página lo necesita ⇒ OCR OFF (no OOM)
 
 
+# ── regresión LS-400: páginas de diagrama con texto ESCASO pero nativo ────────
+def test_paginas_escasas_pero_nativas_no_disparan_ocr():
+    # LS-400: 19/88 pp con <100 chars pero MÍN 59 → TODAS traen capa de texto (son
+    # láminas con pie de figura, no escaneos). Con el umbral default (16) ninguna
+    # dispara OCR ⇒ do_ocr=False ⇒ sin OCR ⇒ sin OOM. (Umbral 100 las marcaba mal.)
+    textos = ["Figura 12. Conjunto de bomba " + "x" * (59 - 30) for _ in range(19)]
+    textos += ["Sección con texto nativo abundante " * 10 for _ in range(69)]
+    g = pipeline._clasificar_paginas(textos)
+    assert g["paginas_totales"] == 88
+    assert g["paginas_ocr"] == 0, "una lámina con pie de figura NO es página a OCR"
+    assert g["do_ocr"] is False
+
+
 # ── §5 — PDF sin capa de texto → OCR corre ───────────────────────────────────
 def test_sin_texto_ocr_corre():
     textos = ["", "", "", ""]  # escaneado: 0 texto extraíble
