@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.auth import verificar_credenciales
+from app.api.blocking import run_blocking
 from app.platform_admin import providers
 from app.platform_admin.models import (
     AddMessageRequest,
@@ -38,8 +39,10 @@ async def redeem_access_code(
     store = providers.get_store()
     audit = providers.get_audit()
     try:
-        prov = canjear_codigo(
-            store, audit, code=code, email=body.email, password=body.password,
+        prov = await run_blocking(
+            canjear_codigo,
+            store, audit, endpoint="/access-codes/{code}/redeem",
+            code=code, email=body.email, password=body.password,
             name=body.name, org_name=body.org_name, quota=get_quota_manager(),
         )
     except OnboardingError as e:
@@ -77,15 +80,19 @@ async def open_thread(
     ctx: dict = Depends(verificar_credenciales),
 ) -> SupportThreadOut:
     store = providers.get_store()
-    thread = store.create_thread({
-        "org_id": ctx["org_id"], "user_id": ctx.get("user_id"),
-        "pantalla_origen": body.pantalla_origen, "estado": "abierto",
-    })
-    store.add_message({
-        "thread_id": thread["id"], "autor_tipo": "usuario",
-        "autor_id": ctx.get("user_id") or ctx["org_id"], "cuerpo": body.mensaje,
-    })
-    return _thread_out(thread, store.list_messages(thread["id"]))
+
+    def _work() -> SupportThreadOut:
+        thread = store.create_thread({
+            "org_id": ctx["org_id"], "user_id": ctx.get("user_id"),
+            "pantalla_origen": body.pantalla_origen, "estado": "abierto",
+        })
+        store.add_message({
+            "thread_id": thread["id"], "autor_tipo": "usuario",
+            "autor_id": ctx.get("user_id") or ctx["org_id"], "cuerpo": body.mensaje,
+        })
+        return _thread_out(thread, store.list_messages(thread["id"]))
+
+    return await run_blocking(_work, endpoint="/support/threads")
 
 
 @router.post("/support/threads/{thread_id}/messages", response_model=SupportThreadOut)
@@ -95,13 +102,17 @@ async def add_message(
     ctx: dict = Depends(verificar_credenciales),
 ) -> SupportThreadOut:
     store = providers.get_store()
-    thread = store.get_thread(thread_id)
-    # Aislamiento: un tenant solo toca SUS hilos (no revela los de otra org).
-    if thread is None or thread["org_id"] != ctx["org_id"]:
-        raise HTTPException(status_code=404, detail="Hilo no encontrado.")
-    store.add_message({
-        "thread_id": thread_id, "autor_tipo": "usuario",
-        "autor_id": ctx.get("user_id") or ctx["org_id"], "cuerpo": body.cuerpo,
-    })
-    thread = store.update_thread(thread_id, estado="abierto")
-    return _thread_out(thread, store.list_messages(thread_id))
+
+    def _work() -> SupportThreadOut:
+        thread = store.get_thread(thread_id)
+        # Aislamiento: un tenant solo toca SUS hilos (no revela los de otra org).
+        if thread is None or thread["org_id"] != ctx["org_id"]:
+            raise HTTPException(status_code=404, detail="Hilo no encontrado.")
+        store.add_message({
+            "thread_id": thread_id, "autor_tipo": "usuario",
+            "autor_id": ctx.get("user_id") or ctx["org_id"], "cuerpo": body.cuerpo,
+        })
+        thread = store.update_thread(thread_id, estado="abierto")
+        return _thread_out(thread, store.list_messages(thread_id))
+
+    return await run_blocking(_work, endpoint="/support/threads/{id}/messages")

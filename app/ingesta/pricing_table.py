@@ -118,10 +118,22 @@ BGE_M3_COMPUTE_USD_PER_1M = _env_float("PRICE_BGE_M3_USD_PER_1M", 0.01)
 VISION_INPUT_TOKENS_POR_FIGURA = _env_float("VISION_INPUT_TOKENS_POR_FIGURA", 1300.0)
 VISION_OUTPUT_TOKENS_POR_FIGURA = _env_float("VISION_OUTPUT_TOKENS_POR_FIGURA", 320.0)
 
-# Tope de figuras por documento (top-N por tamaño). El cotizador solo cotiza hasta
-# este tope y el worker solo extrae hasta este tope (aviso honesto cuando se excede):
-# acota el gasto de visión de un documento con cientos de imágenes. Configurable.
-MAX_FIGURAS_POR_DOCUMENTO = int(_env_float("MAX_FIGURAS_POR_DOCUMENTO", 30.0))
+# Tope de figuras por documento. ED-0c: default 0 = **SIN TOPE**. Un tope ciego
+# descartaba dibujos en silencio (un manual técnico con 85 figuras perdía 55),
+# rompiendo la promesa del producto para documentos con ayudas visuales. El control
+# de costo REAL es el cotizador + confirmación explícita (cotiza TODAS las figuras y
+# el usuario aprueba con el precio a la vista), NO un tope que tira dibujos. Un valor
+# >0 por env reintroduce un tope de emergencia (top-N por tamaño); 0 = todas.
+MAX_FIGURAS_POR_DOCUMENTO = int(_env_float("MAX_FIGURAS_POR_DOCUMENTO", 0.0))
+
+
+def figuras_a_procesar(num_figuras: int) -> int:
+    """Nº de figuras a cotizar/extraer. Con `MAX_FIGURAS_POR_DOCUMENTO<=0` (default
+    ED-0c) NO hay tope: se procesan TODAS. Un valor >0 aplica el tope de emergencia."""
+    n = max(0, int(num_figuras or 0))
+    if MAX_FIGURAS_POR_DOCUMENTO <= 0:
+        return n
+    return min(n, MAX_FIGURAS_POR_DOCUMENTO)
 
 
 def costo_vision_figuras(num_figuras: int) -> float:

@@ -29,6 +29,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from app.api.blocking import run_blocking
 from app.ingesta import providers as ingesta_providers
 from app.ingesta.text_extract import extraer_texto
 from app.jobs.job_models import CotizacionSnapshot, IngestJob
@@ -94,70 +95,74 @@ async def cotizar_documento_prueba(
     if not data:
         raise HTTPException(status_code=400, detail="Archivo vacío.")
 
-    texto, _confiable = extraer_texto(data, file.filename)
-
-    # Clasificación heurística (sin LLM en el backend; el worker genera el schema
-    # definitivo si el tipo no calza con el catálogo). Paridad con la ruta de cliente.
-    selector = ingesta_providers.get_selector()
-    tipo_heuristico, _conf = selector.clasificar_heuristica(texto[:8000], file.filename)
-    tipo_documento = tipo_forzado or tipo_heuristico
-
-    # v2.1: sin saldo prepagado — el cotizador resuelve por cupo + confirmación.
-    cot = ingesta_providers.get_cotizador().cotizar(
-        tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_documento
-    )
-
     job_id = uuid.uuid4().hex
-    if not cot.aprobado:
-        # El gate rechazó (no debería con saldo de prueba, pero se respeta): no se crea
-        # job confirmable; se reporta el motivo honesto.
+
+    def _procesar() -> dict:
+        texto, _confiable = extraer_texto(data, file.filename)
+
+        # Clasificación heurística (sin LLM en el backend; el worker genera el schema
+        # definitivo si el tipo no calza con el catálogo). Paridad con la ruta de cliente.
+        selector = ingesta_providers.get_selector()
+        tipo_heuristico, _conf = selector.clasificar_heuristica(texto[:8000], file.filename)
+        tipo_documento = tipo_forzado or tipo_heuristico
+
+        # v2.1: sin saldo prepagado — el cotizador resuelve por cupo + confirmación.
+        cot = ingesta_providers.get_cotizador().cotizar(
+            tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_documento
+        )
+
+        if not cot.aprobado:
+            # El gate rechazó (no debería con saldo de prueba, pero se respeta): no se crea
+            # job confirmable; se reporta el motivo honesto.
+            platform_providers.get_audit().record(
+                "platform_test_ingesta_rechazada", actor_de(ctx),
+                {"tenant": tenant_id, "archivo": file.filename, "motivo": cot.motivo},
+            )
+            return {
+                "job_id": job_id, "status": "rejected", "tenant": tenant_id,
+                "tipo_documento": tipo_documento,
+                "cotizacion": {
+                    "tokens_documento": cot.tokens_documento,
+                    "costo_estimado_usd": cot.costo_estimado_usd,
+                    "tiempo_estimado_seg": cot.tiempo_estimado_seg,
+                    "decision": cot.decision.value, "aprobado": False,
+                    "motivo": cot.motivo,
+                },
+            }
+
+        # Guarda el binario en storage y crea el job cotizado (pending_confirmation).
+        ref = ingesta_providers.get_document_store().put(tenant_id, file.filename, data)
+        job = IngestJob(
+            job_id=job_id, tenant_id=tenant_id, documento_ref=ref,
+            nombre_archivo=file.filename,
+            content_sha256=hashlib.sha256(data).hexdigest(),
+            tipo_documento=tipo_documento, tipo_forzado=tipo_forzado,
+            bytes_originales=len(data),
+            cotizacion=CotizacionSnapshot(
+                costo_estimado_usd=cot.costo_estimado_usd,
+                tiempo_estimado_seg=cot.tiempo_estimado_seg,
+                tokens_documento=cot.tokens_documento, aprobado=True,
+                decision=cot.decision.value, precio_setup_usd=cot.precio_setup_usd,
+            ),
+        )
+        ingesta_providers.get_dispatcher().crear_job(job)
         platform_providers.get_audit().record(
-            "platform_test_ingesta_rechazada", actor_de(ctx),
-            {"tenant": tenant_id, "archivo": file.filename, "motivo": cot.motivo},
+            "platform_test_ingesta_cotizada", actor_de(ctx),
+            {"tenant": tenant_id, "archivo": file.filename, "job_id": job_id,
+             "tipo_documento": tipo_documento, "costo_usd": cot.costo_estimado_usd},
         )
         return {
-            "job_id": job_id, "status": "rejected", "tenant": tenant_id,
+            "job_id": job_id, "status": "pending_confirmation", "tenant": tenant_id,
             "tipo_documento": tipo_documento,
             "cotizacion": {
                 "tokens_documento": cot.tokens_documento,
                 "costo_estimado_usd": cot.costo_estimado_usd,
                 "tiempo_estimado_seg": cot.tiempo_estimado_seg,
-                "decision": cot.decision.value, "aprobado": False,
-                "motivo": cot.motivo,
+                "decision": cot.decision.value, "aprobado": True,
             },
         }
 
-    # Guarda el binario en storage y crea el job cotizado (pending_confirmation).
-    ref = ingesta_providers.get_document_store().put(tenant_id, file.filename, data)
-    job = IngestJob(
-        job_id=job_id, tenant_id=tenant_id, documento_ref=ref,
-        nombre_archivo=file.filename,
-        content_sha256=hashlib.sha256(data).hexdigest(),
-        tipo_documento=tipo_documento, tipo_forzado=tipo_forzado,
-        bytes_originales=len(data),
-        cotizacion=CotizacionSnapshot(
-            costo_estimado_usd=cot.costo_estimado_usd,
-            tiempo_estimado_seg=cot.tiempo_estimado_seg,
-            tokens_documento=cot.tokens_documento, aprobado=True,
-            decision=cot.decision.value, precio_setup_usd=cot.precio_setup_usd,
-        ),
-    )
-    ingesta_providers.get_dispatcher().crear_job(job)
-    platform_providers.get_audit().record(
-        "platform_test_ingesta_cotizada", actor_de(ctx),
-        {"tenant": tenant_id, "archivo": file.filename, "job_id": job_id,
-         "tipo_documento": tipo_documento, "costo_usd": cot.costo_estimado_usd},
-    )
-    return {
-        "job_id": job_id, "status": "pending_confirmation", "tenant": tenant_id,
-        "tipo_documento": tipo_documento,
-        "cotizacion": {
-            "tokens_documento": cot.tokens_documento,
-            "costo_estimado_usd": cot.costo_estimado_usd,
-            "tiempo_estimado_seg": cot.tiempo_estimado_seg,
-            "decision": cot.decision.value, "aprobado": True,
-        },
-    }
+    return await run_blocking(_procesar, endpoint="/platform/test-ingesta/documents")
 
 
 @router.post("/documents/{job_id}/confirm")
@@ -165,17 +170,21 @@ async def confirmar_ingesta_prueba(
     job_id: str, ctx: dict = Depends(requiere_platform_admin)
 ) -> dict:
     """Confirma e encola el job hacia el worker. Sin esto, no hay ingesta."""
-    dispatcher = ingesta_providers.get_dispatcher()
-    try:
-        job = dispatcher.confirmar(job_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    platform_providers.get_audit().record(
-        "platform_test_ingesta_confirmada", actor_de(ctx),
-        {"tenant": job.tenant_id, "job_id": job_id},
-    )
+    def _work():
+        dispatcher = ingesta_providers.get_dispatcher()
+        try:
+            job = dispatcher.confirmar(job_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Job no encontrado.")
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+        platform_providers.get_audit().record(
+            "platform_test_ingesta_confirmada", actor_de(ctx),
+            {"tenant": job.tenant_id, "job_id": job_id},
+        )
+        return job
+
+    job = await run_blocking(_work, endpoint="/platform/test-ingesta/documents/{id}/confirm")
     return {"job_id": job_id, "status": job.status.value, "tenant": job.tenant_id}
 
 
@@ -184,7 +193,10 @@ async def estado_job_prueba(
     job_id: str, ctx: dict = Depends(requiere_platform_admin)
 ) -> dict:
     """Estado/progreso del job (metadata). Nunca devuelve contenido del grafo."""
-    job = ingesta_providers.get_dispatcher().backend.load_job(job_id)
+    job = await run_blocking(
+        ingesta_providers.get_dispatcher().backend.load_job, job_id,
+        endpoint="/platform/test-ingesta/documents/{id}",
+    )
     if job is None:
         raise HTTPException(status_code=404, detail="Job no encontrado.")
     progreso = build_doc_progress(job)

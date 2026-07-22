@@ -67,9 +67,14 @@ primary_region = "dfw"
     timeout = "5s"
     grace_period = "60s"
 
-# Perfil de recursos (§4.1): la ingesta carga Docling+TableFormer+torch CPU y es
-# intensiva en CPU/RAM. Recomendación inicial shared-cpu-4x / 4 GB; ajustar según
-# el peso real de la imagen y el consumo observado (reporte §11).
+# Perfil de recursos (§4.1). ED-0f (jul 2026, RESUELTO): el pico de conversión de
+# Docling lo dominaba la COLA de páginas (`queue_max_size`, default 100 → un doc de
+# 88pp entra completo → 9.6 GB). Con `DOCLING_QUEUE_MAX_SIZE=1` el pico de LS-400
+# (88pp, 244 figuras) baja a 3.34 GB con OUTPUT BYTE-IDÉNTICO (medido en prod, diff
+# vacío contra el golden). Por eso 4 GB alcanza — con margen — y es el estado final
+# (auto_stop OFF + min 1, B2.2 → siempre vivo; 4 GB = piso de costo 24/7). Recorrido:
+# 16 GB fue TEMPORAL solo para capturar la referencia dorada (Paso 1); el fix es la
+# cola acotada, no la RAM.
 [[vm]]
   size = "shared-cpu-4x"
   memory = "4gb"

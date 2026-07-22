@@ -42,6 +42,7 @@ describe("Tipo 1 · InformativaCard", () => {
           valor: "85",
           unidad: "N·m",
           cita: { documento_nombre: "Manual Rotina 380", seccion: "§4.2.1", pagina: 12 },
+          accionable: false,
         },
       ],
       citas: [{ documento_nombre: "Manual Rotina 380", seccion: "§4.2.1", pagina: 12 }],
@@ -149,8 +150,8 @@ describe("Tipo 7 · AlertasDashboard — línea ABSOLUTA §11.1", () => {
     titulo: "Alertas",
     solo_administrativas: true,
     alertas: [
-      { descripcion: "Calibración vence el 2026-06-20", fecha_vencimiento: "2026-06-20", urgencia: "alta", administrativa: true },
-      { descripcion: "MSDS expira el 2026-07-01", fecha_vencimiento: "2026-07-01", urgencia: "media", administrativa: true },
+      { descripcion: "Calibración vence el 2026-06-20", fecha_vencimiento: "2026-06-20", urgencia: "alta", administrativa: true, accionable: false },
+      { descripcion: "MSDS expira el 2026-07-01", fecha_vencimiento: "2026-07-01", urgencia: "media", administrativa: true, accionable: false },
     ],
     citas: [],
   };

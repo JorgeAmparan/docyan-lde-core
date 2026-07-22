@@ -47,6 +47,14 @@ logger = logging.getLogger("docyan.dkg")
 FALKOR_HOST = os.getenv("FALKOR_HOST") or os.getenv("FALKORDB_HOST", "localhost")
 FALKOR_PORT = int(os.getenv("FALKOR_PORT") or os.getenv("FALKORDB_PORT", "6379"))
 FALKOR_QUERY_TIMEOUT_MS = int(os.getenv("FALKOR_QUERY_TIMEOUT_MS", "10000"))
+# Timeouts de SOCKET (ED-0 §3.2). El `timeout` de `graph.query` es server-side:
+# si el TCP se estanca, el `recv` bloqueante del cliente nunca retorna y congela
+# el thread (o el event loop, antes de ED-0). Estos cortan a nivel socket.
+# `socket_timeout` cubre lectura/escritura; ha de ser ≥ al query timeout server
+# (10s) para no cortar queries legítimas — de ahí 15s. `socket_connect_timeout`
+# es corto: conectar a FalkorDB en la red privada de Fly es inmediato o falla.
+FALKORDB_SOCKET_TIMEOUT = float(os.getenv("FALKORDB_SOCKET_TIMEOUT", "15"))
+FALKORDB_SOCKET_CONNECT_TIMEOUT = float(os.getenv("FALKORDB_SOCKET_CONNECT_TIMEOUT", "5"))
 
 
 class CrossTenantError(Exception):
@@ -61,10 +69,20 @@ class DKGClient:
         host: str | None = None,
         port: int | None = None,
         query_timeout_ms: int | None = None,
+        socket_timeout: float | None = None,
+        socket_connect_timeout: float | None = None,
     ):
         self.host = host or FALKOR_HOST
         self.port = port or FALKOR_PORT
         self.query_timeout_ms = query_timeout_ms or FALKOR_QUERY_TIMEOUT_MS
+        self.socket_timeout = (
+            socket_timeout if socket_timeout is not None else FALKORDB_SOCKET_TIMEOUT
+        )
+        self.socket_connect_timeout = (
+            socket_connect_timeout
+            if socket_connect_timeout is not None
+            else FALKORDB_SOCKET_CONNECT_TIMEOUT
+        )
         self._db = None  # instancia FalkorDB (pool interno redis)
 
     # ── Conexión ─────────────────────────────────────────────────────────────
@@ -79,7 +97,15 @@ class DKGClient:
         if self._db is None:
             from falkordb import FalkorDB
 
-            self._db = FalkorDB(host=self.host, port=self.port)
+            # socket_timeout/socket_connect_timeout se pasan al pool redis interno
+            # de FalkorDB (kwargs de redis.Redis). Sin ellos, un recv estancado
+            # nunca retorna (causa raíz del incidente ED-0).
+            self._db = FalkorDB(
+                host=self.host,
+                port=self.port,
+                socket_timeout=self.socket_timeout,
+                socket_connect_timeout=self.socket_connect_timeout,
+            )
         return self._db
 
     def _graph(self, tenant_id: str):

@@ -1,5 +1,5 @@
 """
-Generador de alertas administrativas (B9.5 §1.1 Tipo 7).
+Generador de alertas administrativas al cierre de ingesta (B9.5 §1.1 Tipo 7).
 
 DOCYAN LDE™ by XCID.
 
@@ -8,14 +8,14 @@ Deriva nodos `:Alerta` desde los vencimientos YA ingeridos (`:CertificadoVigenci
 extrae alertas del LLM: las COMPUTA de datos administrativos (fechas), por eso son
 administrativas por construcción.
 
-LÍNEA ABSOLUTA (CLAUDE.md §11.1): toda alerta candidata pasa por
-`safety_validator.validar_alerta` antes de persistirse. Una alerta con sugerencia
-clínica/operativa NO se crea (se descarta y se reporta en los contadores). El gate
-es defensa en profundidad: aunque la plantilla es administrativa, si un nombre de
-certificado arrastrara texto decisorio, la línea lo frena.
+ED-1: esta ruta (`origen = ingesta`) converge en `app.alerts.despacho`, el núcleo
+compartido con el barrido del scheduler y las alertas manuales. Puede además
+notificar si se le pasa un `notificador` (§2.4.5: las tres rutas disparan
+notificación). Sin notificador se comporta como antes (solo persiste la `:Alerta`).
 
-Las alertas describen SOLO el hecho administrativo ("X vence el YYYY-MM-DD"),
-jamás qué hacer al respecto.
+LÍNEA ABSOLUTA (CLAUDE.md §11.1): `despacho` pasa toda descripción por
+`safety_validator` antes de persistir; una alerta con sugerencia clínica/operativa
+NO se crea (cuenta como `cuarentena`).
 """
 from __future__ import annotations
 
@@ -23,7 +23,8 @@ import logging
 from datetime import date
 from typing import Any
 
-from app.alerts.safety_validator import validar_alerta
+from app.alerts import despacho as _despacho
+from app.alerts.reglas import ReglaAlerta, regla_aplicable
 
 logger = logging.getLogger("docyan.alerts.generador")
 
@@ -40,34 +41,26 @@ def _parse_fecha(valor: Any) -> date | None:
         return None
 
 
-def _urgencia(dias: int) -> str:
-    """Urgencia administrativa por días al vencimiento (no decisión operativa)."""
-    if dias <= 15:
-        return "alta"
-    if dias <= 45:
-        return "media"
-    return "baja"
-
-
 def generar_alertas_vencimiento(
     client: Any,
     tenant_id: str,
     *,
     hoy: date | None = None,
     horizonte_dias: int = 90,
+    regla: ReglaAlerta | None = None,
+    notificador: Any = None,
+    fat: Any = None,
 ) -> dict[str, int]:
     """
     Crea `:Alerta` administrativas para certificados cuyo vencimiento cae dentro de
-    `horizonte_dias`. Idempotente: la alerta usa un `id` derivado del certificado +
-    fecha, con `MERGE` (re-correr no duplica).
+    `horizonte_dias`. Idempotente (MERGE + dedup de thresholds en `despacho`).
 
-    Devuelve contadores: {creadas, vigentes_omitidas, cuarentena}.
+    Devuelve contadores: {creadas, fuera_de_horizonte, cuarentena}.
     """
     hoy = hoy or date.today()
+    regla = regla or regla_aplicable(client, tenant_id, "*")
     counters = {"creadas": 0, "fuera_de_horizonte": 0, "cuarentena": 0}
 
-    # Certificados con fecha de vencimiento (el espejo :CertificadoVigencia lo crea
-    # el bridge; se aceptan ambas etiquetas por robustez).
     rows = client.query(
         tenant_id,
         """
@@ -87,57 +80,19 @@ def generar_alertas_vencimiento(
         fecha = _parse_fecha(r.get("fecha_vencimiento"))
         if fecha is None:
             continue
-        dias = (fecha - hoy).days
-        if dias < 0 or dias > horizonte_dias:
-            counters["fuera_de_horizonte"] += 1
-            continue
-
-        nombre = r.get("nombre") or "certificado"
-        descripcion = f"{nombre} vence el {fecha.isoformat()} (en {dias} días)."
-
-        # Gate absoluto: solo administrativas se persisten.
-        veredicto = validar_alerta(descripcion)
-        if not veredicto.admisible:
-            counters["cuarentena"] += 1
-            logger.warning(
-                "alerta NO administrativa descartada (tenant=%s cert=%s): %s",
-                tenant_id, r.get("cert_id"), veredicto.motivo,
-            )
-            continue
-
-        alerta_id = f"alert_{r.get('cert_id')}_{fecha.isoformat()}"
-        client.query(
-            tenant_id,
-            """
-            MERGE (a:Alerta {id: $id})
-            SET a.descripcion = $descripcion,
-                a.fecha_vencimiento = $fecha,
-                a.urgencia = $urgencia,
-                a.tipo = 'vencimiento',
-                a.entidad_id = $entidad_id,
-                a.cert_id = $cert_id,
-                a.administrativa = true
-            WITH a
-            // B13.3 §2.4 — enlaza la alerta a su certificado fuente para que el
-            // reader hidrate la CITA verbatim (atribución + fragmento del documento).
-            OPTIONAL MATCH (c {id: $cert_id})
-            FOREACH (_ IN CASE WHEN c IS NULL THEN [] ELSE [1] END |
-                MERGE (a)-[:DERIVA_DE]->(c))
-            WITH a
-            OPTIONAL MATCH (ent:EntidadOperativa {id: $entidad_id})
-            FOREACH (_ IN CASE WHEN ent IS NULL THEN [] ELSE [1] END |
-                MERGE (ent)-[:CONTIENE]->(a))
-            """,
-            {
-                "id": alerta_id,
-                "descripcion": descripcion,
-                "fecha": fecha.isoformat(),
-                "urgencia": _urgencia(dias),
-                "entidad_id": r.get("entidad_id"),
-                "cert_id": r.get("cert_id"),
-            },
+        res = _despacho.procesar_vencimiento(
+            client, tenant_id,
+            cert_id=r.get("cert_id"), nombre=r.get("nombre") or "certificado",
+            fecha=fecha, entidad_id=r.get("entidad_id"), hoy=hoy, regla=regla,
+            origen="ingesta", horizonte_dias=horizonte_dias,
+            notificador=notificador, fat=fat,
         )
-        counters["creadas"] += 1
+        if res.resultado == "creada":
+            counters["creadas"] += 1
+        elif res.resultado == "fuera_de_horizonte":
+            counters["fuera_de_horizonte"] += 1
+        elif res.resultado == "cuarentena":
+            counters["cuarentena"] += 1
 
     logger.info("alertas generadas | tenant=%s | %s", tenant_id, counters)
     return counters

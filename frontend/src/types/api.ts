@@ -1628,8 +1628,8 @@ export interface paths {
         };
         /**
          * Resumen Cuenta
-         * @description Resumen REAL de la cuenta del tenant: plan, cupo de documentos (contado del grafo)
-         *     y saldo de ingesta (del budget). Sin datos enlatados. Aislado por org_id del JWT.
+         * @description Resumen REAL de la cuenta del tenant: plan y cupo de documentos (contado del grafo).
+         *     Modelo comercial v2.1: cupo + excedente, SIN saldo prepagado. Aislado por org_id del JWT.
          */
         get: operations["resumen_cuenta_onboarding_cuenta_get"];
         put?: never;
@@ -1767,6 +1767,360 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/demo/codo/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Demo Codo Documentos
+         * @description Documentos REALES del tenant demo (con su id) — sin auth, rate-limited por IP.
+         *     Alimenta las doc-tabs del explorador demo (F3/§2.4 fix): el front necesita el
+         *     `id` real de cada documento para acotar `/demo/query` por documento
+         *     (`documento_id`) y evitar cross-citation entre los documentos del mismo tenant.
+         *
+         *     Sin `codo_id`: en estos tenants demo no hay `:EntidadOperativa` que agrupe los
+         *     documentos — "el CoDo" que muestra la UI (p. ej. "CODO-LAB-04") es una etiqueta
+         *     de presentación sin nodo propio en el grafo. El tenant completo son sus 2-3
+         *     documentos sueltos, igual que ya scopea `/demo/query` (por `org_id`, no por un
+         *     id de CoDo). Sin datos enlatados: lista vacía si el tenant no tiene documentos.
+         */
+        get: operations["demo_codo_documentos_demo_codo__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/destinatarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar */
+        get: operations["listar_destinatarios_get"];
+        put?: never;
+        /** Crear */
+        post: operations["crear_destinatarios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/destinatarios/{destinatario_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borrar */
+        delete: operations["borrar_destinatarios__destinatario_id__delete"];
+        options?: never;
+        head?: never;
+        /** Actualizar */
+        patch: operations["actualizar_destinatarios__destinatario_id__patch"];
+        trace?: never;
+    };
+    "/alertas/reglas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Reglas */
+        get: operations["listar_reglas_alertas_reglas_get"];
+        /** Guardar Regla */
+        put: operations["guardar_regla_alertas_reglas_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alertas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar Alertas */
+        get: operations["listar_alertas_alertas_get"];
+        put?: never;
+        /** Crear Alerta Manual */
+        post: operations["crear_alerta_manual_alertas_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alertas/{alerta_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle Alerta */
+        get: operations["detalle_alerta_alertas__alerta_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alertas/{alerta_id}/accion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Aplicar Accion */
+        post: operations["aplicar_accion_alertas__alerta_id__accion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alertas/scheduler/evaluate-vencimientos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Evaluate Vencimientos
+         * @description Ejecuta el barrido de vencimientos para el tenant del admin (disparo manual del
+         *     job del scheduler, scope multi-tenant estricto). Correrlo dos veces demuestra la
+         *     idempotencia (segunda corrida: 0 nuevas creadas / 0 renotificaciones).
+         */
+        post: operations["trigger_evaluate_vencimientos_alertas_scheduler_evaluate_vencimientos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notificaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar */
+        get: operations["listar_notificaciones_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notificaciones/{notif_id}/leer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marcar Leida */
+        post: operations["marcar_leida_notificaciones__notif_id__leer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notificaciones/leer-todas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marcar Todas */
+        post: operations["marcar_todas_notificaciones_leer_todas_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notificaciones/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar Admin
+         * @description Vista admin: todas las notificaciones del tenant (incl. `fallida`).
+         */
+        get: operations["listar_admin_notificaciones_admin_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tipos-solicitud": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar */
+        get: operations["listar_tipos_solicitud_get"];
+        put?: never;
+        /** Crear */
+        post: operations["crear_tipos_solicitud_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tipos-solicitud/propuestas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Propuestas
+         * @description Etiquetas libres repetidas (>= umbral) que el sistema PROPONE promover a tipo.
+         *     Aceptar = crear el tipo con POST /tipos-solicitud (el sistema propone, no actúa).
+         */
+        get: operations["propuestas_tipos_solicitud_propuestas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tipos-solicitud/{tipo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borrar */
+        delete: operations["borrar_tipos_solicitud__tipo_id__delete"];
+        options?: never;
+        head?: never;
+        /** Actualizar */
+        patch: operations["actualizar_tipos_solicitud__tipo_id__patch"];
+        trace?: never;
+    };
+    "/solicitudes/mapeo-inferencia": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mapeo Inferencia */
+        get: operations["mapeo_inferencia_solicitudes_mapeo_inferencia_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/solicitudes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar */
+        get: operations["listar_solicitudes_get"];
+        put?: never;
+        /** Crear */
+        post: operations["crear_solicitudes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/solicitudes/{solicitud_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle */
+        get: operations["detalle_solicitudes__solicitud_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/solicitudes/{solicitud_id}/transicion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transicionar */
+        post: operations["transicionar_solicitudes__solicitud_id__transicion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -1875,6 +2229,52 @@ export interface components {
             /** Nota */
             nota?: string | null;
         };
+        /** AccionRegistro */
+        AccionRegistro: {
+            /** Id */
+            id?: string | null;
+            /** Accion */
+            accion: string;
+            /** Actor Id */
+            actor_id?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Estado Anterior */
+            estado_anterior?: string | null;
+            /** Estado Nuevo */
+            estado_nuevo?: string | null;
+            /** Justificacion */
+            justificacion?: string | null;
+            /** Comentario */
+            comentario?: string | null;
+        };
+        /** AccionRequest */
+        AccionRequest: {
+            /**
+             * Accion
+             * @enum {string}
+             */
+            accion: "reconocer" | "iniciar_proceso" | "escalar" | "postponer" | "suprimir" | "resolver" | "comentar";
+            /** Justificacion */
+            justificacion?: string | null;
+            /** Comentario */
+            comentario?: string | null;
+        };
+        /** AccionResultado */
+        AccionResultado: {
+            /** Alerta Id */
+            alerta_id: string;
+            /** Accion */
+            accion: string;
+            /** Estado Anterior */
+            estado_anterior: string;
+            /** Estado */
+            estado: string;
+            /** Accion Id */
+            accion_id: string;
+            /** Timestamp */
+            timestamp: string;
+        };
         /** AceptarSugerenciaRequest */
         AceptarSugerenciaRequest: {
             /** Nombre */
@@ -1930,6 +2330,42 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** AlertaAdmin */
+        AlertaAdmin: {
+            /** Alerta Id */
+            alerta_id?: string | null;
+            /** Descripcion */
+            descripcion: string;
+            /** Fecha Vencimiento */
+            fecha_vencimiento?: string | null;
+            /**
+             * Urgencia
+             * @default media
+             */
+            urgencia: string;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /**
+             * Estado
+             * @default creado
+             */
+            estado: string;
+            /** Origen */
+            origen?: string | null;
+            /** Tipo */
+            tipo?: string | null;
+            /**
+             * Administrativa
+             * @default true
+             */
+            administrativa: boolean;
+            /** Thresholds Notificados */
+            thresholds_notificados?: number[];
+            /** Notificado Ts */
+            notificado_ts?: string | null;
+            /** Acciones */
+            acciones?: components["schemas"]["AccionRegistro"][];
+        };
         /** AlertaItem */
         AlertaItem: {
             /** Alerta Id */
@@ -1951,6 +2387,36 @@ export interface components {
              */
             administrativa: boolean;
             cita?: components["schemas"]["Cita"] | null;
+            /**
+             * Accionable
+             * @default false
+             */
+            accionable: boolean;
+            /** Tipo Sugerido */
+            tipo_sugerido?: string | null;
+        };
+        /** AlertaListado */
+        AlertaListado: {
+            /** Alertas */
+            alertas?: components["schemas"]["AlertaAdmin"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /** AlertaManualCreate */
+        AlertaManualCreate: {
+            /** Descripcion */
+            descripcion: string;
+            /** Fecha Vencimiento */
+            fecha_vencimiento?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Documento Id */
+            documento_id?: string | null;
+            /** Destinatarios */
+            destinatarios?: string[] | null;
         };
         /** AlertsDashboardPayload */
         AlertsDashboardPayload: {
@@ -2034,14 +2500,20 @@ export interface components {
         };
         /** Body_cotizar_documento_ingesta_documents_post */
         Body_cotizar_documento_ingesta_documents_post: {
-            /** File */
+            /**
+             * File
+             * Format: binary
+             */
             file: string;
             /** Tipo Forzado */
             tipo_forzado?: string | null;
         };
         /** Body_cotizar_documento_prueba_platform_test_ingesta_documents_post */
         Body_cotizar_documento_prueba_platform_test_ingesta_documents_post: {
-            /** File */
+            /**
+             * File
+             * Format: binary
+             */
             file: string;
             /** Tenant */
             tenant: string;
@@ -2050,24 +2522,29 @@ export interface components {
         };
         /** Body_procesar_documento_documents_process_post */
         Body_procesar_documento_documents_process_post: {
-            /** File */
+            /**
+             * File
+             * Format: binary
+             */
             file: string;
         };
-        /** BudgetMetrics */
-        BudgetMetrics: {
-            /** Saldo Actual Usd */
-            saldo_actual_usd?: number | null;
-            /** Retenido Usd */
-            retenido_usd?: number | null;
-            /** Hard Cap Por Documento */
-            hard_cap_por_documento?: number | null;
-            /** Hard Cap Por Sesion */
-            hard_cap_por_sesion?: number | null;
+        /** CampoTipado */
+        CampoTipado: {
+            /** Clave */
+            clave: string;
+            /** Etiqueta */
+            etiqueta: string;
             /**
-             * Moneda
-             * @default USD
+             * Tipo
+             * @default text
+             * @enum {string}
              */
-            moneda: string;
+            tipo: "text" | "number" | "date" | "textarea";
+            /**
+             * Requerido
+             * @default false
+             */
+            requerido: boolean;
         };
         /**
          * Canal
@@ -2512,7 +2989,8 @@ export interface components {
          * CuentaResumen
          * @description Resumen REAL de la cuenta para la superficie /cuenta (B13/D4). Reemplaza el
          *     FALLBACK enlatado ("Plan Profesional MXN 10,191" para un freemium era dato falso).
-         *     Datos del tenant del JWT: plan, cupo de documentos (del grafo) y saldo de ingesta.
+         *     Datos del tenant del JWT: plan y cupo de documentos (del grafo). Modelo comercial
+         *     v2.1 (cotizador.md): cupo + excedente, SIN saldo prepagado.
          */
         CuentaResumen: {
             /** Org Id */
@@ -2546,17 +3024,30 @@ export interface components {
             /** Docs Disponibles */
             docs_disponibles?: number | null;
             /**
-             * Saldo Actual Usd
-             * @default 0
-             */
-            saldo_actual_usd: number;
-            /**
              * Moneda
              * @default USD
              */
             moneda: string;
             /** Freemium Expira */
             freemium_expira?: string | null;
+        };
+        /**
+         * DatoOrigen
+         * @description Provenance heredado de la cita del dato de origen (§2.2).
+         */
+        DatoOrigen: {
+            /** Nodo Id */
+            nodo_id?: string | null;
+            /** Documento Id */
+            documento_id?: string | null;
+            /** Documento Nombre */
+            documento_nombre?: string | null;
+            /** Span Inicio */
+            span_inicio?: number | null;
+            /** Span Fin */
+            span_fin?: number | null;
+            /** Fragmento */
+            fragmento?: string | null;
         };
         /** DeleteDocumentoResponse */
         DeleteDocumentoResponse: {
@@ -2582,6 +3073,17 @@ export interface components {
             /** Disponibles */
             disponibles?: number | null;
         };
+        /**
+         * DemoCodoDocumentosOut
+         * @description Documentos reales del tenant demo — alimenta las doc-tabs (fix §2.4).
+         *     Sin `id`/`titulo`/`entidad_id`: en el demo el "CoDo" (p. ej. "CODO-LAB-04") es
+         *     una etiqueta de presentación del front, no un nodo del grafo — el tenant
+         *     completo son sus documentos sueltos.
+         */
+        DemoCodoDocumentosOut: {
+            /** Documentos */
+            documentos: components["schemas"]["DocumentoRefOut"][];
+        };
         /** DemoQueryRequest */
         DemoQueryRequest: {
             /** Texto */
@@ -2591,6 +3093,8 @@ export interface components {
              * @default hero
              */
             codo: string;
+            /** Documento Id */
+            documento_id?: string | null;
         };
         /** DemoQueryResponse */
         DemoQueryResponse: {
@@ -2608,6 +3112,75 @@ export interface components {
             codo: string;
             /** Tenant Demo */
             tenant_demo: string;
+        };
+        /** DestinatarioCreate */
+        DestinatarioCreate: {
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "proveedor_externo" | "departamento_interno" | "colaborador";
+            /** Nombre */
+            nombre: string;
+            /** Email */
+            email?: string | null;
+            /** Empresa */
+            empresa?: string | null;
+            /** Usuario Id */
+            usuario_id?: string | null;
+            /** Miembros */
+            miembros?: string[];
+            /** Categorias */
+            categorias?: string[];
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
+        };
+        /** DestinatarioOut */
+        DestinatarioOut: {
+            /** Id */
+            id: string;
+            /**
+             * Tipo
+             * @enum {string}
+             */
+            tipo: "proveedor_externo" | "departamento_interno" | "colaborador";
+            /** Nombre */
+            nombre: string;
+            /** Email */
+            email?: string | null;
+            /** Empresa */
+            empresa?: string | null;
+            /** Usuario Id */
+            usuario_id?: string | null;
+            /** Miembros */
+            miembros?: string[];
+            /** Categorias */
+            categorias?: string[];
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
+        };
+        /** DestinatarioUpdate */
+        DestinatarioUpdate: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Empresa */
+            empresa?: string | null;
+            /** Usuario Id */
+            usuario_id?: string | null;
+            /** Miembros */
+            miembros?: string[] | null;
+            /** Categorias */
+            categorias?: string[] | null;
+            /** Activo */
+            activo?: boolean | null;
         };
         /** DiagnosticTreePayload */
         DiagnosticTreePayload: {
@@ -2828,6 +3401,13 @@ export interface components {
             /** Unidad */
             unidad?: string | null;
             cita?: components["schemas"]["Cita"] | null;
+            /**
+             * Accionable
+             * @default false
+             */
+            accionable: boolean;
+            /** Tipo Sugerido */
+            tipo_sugerido?: string | null;
         };
         /** EtiquetaDiagrama */
         EtiquetaDiagrama: {
@@ -3069,6 +3649,22 @@ export interface components {
              */
             todos: boolean;
         };
+        /** MapeoInferencia */
+        MapeoInferencia: {
+            /** Version */
+            version: string;
+            /** Reglas */
+            reglas?: components["schemas"]["MapeoRegla"][];
+        };
+        /** MapeoRegla */
+        MapeoRegla: {
+            /** Tipo Intencion */
+            tipo_intencion: string;
+            /** Documento Tipo */
+            documento_tipo: string;
+            /** Tipo Sugerido */
+            tipo_sugerido: string;
+        };
         /**
          * MetricasCCP
          * @description Respuesta de `GET /admin/pcl/metrics` (doc §7.3).
@@ -3211,6 +3807,50 @@ export interface components {
              */
             sugerencias_rechazadas: number;
         };
+        /** NotificacionOut */
+        NotificacionOut: {
+            /** Id */
+            id: string;
+            /** Tipo Evento */
+            tipo_evento: string;
+            /** Evento Ref */
+            evento_ref?: string | null;
+            /**
+             * Canal
+             * @default in_app
+             */
+            canal: string;
+            /** Titulo */
+            titulo: string;
+            /** Cuerpo */
+            cuerpo: string;
+            /**
+             * Leida
+             * @default false
+             */
+            leida: boolean;
+            /**
+             * Estado
+             * @default enviada
+             */
+            estado: string;
+            /** Error */
+            error?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Leida At */
+            leida_at?: string | null;
+        };
+        /** NotificacionesListado */
+        NotificacionesListado: {
+            /** Notificaciones */
+            notificaciones?: components["schemas"]["NotificacionOut"][];
+            /**
+             * No Leidas
+             * @default 0
+             */
+            no_leidas: number;
+        };
         /** ObservacionRequest */
         ObservacionRequest: {
             /** Texto */
@@ -3270,7 +3910,6 @@ export interface components {
              */
             consultas_total: number;
             grafo?: components["schemas"]["GraphMetrics"];
-            presupuesto?: components["schemas"]["BudgetMetrics"];
         };
         /** OrgOut */
         OrgOut: {
@@ -3574,6 +4213,20 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** PropuestaPromocion */
+        PropuestaPromocion: {
+            /** Etiqueta Libre */
+            etiqueta_libre: string;
+            /** Conteo */
+            conteo: number;
+        };
+        /** PropuestasListado */
+        PropuestasListado: {
+            /** Propuestas */
+            propuestas?: components["schemas"]["PropuestaPromocion"][];
+            /** Umbral */
+            umbral: number;
+        };
         /**
          * QueryResponse
          * @description Respuesta tipada de `POST /mo/query` (B8): clasificación + payload tipado.
@@ -3657,6 +4310,60 @@ export interface components {
              * @default viewer
              */
             role: string;
+        };
+        /** ReglaAlertaOut */
+        ReglaAlertaOut: {
+            /** Tipo */
+            tipo: string;
+            /** Thresholds */
+            thresholds: number[];
+            /** Urgencias */
+            urgencias: {
+                [key: string]: string;
+            };
+            /** Destinatarios */
+            destinatarios: string[];
+            /** Canales */
+            canales: string[];
+            /** Escalacion Dias */
+            escalacion_dias?: number | null;
+            /** Escalacion Destinatario Id */
+            escalacion_destinatario_id?: string | null;
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
+        };
+        /** ReglaAlertaUpdate */
+        ReglaAlertaUpdate: {
+            /**
+             * Tipo
+             * @default *
+             */
+            tipo: string;
+            /** Thresholds */
+            thresholds?: number[];
+            /** Urgencias */
+            urgencias?: {
+                [key: string]: string;
+            } | null;
+            /** Destinatarios */
+            destinatarios?: string[];
+            /** Canales */
+            canales?: ("email" | "in_app")[];
+            /**
+             * Escalacion Dias
+             * @default 7
+             */
+            escalacion_dias: number | null;
+            /** Escalacion Destinatario Id */
+            escalacion_destinatario_id?: string | null;
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
         };
         /** ReglaRequest */
         ReglaRequest: {
@@ -3836,6 +4543,86 @@ export interface components {
             /** Significado */
             significado: string;
         };
+        /** SolicitudCreate */
+        SolicitudCreate: {
+            /** Tipo Id */
+            tipo_id?: string | null;
+            /** Etiqueta Libre */
+            etiqueta_libre?: string | null;
+            /** Destinatario Id */
+            destinatario_id: string;
+            /** Mensaje */
+            mensaje?: string | null;
+            /** Campos Tipados */
+            campos_tipados?: {
+                [key: string]: unknown;
+            };
+            dato_origen?: components["schemas"]["DatoOrigen"] | null;
+            /** Consulta Id */
+            consulta_id?: string | null;
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Codo Id */
+            codo_id?: string | null;
+        };
+        /** SolicitudListado */
+        SolicitudListado: {
+            /** Solicitudes */
+            solicitudes?: components["schemas"]["SolicitudOut"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /** SolicitudOut */
+        SolicitudOut: {
+            /** Id */
+            id: string;
+            /** Tipo Id */
+            tipo_id?: string | null;
+            /** Tipo Nombre */
+            tipo_nombre?: string | null;
+            /** Etiqueta Libre */
+            etiqueta_libre?: string | null;
+            /**
+             * Estado
+             * @default creado
+             */
+            estado: string;
+            /** Documento Id */
+            documento_id?: string | null;
+            /** Span Inicio */
+            span_inicio?: number | null;
+            /** Span Fin */
+            span_fin?: number | null;
+            /** Fragmento */
+            fragmento?: string | null;
+            /** Consulta Id */
+            consulta_id?: string | null;
+            /** Solicitante Id */
+            solicitante_id?: string | null;
+            /** Solicitante Nombre */
+            solicitante_nombre?: string | null;
+            /** Solicitante Email */
+            solicitante_email?: string | null;
+            /** Destinatario Id */
+            destinatario_id: string;
+            /** Mensaje */
+            mensaje?: string | null;
+            /** Campos Tipados */
+            campos_tipados?: {
+                [key: string]: unknown;
+            };
+            /** Entidad Id */
+            entidad_id?: string | null;
+            /** Codo Id */
+            codo_id?: string | null;
+            /** Fecha Creacion */
+            fecha_creacion?: string | null;
+            /** Fecha Resolucion */
+            fecha_resolucion?: string | null;
+        };
         /**
          * SourceConfigRequest
          * @description Configuración de conexión a un repositorio documental del cliente.
@@ -3993,6 +4780,54 @@ export interface components {
             /** Citas */
             citas?: components["schemas"]["Cita"][];
         };
+        /** TipoSolicitudCreate */
+        TipoSolicitudCreate: {
+            /** Nombre */
+            nombre: string;
+            /** Campos */
+            campos?: components["schemas"]["CampoTipado"][];
+            /** Destinatarios Sugeridos */
+            destinatarios_sugeridos?: ("proveedor_externo" | "departamento_interno" | "colaborador")[];
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
+        };
+        /** TipoSolicitudOut */
+        TipoSolicitudOut: {
+            /** Id */
+            id: string;
+            /** Clave */
+            clave?: string | null;
+            /** Nombre */
+            nombre: string;
+            /** Campos */
+            campos?: components["schemas"]["CampoTipado"][];
+            /** Destinatarios Sugeridos */
+            destinatarios_sugeridos?: string[];
+            /**
+             * Es Base
+             * @default false
+             */
+            es_base: boolean;
+            /**
+             * Activo
+             * @default true
+             */
+            activo: boolean;
+        };
+        /** TipoSolicitudUpdate */
+        TipoSolicitudUpdate: {
+            /** Nombre */
+            nombre?: string | null;
+            /** Campos */
+            campos?: components["schemas"]["CampoTipado"][] | null;
+            /** Destinatarios Sugeridos */
+            destinatarios_sugeridos?: ("proveedor_externo" | "departamento_interno" | "colaborador")[] | null;
+            /** Activo */
+            activo?: boolean | null;
+        };
         /** TokenBundle */
         TokenBundle: {
             /** Access Token */
@@ -4013,6 +4848,14 @@ export interface components {
         /** TransferirSesionRequest */
         TransferirSesionRequest: {
             canal: components["schemas"]["Canal"];
+        };
+        /** TransicionRequest */
+        TransicionRequest: {
+            /**
+             * Accion
+             * @enum {string}
+             */
+            accion: "marcar_leida" | "iniciar_proceso" | "resolver" | "cancelar";
         };
         /**
          * TrendPoint
@@ -4062,10 +4905,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /** VideoPlayerPayload */
         VideoPlayerPayload: {
@@ -7008,6 +7847,786 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DemoQueryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_codo_documentos_demo_codo__key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoCodoDocumentosOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_destinatarios_get: {
+        parameters: {
+            query?: {
+                solo_activos?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinatarioOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_destinatarios_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DestinatarioCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinatarioOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    borrar_destinatarios__destinatario_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                destinatario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_destinatarios__destinatario_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                destinatario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DestinatarioUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DestinatarioOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_reglas_alertas_reglas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReglaAlertaOut"][];
+                };
+            };
+        };
+    };
+    guardar_regla_alertas_reglas_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReglaAlertaUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReglaAlertaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_alertas_alertas_get: {
+        parameters: {
+            query?: {
+                entidad_id?: string | null;
+                estado?: string | null;
+                urgencia?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertaListado"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_alerta_manual_alertas_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertaManualCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertaAdmin"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_alerta_alertas__alerta_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alerta_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertaAdmin"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    aplicar_accion_alertas__alerta_id__accion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alerta_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccionResultado"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_evaluate_vencimientos_alertas_scheduler_evaluate_vencimientos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    listar_notificaciones_get: {
+        parameters: {
+            query?: {
+                solo_no_leidas?: boolean;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacionesListado"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    marcar_leida_notificaciones__notif_id__leer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notif_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    marcar_todas_notificaciones_leer_todas_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    listar_admin_notificaciones_admin_get: {
+        parameters: {
+            query?: {
+                estado?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listar_tipos_solicitud_get: {
+        parameters: {
+            query?: {
+                solo_activos?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipoSolicitudOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_tipos_solicitud_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipoSolicitudCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipoSolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    propuestas_tipos_solicitud_propuestas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropuestasListado"];
+                };
+            };
+        };
+    };
+    borrar_tipos_solicitud__tipo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    actualizar_tipos_solicitud__tipo_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tipo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipoSolicitudUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipoSolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mapeo_inferencia_solicitudes_mapeo_inferencia_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapeoInferencia"];
+                };
+            };
+        };
+    };
+    listar_solicitudes_get: {
+        parameters: {
+            query?: {
+                buzon?: string;
+                estado?: string | null;
+                tipo_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudListado"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    crear_solicitudes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SolicitudCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detalle_solicitudes__solicitud_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transicionar_solicitudes__solicitud_id__transicion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                solicitud_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransicionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolicitudOut"];
                 };
             };
             /** @description Validation Error */

@@ -24,7 +24,18 @@ load_dotenv()
 # se mantiene como alias para compatibilidad con configuración previa (B0).
 EMBEDDER_URL = os.getenv("EMBEDDER_URL") or os.getenv("BGE_M3_URL", "http://localhost:8080")
 BGE_M3_TIMEOUT = float(os.getenv("BGE_M3_TIMEOUT", "30"))
+# Timeout de CONEXIÓN separado del de lectura (ED-0 §3.2). El embedder puede estar
+# auto-stopped (cold-start ~5 min); un connect corto distingue "arrancando/colgado"
+# de una lectura legítimamente larga. El corte duro del endpoint (QUERY_TIMEOUT_SECONDS)
+# acota el total, así que un embedder frío degrada la consulta a 504 en vez de colgar
+# el thread. Un connect de 10s tolera el arranque de flycast sin esperar el boot completo.
+BGE_M3_CONNECT_TIMEOUT = float(os.getenv("BGE_M3_CONNECT_TIMEOUT", "10"))
 BGE_M3_DIMS = 1024
+
+
+def _httpx_timeout(read: float, connect: float = BGE_M3_CONNECT_TIMEOUT) -> "httpx.Timeout":
+    """Timeout httpx explícito: connect corto, read/write/pool = `read`."""
+    return httpx.Timeout(read, connect=connect)
 
 
 class BGEEmbeddingClient:
@@ -41,7 +52,7 @@ class BGEEmbeddingClient:
         lista de vectores de 1024 dim. POST /embed {"texts": [...]}.
         """
         cleaned = [t.strip() for t in texts]
-        with httpx.Client(timeout=self.timeout) as client:
+        with httpx.Client(timeout=_httpx_timeout(self.timeout)) as client:
             resp = client.post(f"{self.base_url}/embed", json={"texts": cleaned})
             resp.raise_for_status()
             return resp.json()["embeddings"]
@@ -56,7 +67,7 @@ class BGEEmbeddingClient:
 
     def health(self) -> bool:
         try:
-            with httpx.Client(timeout=5) as client:
+            with httpx.Client(timeout=_httpx_timeout(5, connect=5)) as client:
                 resp = client.get(f"{self.base_url}/health")
                 return resp.status_code == 200
         except Exception:

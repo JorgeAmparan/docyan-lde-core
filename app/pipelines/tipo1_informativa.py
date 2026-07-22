@@ -14,6 +14,7 @@ from app.pipelines import cruces
 from app.pipelines.base import ContextoPipeline, ResultadoPipeline
 from app.pipelines.dkg_reader import PipelineGraphReader
 from app.schemas.pipeline_payloads import Cita, EspecificacionItem, InfoCardPayload
+from app.solicitudes import inferencia as _inferencia
 
 
 def _cita(row: dict) -> Cita | None:
@@ -39,15 +40,20 @@ def resolver(ctx: ContextoPipeline, reader: PipelineGraphReader) -> ResultadoPip
     data = reader.informativa(ctx.tenant_id, termino, ctx.entidad_id, ctx.documento_id)
     especs_raw = data.get("especificaciones") or []
 
-    especificaciones = [
-        EspecificacionItem(
+    especificaciones = []
+    for r in especs_raw:
+        cita = _cita(r)
+        doc_tipo = cita.documento_tipo if cita else None
+        # ED-2 §2.4: marcado accionable determinístico (INFORMATIVA + tipo_documento).
+        tipo_sugerido = _inferencia.inferir_tipo("INFORMATIVA", doc_tipo)
+        especificaciones.append(EspecificacionItem(
             nombre=r.get("nombre") or "—",
             valor=r.get("valor"),
             unidad=r.get("unidad"),
-            cita=_cita(r),
-        )
-        for r in especs_raw
-    ]
+            cita=cita,
+            accionable=tipo_sugerido is not None,
+            tipo_sugerido=tipo_sugerido,
+        ))
     citas = [e.cita for e in especificaciones if e.cita is not None]
     match_multiple = len(especificaciones) > 1
     desambiguacion = [e.nombre for e in especificaciones] if match_multiple else []

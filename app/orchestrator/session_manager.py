@@ -166,8 +166,19 @@ class RedisSessionStore:
     def _r(self):
         if self._client is None:
             import redis
+            from app.cache.redis_client import (
+                REDIS_SOCKET_CONNECT_TIMEOUT,
+                REDIS_SOCKET_TIMEOUT,
+            )
 
-            self._client = redis.from_url(self.url, decode_responses=True)
+            # Socket timeouts (ED-0 §3.2): un recv estancado a Redis no puede
+            # congelar el thread de sesiones/scheduler indefinidamente.
+            self._client = redis.from_url(
+                self.url,
+                decode_responses=True,
+                socket_timeout=REDIS_SOCKET_TIMEOUT,
+                socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
+            )
         return self._client
 
     def _k(self, session_id: str) -> str:

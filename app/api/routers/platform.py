@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.api.blocking import run_blocking
 from app.jobs.job_models import JobStatus
 from app.jobs.progress import pct_total
 from app.platform_admin import providers
@@ -71,13 +72,18 @@ def _gen_code() -> str:
 async def platform_login(body: PlatformLoginRequest):
     store = providers.get_store()
     audit = providers.get_audit()
-    admin = store.get_admin_by_email(body.email)
+    admin = await run_blocking(
+        store.get_admin_by_email, body.email, endpoint="/platform/auth/login"
+    )
     if not admin or not admin.get("is_active", True) or not verify_password(
         body.password, admin["password_hash"]
     ):
         raise HTTPException(status_code=401, detail="Credenciales de plataforma inválidas.")
     token = create_platform_token(admin)
-    audit.record("platform_login", admin["email"], {"admin_id": admin["id"]})
+    await run_blocking(
+        audit.record, "platform_login", admin["email"], {"admin_id": admin["id"]},
+        endpoint="/platform/auth/login",
+    )
     return PlatformTokenResponse(
         access_token=token,
         expires_in=PLATFORM_TOKEN_EXPIRE_MINUTES * 60,
@@ -90,19 +96,22 @@ async def platform_login(body: PlatformLoginRequest):
 
 @router.get("/orgs", response_model=OrgList)
 async def list_orgs(ctx: dict = Depends(requiere_platform_admin)) -> OrgList:
-    return providers.get_metrics().list_orgs()
+    return await run_blocking(providers.get_metrics().list_orgs, endpoint="/platform/orgs")
 
 
 @router.get("/orgs/{org_id}/metrics", response_model=OrgMetrics)
 async def org_metrics(org_id: str, ctx: dict = Depends(requiere_platform_admin)) -> OrgMetrics:
-    return providers.get_metrics().org_metrics(org_id)
+    return await run_blocking(
+        providers.get_metrics().org_metrics, org_id, endpoint="/platform/orgs/{id}/metrics"
+    )
 
 
 @router.get("/jobs", response_model=JobList)
 async def list_jobs(ctx: dict = Depends(requiere_platform_admin)) -> JobList:
     jobs_backend = providers.get_jobs_backend()
+    all_jobs = await run_blocking(jobs_backend.list_all_jobs, endpoint="/platform/jobs")
     items = []
-    for job in jobs_backend.list_all_jobs():
+    for job in all_jobs:
         status = job.status.value
         pct = 100.0 if status == "completed" else (
             pct_total(job.phase, job.phase_fraction) if status == "processing" else 0.0
@@ -128,13 +137,19 @@ async def metrics_summary(
 ) -> PlatformSummary:
     store = providers.get_store()
     jobs_backend = providers.get_jobs_backend()
-    jobs_activos = sum(1 for j in jobs_backend.list_all_jobs() if j.status.value in _ACTIVE_JOB)
-    ingresos = sum(
-        float(p["monto"]) for p in store.list_payments() if p.get("moneda") == moneda
-    )
-    return providers.get_metrics().summary(
-        jobs_activos=jobs_activos, ingresos_periodo=ingresos, moneda=moneda
-    )
+
+    def _work() -> PlatformSummary:
+        jobs_activos = sum(
+            1 for j in jobs_backend.list_all_jobs() if j.status.value in _ACTIVE_JOB
+        )
+        ingresos = sum(
+            float(p["monto"]) for p in store.list_payments() if p.get("moneda") == moneda
+        )
+        return providers.get_metrics().summary(
+            jobs_activos=jobs_activos, ingresos_periodo=ingresos, moneda=moneda
+        )
+
+    return await run_blocking(_work, endpoint="/platform/metrics/summary")
 
 
 @router.get("/metrics/trends", response_model=PlatformTrends)
@@ -143,7 +158,9 @@ async def metrics_trends(
     moneda: str = Query("MXN"),
 ) -> PlatformTrends:
     """Series temporales reales para las gráficas de Resumen (metadata, no contenido)."""
-    return providers.get_metrics().trends(moneda=moneda)
+    return await run_blocking(
+        providers.get_metrics().trends, endpoint="/platform/metrics/trends", moneda=moneda
+    )
 
 
 # ── (B) Códigos de acceso ─────────────────────────────────────────────────────
@@ -168,22 +185,29 @@ async def create_access_code(
         raise HTTPException(status_code=400, detail="tipo debe ser 'prueba' o 'piloto'.")
     store = providers.get_store()
     expires = (_now() + timedelta(days=body.dias_vigencia)).isoformat()
-    row = store.create_access_code({
-        "code": _gen_code(), "tipo": body.tipo,
-        "cuota_documentos": body.cuota_documentos, "cuota_saldo_usd": body.cuota_saldo_usd,
-        "expires_at": expires, "status": "active", "created_by": actor_de(ctx),
-        "nota": body.nota,
-    })
-    providers.get_audit().record("access_code_created", actor_de(ctx), {
-        "code": row["code"], "tipo": body.tipo, "cuota_documentos": body.cuota_documentos,
-        "cuota_saldo_usd": body.cuota_saldo_usd,
-    })
+
+    def _work() -> dict:
+        row = store.create_access_code({
+            "code": _gen_code(), "tipo": body.tipo,
+            "cuota_documentos": body.cuota_documentos, "cuota_saldo_usd": body.cuota_saldo_usd,
+            "expires_at": expires, "status": "active", "created_by": actor_de(ctx),
+            "nota": body.nota,
+        })
+        providers.get_audit().record("access_code_created", actor_de(ctx), {
+            "code": row["code"], "tipo": body.tipo, "cuota_documentos": body.cuota_documentos,
+            "cuota_saldo_usd": body.cuota_saldo_usd,
+        })
+        return row
+
+    row = await run_blocking(_work, endpoint="/platform/access-codes")
     return _access_code_out(row)
 
 
 @router.get("/access-codes", response_model=AccessCodeList)
 async def list_access_codes(ctx: dict = Depends(requiere_platform_admin)) -> AccessCodeList:
-    rows = providers.get_store().list_access_codes()
+    rows = await run_blocking(
+        providers.get_store().list_access_codes, endpoint="/platform/access-codes (list)"
+    )
     return AccessCodeList(items=[_access_code_out(r) for r in rows], total=len(rows))
 
 
@@ -193,13 +217,20 @@ async def revoke_access_code(
     ctx: dict = Depends(requiere_platform_admin),
 ) -> AccessCodeOut:
     store = providers.get_store()
-    row = store.get_access_code(code)
+    row = await run_blocking(
+        store.get_access_code, code, endpoint="/platform/access-codes/{code}/revoke"
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="Código no encontrado.")
     if row["status"] != "active":
         raise HTTPException(status_code=409, detail=f"Código en estado '{row['status']}', no revocable.")
-    updated = store.update_access_code(code, status="revoked")
-    providers.get_audit().record("access_code_revoked", actor_de(ctx), {"code": code})
+
+    def _work() -> dict:
+        updated = store.update_access_code(code, status="revoked")
+        providers.get_audit().record("access_code_revoked", actor_de(ctx), {"code": code})
+        return updated
+
+    updated = await run_blocking(_work, endpoint="/platform/access-codes/{code}/revoke")
     return _access_code_out(updated)
 
 
@@ -224,15 +255,21 @@ async def create_payment(
     if body.concepto not in ("suscripcion", "setup", "recarga"):
         raise HTTPException(status_code=400, detail="concepto inválido.")
     store = providers.get_store()
-    row = store.create_payment({
-        "org_id": body.org_id, "monto": body.monto, "moneda": body.moneda,
-        "concepto": body.concepto, "nota": body.nota, "registrado_por": actor_de(ctx),
-        "fecha": _now().isoformat(),
-    })
-    providers.get_audit().record("manual_payment_recorded", actor_de(ctx), {
-        "org_id": body.org_id, "monto": body.monto, "moneda": body.moneda,
-        "concepto": body.concepto,
-    }, org_id=body.org_id)
+    fecha = _now().isoformat()
+
+    def _work() -> dict:
+        row = store.create_payment({
+            "org_id": body.org_id, "monto": body.monto, "moneda": body.moneda,
+            "concepto": body.concepto, "nota": body.nota, "registrado_por": actor_de(ctx),
+            "fecha": fecha,
+        })
+        providers.get_audit().record("manual_payment_recorded", actor_de(ctx), {
+            "org_id": body.org_id, "monto": body.monto, "moneda": body.moneda,
+            "concepto": body.concepto,
+        }, org_id=body.org_id)
+        return row
+
+    row = await run_blocking(_work, endpoint="/platform/payments")
     return _payment_out(row)
 
 
@@ -242,7 +279,10 @@ async def list_payments(
     org_id: str | None = Query(None),
     desde: str | None = Query(None),
 ) -> PaymentList:
-    rows = providers.get_store().list_payments(org_id=org_id, desde=desde)
+    rows = await run_blocking(
+        providers.get_store().list_payments, endpoint="/platform/payments (list)",
+        org_id=org_id, desde=desde,
+    )
     return PaymentList(items=[_payment_out(r) for r in rows], total=len(rows))
 
 
@@ -253,8 +293,15 @@ async def billing_status(
     moneda: str = Query("MXN"),
 ) -> BillingStatus:
     store = providers.get_store()
-    billing = store.get_org_billing(org_id) or {}
-    pagos = [p for p in store.list_payments(org_id=org_id) if p.get("moneda") == moneda]
+
+    def _work() -> tuple[dict, list]:
+        billing = store.get_org_billing(org_id) or {}
+        pagos = [p for p in store.list_payments(org_id=org_id) if p.get("moneda") == moneda]
+        return billing, pagos
+
+    billing, pagos = await run_blocking(
+        _work, endpoint="/platform/orgs/{id}/billing-status"
+    )
     return BillingStatus(
         org_id=org_id,
         plan=billing.get("plan", "piloto"),
@@ -288,8 +335,12 @@ def _thread_out(thread: dict, mensajes: list[dict]) -> SupportThreadOut:
 @router.get("/support/threads", response_model=SupportThreadList)
 async def support_inbox(ctx: dict = Depends(requiere_platform_admin)) -> SupportThreadList:
     store = providers.get_store()
-    threads = store.list_threads()
-    items = [_thread_out(t, store.list_messages(t["id"])) for t in threads]
+
+    def _work() -> list:
+        threads = store.list_threads()
+        return [_thread_out(t, store.list_messages(t["id"])) for t in threads]
+
+    items = await run_blocking(_work, endpoint="/platform/support/threads")
     return SupportThreadList(items=items, total=len(items))
 
 
@@ -300,16 +351,20 @@ async def support_reply(
     ctx: dict = Depends(requiere_platform_admin),
 ) -> SupportThreadOut:
     store = providers.get_store()
-    thread = store.get_thread(thread_id)
-    if thread is None:
-        raise HTTPException(status_code=404, detail="Hilo no encontrado.")
-    store.add_message({
-        "thread_id": thread_id, "autor_tipo": "founder",
-        "autor_id": actor_de(ctx), "cuerpo": body.cuerpo,
-    })
-    nuevo_estado = "cerrado" if body.cerrar else "respondido"
-    thread = store.update_thread(thread_id, estado=nuevo_estado)
-    providers.get_audit().record("support_reply", actor_de(ctx), {
-        "thread_id": thread_id, "estado": nuevo_estado,
-    }, org_id=thread.get("org_id"))
-    return _thread_out(thread, store.list_messages(thread_id))
+
+    def _work() -> SupportThreadOut:
+        thread = store.get_thread(thread_id)
+        if thread is None:
+            raise HTTPException(status_code=404, detail="Hilo no encontrado.")
+        store.add_message({
+            "thread_id": thread_id, "autor_tipo": "founder",
+            "autor_id": actor_de(ctx), "cuerpo": body.cuerpo,
+        })
+        nuevo_estado = "cerrado" if body.cerrar else "respondido"
+        thread = store.update_thread(thread_id, estado=nuevo_estado)
+        providers.get_audit().record("support_reply", actor_de(ctx), {
+            "thread_id": thread_id, "estado": nuevo_estado,
+        }, org_id=thread.get("org_id"))
+        return _thread_out(thread, store.list_messages(thread_id))
+
+    return await run_blocking(_work, endpoint="/platform/support/threads/{id}/reply")

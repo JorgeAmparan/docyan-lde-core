@@ -42,10 +42,6 @@ import sys
 import time
 from pathlib import Path
 
-# Saldo de cortesía generoso para los tenants demo (cubre el cómputo de la ingesta;
-# los demo no pagan setup — su cupo no aplica, ingieren una sola vez en el alta).
-DEMO_SALDO_USD = 50.0
-
 
 def _doc_spec(entry) -> dict:
     """Normaliza una entrada del manifiesto a {path, tipo, nombre}.
@@ -71,7 +67,6 @@ def _ingest_one(tenant_id: str, spec: dict, *, dry_run: bool, tipo_override: str
     import hashlib
     import uuid
 
-    from app.ingesta.budget_manager import BudgetManager
     from app.ingesta.providers import get_cotizador, get_dispatcher, get_document_store
     from app.ingesta.text_extract import extraer_texto
     from app.jobs.job_models import CotizacionSnapshot, IngestJob
@@ -93,10 +88,10 @@ def _ingest_one(tenant_id: str, spec: dict, *, dry_run: bool, tipo_override: str
     # Nombre display de la cita (B13.3 §2.3/§2.5): el del manifiesto, o el filename.
     nombre_display = spec.get("nombre") or path.name
 
-    # Asegura saldo de cómputo del tenant demo (sin auto-recharge en prod; aquí lo
-    # provisionamos explícitamente para la siembra).
-    BudgetManager().ensure_budget(tenant_id, saldo_inicial_usd=DEMO_SALDO_USD)
-
+    # ED-0b §5: v2.1 retiró el wallet prepagado (la 022 dropeó `tenant_budget`), así
+    # que YA NO se provisiona saldo (el viejo `BudgetManager.ensure_budget` rompía
+    # contra una tabla inexistente). El gate vigente es el cotizador + cupo: los
+    # tenants demo se ingieren dentro de cupo freemium con confirmación explícita.
     cot = get_cotizador().cotizar(
         tenant_id=tenant_id, texto_documento=texto, tipo_documento=tipo_documento
     )
@@ -122,7 +117,7 @@ def _ingest_one(tenant_id: str, spec: dict, *, dry_run: bool, tipo_override: str
     )
     disp = get_dispatcher()
     disp.crear_job(job)
-    disp.confirmar(job.job_id)  # reserva saldo + encola hacia el worker
+    disp.confirmar(job.job_id)  # v2.1: encola hacia el worker (sin reserva de saldo)
     return {"doc": nombre_display, "ok": True, "job_id": job.job_id,
             "tipo": tipo_documento, "costo_usd": cot.costo_estimado_usd}
 

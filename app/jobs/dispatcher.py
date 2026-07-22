@@ -126,8 +126,19 @@ class RedisQueueBackend:
     def _r(self):
         if self._client is None:
             import redis
+            from app.cache.redis_client import (
+                REDIS_SOCKET_CONNECT_TIMEOUT,
+                REDIS_SOCKET_TIMEOUT,
+            )
 
-            self._client = redis.from_url(self.url, decode_responses=True)
+            # Socket timeouts (ED-0 §3.2): la cola de ingesta no puede quedar
+            # colgada en un recv a Redis sin retorno.
+            self._client = redis.from_url(
+                self.url,
+                decode_responses=True,
+                socket_timeout=REDIS_SOCKET_TIMEOUT,
+                socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
+            )
         return self._client
 
     def save_job(self, job: IngestJob) -> None:

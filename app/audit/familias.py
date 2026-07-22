@@ -3,12 +3,17 @@ Familias de eventos FAT (doc 08) + retención por familia (decisión #12 Paso C)
 
 DOCYAN LDE™ by XCID — B7.
 
-9 familias. 6 ACTIVAS en runtime MVP (F4 consulta, F5 troubleshooting,
-F6 alertas, F7 gobernanza, F8 onboarding, F9 sistema) y 3 MODELADAS pero INERTES
-hasta la reactivación de traducción en B5 (F1 pipeline traducción, F2 revisión
-humana, F3 ingesta bilingüe). La estructura, la retención y la inmutabilidad se
-construyen completas para las 9; las inertes simplemente no se emiten en runtime
-MVP (mismo patrón que B3-DTM).
+10 familias. 7 ACTIVAS en runtime MVP (F4 consulta, F5 troubleshooting,
+F6 alertas, F7 gobernanza, F8 onboarding, F9 sistema, F10 eventos dirigidos) y 3
+MODELADAS pero INERTES hasta la reactivación de traducción en B5 (F1 pipeline
+traducción, F2 revisión humana, F3 ingesta bilingüe). La estructura, la retención
+y la inmutabilidad se construyen completas para todas; las inertes simplemente no
+se emiten en runtime MVP (mismo patrón que B3-DTM).
+
+F10 (eventos dirigidos, ED-1): cada transición del ciclo de vida común de un
+`:EventoDirigido` (alertas ahora, solicitudes en ED-2) registra un evento FAT en
+esta familia. La adenda de Eventos Dirigidos §1.1 la introduce como extensión del
+subsistema de alertas hacia la base común Alerta+Solicitud.
 """
 from __future__ import annotations
 
@@ -16,7 +21,7 @@ from enum import Enum
 
 
 class FamiliaFAT(str, Enum):
-    """Las 9 familias de eventos FAT (doc 08)."""
+    """Las 10 familias de eventos FAT (doc 08 + adenda Eventos Dirigidos §1.1)."""
 
     # ── Modeladas pero INERTES en MVP (cimiento para reactivación de traducción) ─
     F1_PIPELINE_TRADUCCION = "F1"
@@ -29,6 +34,8 @@ class FamiliaFAT(str, Enum):
     F7_GOBERNANZA = "F7"
     F8_ONBOARDING = "F8"
     F9_SISTEMA = "F9"
+    # Eventos dirigidos (ED-1): transiciones del ciclo de vida común Alerta/Solicitud.
+    F10_EVENTO_DIRIGIDO = "F10"
 
 
 #: Familias activas en runtime MVP (las que el sistema emite hoy).
@@ -40,6 +47,7 @@ FAMILIAS_ACTIVAS_MVP: frozenset[FamiliaFAT] = frozenset(
         FamiliaFAT.F7_GOBERNANZA,
         FamiliaFAT.F8_ONBOARDING,
         FamiliaFAT.F9_SISTEMA,
+        FamiliaFAT.F10_EVENTO_DIRIGIDO,
     }
 )
 
@@ -65,6 +73,9 @@ RETENCION_ANIOS: dict[FamiliaFAT, int] = {
     FamiliaFAT.F7_GOBERNANZA: 7,
     FamiliaFAT.F8_ONBOARDING: 5,
     FamiliaFAT.F9_SISTEMA: 2,
+    # Eventos dirigidos: registro administrativo/operacional (vencimientos,
+    # solicitudes). Retención alineada con alertas (F6).
+    FamiliaFAT.F10_EVENTO_DIRIGIDO: 3,
 }
 
 

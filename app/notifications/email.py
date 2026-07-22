@@ -1,11 +1,15 @@
 """
-Envío de correo (B13) — abstracción pluggable.
+Envío de correo — abstracción pluggable con proveedor ÚNICO (ED-1 §2.4 / Adenda ED §4).
 
-Producción: `SmtpEmailSender` por variables de entorno (`SMTP_HOST`/`SMTP_PORT`/
-`SMTP_USER`/`SMTP_PASSWORD`/`EMAIL_FROM`). Si no hay SMTP configurado, el factory
-degrada a `ConsoleEmailSender` (loguea el correo en vez de enviarlo) — útil en
-dev y para que el flujo NO se bloquee, dejando explícito que falta credencial.
+Producción: **Resend** (decisión cerrada julio 2026) vía `ResendEmailSender` cuando
+existe `RESEND_API_KEY`. Absorbe también las invitaciones de onboarding — un solo
+proveedor. Fallback al SMTP actual (`SmtpEmailSender`) si solo hay `SMTP_HOST`; si
+no hay nada, el factory devuelve `None` (canal deshabilitado con log claro, NO
+excepción) para que el flujo no se bloquee, dejando explícito que falta credencial.
 Tests: `CapturingEmailSender` (en memoria, sin red).
+
+Regla ED-0 permanente: todo cliente de red nace con timeouts explícitos
+(`ResendEmailSender` usa `httpx` con `timeout=`; `SmtpEmailSender` con `timeout=`).
 """
 from __future__ import annotations
 
@@ -18,6 +22,14 @@ from typing import Protocol
 
 logger = logging.getLogger("docyan.notifications.email")
 
+# Timeouts del cliente HTTP de Resend (ED-0: ningún cliente de red sin timeout).
+RESEND_TIMEOUT_S = float(os.getenv("RESEND_TIMEOUT_S", "10"))
+RESEND_CONNECT_TIMEOUT_S = float(os.getenv("RESEND_CONNECT_TIMEOUT_S", "5"))
+RESEND_API_URL = "https://api.resend.com/emails"
+# Con `onboarding@resend.dev` Resend solo entrega al dueño de la cuenta — suficiente
+# para verificar el sprint; el dominio propio es prerequisito de pilotos, no de ED-1.
+RESEND_FROM_DEFAULT = "onboarding@resend.dev"
+
 
 class EmailSendError(RuntimeError):
     """Fallo real al enviar correo (credencial/servidor). Se reporta específico."""
@@ -29,6 +41,8 @@ class EmailMessage:
     subject: str
     body_text: str
     body_html: str | None = None
+    # Reply-to: para solicitudes a externos (ED-2) la respuesta va al solicitante.
+    reply_to: str | None = None
 
 
 class EmailSender(Protocol):
@@ -95,17 +109,63 @@ class SmtpEmailSender:
             ) from exc
 
 
+class ResendEmailSender:
+    """
+    Envía por la API HTTP de Resend (decisión cerrada). `httpx` con timeouts
+    explícitos (ED-0). Lazy: no crea el cliente HTTP hasta el primer `send`.
+    """
+
+    def __init__(self, api_key: str, sender: str, *, api_url: str = RESEND_API_URL) -> None:
+        self.api_key = api_key
+        self.sender = sender
+        self.api_url = api_url
+
+    def send(self, message: EmailMessage) -> None:
+        import httpx
+
+        body: dict = {
+            "from": self.sender,
+            "to": [message.to],
+            "subject": message.subject,
+            "text": message.body_text,
+        }
+        if message.body_html:
+            body["html"] = message.body_html
+        if message.reply_to:
+            body["reply_to"] = message.reply_to
+        try:
+            resp = httpx.post(
+                self.api_url,
+                json=body,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=httpx.Timeout(RESEND_TIMEOUT_S, connect=RESEND_CONNECT_TIMEOUT_S),
+            )
+        except httpx.HTTPError as exc:
+            raise EmailSendError(f"Fallo de red al enviar vía Resend: {exc}") from exc
+        if resp.status_code >= 400:
+            raise EmailSendError(
+                f"Resend rechazó el envío ({resp.status_code}): {resp.text[:300]}"
+            )
+
+
 def get_email_sender() -> EmailSender | None:
     """
-    Factory de producción: SMTP si está configurado; si NO, devuelve `None` (sin
-    proveedor de correo).
+    Factory de producción con proveedor ÚNICO (ED-1 §2.4):
 
-    Falta de SMTP NO bloquea el flujo de invitación: el llamador (crear_invitacion)
-    trata `None` como "no se envió" (`email_enviado=False`) y devuelve igual el
-    `invite_url` en la respuesta de la API para reenvío/prueba manual. Cuando se
-    configure SMTP (Fly secrets: SMTP_HOST + EMAIL_FROM), el envío real se activa
-    sin tocar código.
+    1. `RESEND_API_KEY` presente → `ResendEmailSender` (from = `EMAIL_FROM` o el
+       default `onboarding@resend.dev`). Es el camino de producción.
+    2. Solo `SMTP_HOST` (+ `EMAIL_FROM`/`SMTP_USER`) → `SmtpEmailSender` (fallback).
+    3. Nada configurado → `None` (canal deshabilitado, log claro; NO excepción).
+
+    Devolver `None` NO bloquea el flujo: el llamador (invitaciones de onboarding,
+    motor de notificación de alertas) lo trata como "no se envió" y sigue. Cuando se
+    configure el secret en Fly, el envío real se activa sin tocar código.
     """
+    resend_key = os.getenv("RESEND_API_KEY")
+    if resend_key:
+        sender = os.getenv("EMAIL_FROM") or RESEND_FROM_DEFAULT
+        return ResendEmailSender(resend_key, sender)
+
     host = os.getenv("SMTP_HOST")
     sender = os.getenv("EMAIL_FROM") or os.getenv("SMTP_USER")
     if host and sender:
@@ -117,4 +177,6 @@ def get_email_sender() -> EmailSender | None:
             sender=sender,
             use_tls=os.getenv("SMTP_USE_TLS", "true").lower() != "false",
         )
+
+    logger.info("Sin proveedor de correo (ni RESEND_API_KEY ni SMTP_HOST) — canal email deshabilitado.")
     return None

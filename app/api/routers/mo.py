@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.auth import requiere_rol
+from app.api.blocking import run_blocking
 from app.orchestrator import providers
 from app.orchestrator.master_orchestrator import MasterOrchestrator
 from app.orchestrator.models import Canal, MORequest, SessionType
@@ -204,7 +205,10 @@ async def crear_sesion(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     mo: MasterOrchestrator = Depends(get_mo),
 ):
-    sid = mo.iniciar_sesion(ctx, body.session_type, body.canal, body.initial_state)
+    sid = await run_blocking(
+        mo.iniciar_sesion, ctx, body.session_type, body.canal, body.initial_state,
+        endpoint="/mo/sessions",
+    )
     return {"session_id": sid, "session_type": body.session_type.value, "canal": body.canal.value}
 
 
@@ -214,7 +218,9 @@ async def obtener_sesion(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     mo: MasterOrchestrator = Depends(get_mo),
 ):
-    state = mo.session_manager.get_session(session_id)
+    state = await run_blocking(
+        mo.session_manager.get_session, session_id, endpoint="/mo/sessions/{id}"
+    )
     # Aislamiento multi-tenant: una sesión de otro tenant NO se revela (404).
     if state is None or state.tenant_id != ctx["org_id"]:
         raise HTTPException(status_code=404, detail="Sesión no encontrada.")
@@ -235,10 +241,14 @@ async def transferir_sesion(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     mo: MasterOrchestrator = Depends(get_mo),
 ):
-    state = mo.session_manager.get_session(session_id)
+    state = await run_blocking(
+        mo.session_manager.get_session, session_id, endpoint="/mo/sessions/{id}/transfer"
+    )
     if state is None or state.tenant_id != ctx["org_id"]:
         raise HTTPException(status_code=404, detail="Sesión no encontrada.")
-    nuevo = mo.transferir_sesion(session_id, body.canal)
+    nuevo = await run_blocking(
+        mo.transferir_sesion, session_id, body.canal, endpoint="/mo/sessions/{id}/transfer"
+    )
     return {"session_id": session_id, "canal": nuevo.canal, "state": nuevo.state}
 
 
@@ -249,10 +259,14 @@ async def cerrar_sesion(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     mo: MasterOrchestrator = Depends(get_mo),
 ):
-    state = mo.session_manager.get_session(session_id)
+    state = await run_blocking(
+        mo.session_manager.get_session, session_id, endpoint="/mo/sessions/{id}/close"
+    )
     if state is None or state.tenant_id != ctx["org_id"]:
         raise HTTPException(status_code=404, detail="Sesión no encontrada.")
-    completed = mo.cerrar_sesion(session_id, body.reason)
+    completed = await run_blocking(
+        mo.cerrar_sesion, session_id, body.reason, endpoint="/mo/sessions/{id}/close"
+    )
     return {"session_id": session_id, "cerrada": True, "spillover": completed is not None}
 
 
@@ -282,7 +296,16 @@ async def consultar(
         },
         session_id=body.session_id,
     )
-    resp = mo.handle_request(req)
+    actor = _user(ctx)
+    resp = await run_blocking(
+        mo.handle_request,
+        req,
+        endpoint="/mo/query",
+        audit=lambda: mo.audit_logger.event(
+            ctx["org_id"], "consulta_timeout", actor,
+            {"canal": body.canal.value, "texto_len": len(body.texto)},
+        ),
+    )
     if not resp.servido:
         raise HTTPException(status_code=403, detail=resp.motivo_bloqueo or "Output retenido.")
     return QueryResponse(
@@ -311,7 +334,9 @@ async def listar_codos(
     from app.onboarding import providers as onb
 
     tenant_id = ctx["org_id"]
-    rows = dkg_codos.listar_codos(onb.get_dkg(), tenant_id)
+    rows = await run_blocking(
+        dkg_codos.listar_codos, onb.get_dkg(), tenant_id, endpoint="/mo/codos"
+    )
     items = [CodoOut(**r) for r in rows]
     return CodosResponse(items=items, total=len(items))
 
@@ -329,7 +354,10 @@ async def contexto_codo(
     from app.onboarding import providers as onb
 
     tenant_id = ctx["org_id"]
-    ctxd = dkg_codos.contexto_codo(onb.get_dkg(), tenant_id, codo_id)
+    ctxd = await run_blocking(
+        dkg_codos.contexto_codo, onb.get_dkg(), tenant_id, codo_id,
+        endpoint="/mo/codos/{id}",
+    )
     if ctxd is None:
         raise HTTPException(status_code=404, detail="CoDo no encontrado.")
     return CodoContextoOut(
@@ -354,23 +382,32 @@ async def relaciones_codo(
 
     tenant_id = ctx["org_id"]
     dkg = onb.get_dkg()
-    ctxd = dkg_codos.contexto_codo(dkg, tenant_id, codo_id)
-    if ctxd is None:
+
+    def _cargar() -> dict | None:
+        """Hasta 4 round-trips a FalkorDB; se corren juntos en un solo thread."""
+        ctxd = dkg_codos.contexto_codo(dkg, tenant_id, codo_id)
+        if ctxd is None:
+            return None
+        relaciones = dkg_relaciones.relaciones_de_codo(dkg, tenant_id, codo_id, ctxd["tipo"])
+        sugeridas: list[dict] = []
+        recursos: list[dict] = []
+        docs = ctxd.get("documentos") or []
+        if docs:
+            doc_id = docs[0]["id"]
+            sugeridas = dkg_sugerencias_doc.sugerencias_por_documento(dkg, tenant_id, doc_id)
+            recursos = [
+                r for r in dkg_relaciones.relaciones_de_documento(dkg, tenant_id, doc_id)
+                if r.get("tipo") == "video"
+            ]
+        return {"ctxd": ctxd, "relaciones": relaciones, "sugeridas": sugeridas, "recursos": recursos}
+
+    data = await run_blocking(_cargar, endpoint="/mo/codos/{id}/relaciones")
+    if data is None:
         raise HTTPException(status_code=404, detail="CoDo no encontrado.")
-
-    relaciones = dkg_relaciones.relaciones_de_codo(dkg, tenant_id, codo_id, ctxd["tipo"])
-
-    # Sugerencias + recursos sobre el documento principal del CoDo (el primero del acervo).
-    sugeridas: list[dict] = []
-    recursos: list[dict] = []
-    docs = ctxd.get("documentos") or []
-    if docs:
-        doc_id = docs[0]["id"]
-        sugeridas = dkg_sugerencias_doc.sugerencias_por_documento(dkg, tenant_id, doc_id)
-        recursos = [
-            r for r in dkg_relaciones.relaciones_de_documento(dkg, tenant_id, doc_id)
-            if r.get("tipo") == "video"
-        ]
+    ctxd = data["ctxd"]
+    relaciones = data["relaciones"]
+    sugeridas = data["sugeridas"]
+    recursos = data["recursos"]
 
     return CodoRelacionesOut(
         codo_id=codo_id,
@@ -404,7 +441,7 @@ async def ingesta(
         },
         session_id=body.session_id,
     )
-    resp = mo.handle_request(req)
+    resp = await run_blocking(mo.handle_request, req, endpoint="/mo/ingesta")
     return resp.to_dict()
 
 
@@ -415,7 +452,10 @@ async def confirmar_ingesta(
     mo: MasterOrchestrator = Depends(get_mo),
 ):
     try:
-        resultado = mo.confirmar_ingesta(job_id, ctx["org_id"], ctx.get("user_id") or "system")
+        resultado = await run_blocking(
+            mo.confirmar_ingesta, job_id, ctx["org_id"], ctx.get("user_id") or "system",
+            endpoint="/mo/ingesta/{id}/confirm",
+        )
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=409, detail=str(e))
     return resultado
@@ -431,16 +471,20 @@ async def guardar_consulta(
     mo: MasterOrchestrator = Depends(get_mo),
     pb: dict = Depends(get_pb),
 ):
-    consulta = pb["consultas"].guardar(
-        tenant_id=ctx["org_id"], user_id=_user(ctx), nombre=body.nombre,
-        consulta_original=body.consulta_original, tipo_intencion=body.tipo_intencion,
-        tipo_documento_origen=body.tipo_documento_origen,
-        entidad_referenciada_id=body.entidad_referenciada_id, metadata=body.metadata,
-    )
-    mo.audit_logger.event(
-        ctx["org_id"], "consulta_guardada", _user(ctx),
-        {"consulta_id": consulta["id"], "tipo_intencion": body.tipo_intencion},
-    )
+    def _work() -> dict:
+        consulta = pb["consultas"].guardar(
+            tenant_id=ctx["org_id"], user_id=_user(ctx), nombre=body.nombre,
+            consulta_original=body.consulta_original, tipo_intencion=body.tipo_intencion,
+            tipo_documento_origen=body.tipo_documento_origen,
+            entidad_referenciada_id=body.entidad_referenciada_id, metadata=body.metadata,
+        )
+        mo.audit_logger.event(
+            ctx["org_id"], "consulta_guardada", _user(ctx),
+            {"consulta_id": consulta["id"], "tipo_intencion": body.tipo_intencion},
+        )
+        return consulta
+
+    consulta = await run_blocking(_work, endpoint="/mo/queries/save")
     return ConsultaGuardadaOut(**consulta)
 
 
@@ -449,8 +493,13 @@ async def listar_consultas_guardadas(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     pb: dict = Depends(get_pb),
 ):
-    items = pb["consultas"].listar(ctx["org_id"], _user(ctx))
-    disponible = pb["consultas"].termino_playbook_disponible(ctx["org_id"], _user(ctx))
+    def _work() -> tuple[list, bool]:
+        return (
+            pb["consultas"].listar(ctx["org_id"], _user(ctx)),
+            pb["consultas"].termino_playbook_disponible(ctx["org_id"], _user(ctx)),
+        )
+
+    items, disponible = await run_blocking(_work, endpoint="/mo/queries/saved")
     return ConsultasGuardadasList(
         items=[ConsultaGuardadaOut(**c) for c in items],
         termino_playbook_disponible=disponible,
@@ -464,14 +513,24 @@ async def disparar_consulta_guardada(
     mo: MasterOrchestrator = Depends(get_mo),
     pb: dict = Depends(get_pb),
 ):
-    try:
+    def _work() -> dict:
         res = pb["consultas"].disparar(ctx["org_id"], consulta_id, mo, ctx)
+        mo.audit_logger.event(
+            ctx["org_id"], "consulta_guardada_disparada", _user(ctx),
+            {"consulta_id": consulta_id},
+        )
+        return res
+
+    try:
+        res = await run_blocking(
+            _work, endpoint="/mo/queries/saved/{id}/run",
+            audit=lambda: mo.audit_logger.event(
+                ctx["org_id"], "consulta_timeout", _user(ctx),
+                {"consulta_guardada_id": consulta_id},
+            ),
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    mo.audit_logger.event(
-        ctx["org_id"], "consulta_guardada_disparada", _user(ctx),
-        {"consulta_id": consulta_id},
-    )
     return DispararConsultaResponse(
         consulta=ConsultaGuardadaOut(**res["consulta"]),
         resultado=ConsultaResuelta(**res["resultado"]),
@@ -487,13 +546,18 @@ async def borrar_consulta_guardada(
     pb: dict = Depends(get_pb),
 ):
     try:
-        ok = pb["consultas"].borrar(ctx["org_id"], consulta_id)
+        ok = await run_blocking(
+            pb["consultas"].borrar, ctx["org_id"], consulta_id,
+            endpoint="/mo/queries/saved/{id}",
+        )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     if not ok:
         raise HTTPException(status_code=404, detail="Consulta guardada no encontrada.")
-    mo.audit_logger.event(
-        ctx["org_id"], "consulta_guardada_borrada", _user(ctx), {"consulta_id": consulta_id}
+    await run_blocking(
+        mo.audit_logger.event,
+        ctx["org_id"], "consulta_guardada_borrada", _user(ctx), {"consulta_id": consulta_id},
+        endpoint="/mo/queries/saved/{id}",
     )
     return {"consulta_id": consulta_id, "borrada": True}
 
@@ -505,7 +569,10 @@ async def renombrar_consulta_guardada(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     pb: dict = Depends(get_pb),
 ):
-    actualizada = pb["consultas"].renombrar(ctx["org_id"], consulta_id, body.nombre)
+    actualizada = await run_blocking(
+        pb["consultas"].renombrar, ctx["org_id"], consulta_id, body.nombre,
+        endpoint="/mo/queries/saved/{id} (patch)",
+    )
     if actualizada is None:
         raise HTTPException(status_code=404, detail="Consulta guardada no encontrada.")
     return ConsultaGuardadaOut(**actualizada)
@@ -519,7 +586,10 @@ async def listar_sugerencias(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     pb: dict = Depends(get_pb),
 ):
-    pendientes = pb["sugerencias"].listar_pendientes(ctx["org_id"], _user(ctx))
+    pendientes = await run_blocking(
+        pb["sugerencias"].listar_pendientes, ctx["org_id"], _user(ctx),
+        endpoint="/mo/playbooks/sugerencias",
+    )
     return [SugerenciaOut(**s) for s in pendientes]
 
 
@@ -532,14 +602,18 @@ async def aceptar_sugerencia(
     mo: MasterOrchestrator = Depends(get_mo),
     pb: dict = Depends(get_pb),
 ):
-    try:
+    def _work() -> dict:
         res = pb["sugerencias"].aceptar(ctx["org_id"], sugerencia_id, _user(ctx), body.nombre)
+        mo.audit_logger.event(
+            ctx["org_id"], "sugerencia_aceptada", _user(ctx),
+            {"sugerencia_id": sugerencia_id, "playbook_id": res["playbook"]["id"]},
+        )
+        return res
+
+    try:
+        res = await run_blocking(_work, endpoint="/mo/playbooks/sugerencias/{id}/accept")
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    mo.audit_logger.event(
-        ctx["org_id"], "sugerencia_aceptada", _user(ctx),
-        {"sugerencia_id": sugerencia_id, "playbook_id": res["playbook"]["id"]},
-    )
     return AceptarSugerenciaResponse(
         sugerencia_id=res["sugerencia_id"], playbook=PlaybookOut(**res["playbook"])
     )
@@ -552,13 +626,17 @@ async def rechazar_sugerencia(
     mo: MasterOrchestrator = Depends(get_mo),
     pb: dict = Depends(get_pb),
 ):
-    try:
+    def _work() -> dict:
         sug = pb["sugerencias"].rechazar(ctx["org_id"], sugerencia_id)
+        mo.audit_logger.event(
+            ctx["org_id"], "sugerencia_rechazada", _user(ctx), {"sugerencia_id": sugerencia_id}
+        )
+        return sug
+
+    try:
+        sug = await run_blocking(_work, endpoint="/mo/playbooks/sugerencias/{id}/reject")
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    mo.audit_logger.event(
-        ctx["org_id"], "sugerencia_rechazada", _user(ctx), {"sugerencia_id": sugerencia_id}
-    )
     return SugerenciaOut(**sug)
 
 
@@ -569,7 +647,10 @@ async def ignorar_sugerencia(
     pb: dict = Depends(get_pb),
 ):
     try:
-        sug = pb["sugerencias"].ignorar(ctx["org_id"], sugerencia_id)
+        sug = await run_blocking(
+            pb["sugerencias"].ignorar, ctx["org_id"], sugerencia_id,
+            endpoint="/mo/playbooks/sugerencias/{id}/ignore",
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return SugerenciaOut(**sug)
@@ -585,15 +666,20 @@ async def crear_playbook(
     mo: MasterOrchestrator = Depends(get_mo),
     pb: dict = Depends(get_pb),
 ):
-    playbook = pb["playbooks"].crear(
-        tenant_id=ctx["org_id"], user_id=_user(ctx), nombre=body.nombre,
-        descripcion=body.descripcion,
-        pasos=[p.model_dump() for p in body.pasos],
-    )
-    mo.audit_logger.event(
-        ctx["org_id"], "playbook_creado", _user(ctx),
-        {"playbook_id": playbook["id"], "pasos": len(body.pasos)},
-    )
+    pasos = [p.model_dump() for p in body.pasos]
+
+    def _work() -> dict:
+        playbook = pb["playbooks"].crear(
+            tenant_id=ctx["org_id"], user_id=_user(ctx), nombre=body.nombre,
+            descripcion=body.descripcion, pasos=pasos,
+        )
+        mo.audit_logger.event(
+            ctx["org_id"], "playbook_creado", _user(ctx),
+            {"playbook_id": playbook["id"], "pasos": len(pasos)},
+        )
+        return playbook
+
+    playbook = await run_blocking(_work, endpoint="/mo/playbooks")
     return PlaybookOut(**playbook)
 
 
@@ -602,7 +688,10 @@ async def listar_playbooks(
     ctx: dict = Depends(requiere_rol("admin", "editor", "viewer")),
     pb: dict = Depends(get_pb),
 ):
-    return [PlaybookOut(**p) for p in pb["playbooks"].listar(ctx["org_id"])]
+    plist = await run_blocking(
+        pb["playbooks"].listar, ctx["org_id"], endpoint="/mo/playbooks (list)"
+    )
+    return [PlaybookOut(**p) for p in plist]
 
 
 @router.post("/playbooks/seed_for_vertical", response_model=SeedVerticalResponse)
@@ -613,7 +702,10 @@ async def seed_for_vertical(
 ):
     from app.playbooks.seed_vertical import seed_for_vertical as _seed
 
-    creados = _seed(ctx["org_id"], body.vertical, pb["store"], user_id=_user(ctx))
+    creados = await run_blocking(
+        _seed, ctx["org_id"], body.vertical, pb["store"],
+        endpoint="/mo/playbooks/seed_for_vertical", user_id=_user(ctx),
+    )
     nota = None if creados else "Sin contenido para este vertical en B8 (se llena en B13)."
     return SeedVerticalResponse(
         vertical=body.vertical, creados=[PlaybookOut(**c) for c in creados], nota=nota
@@ -628,9 +720,15 @@ async def disparar_playbook(
     pb: dict = Depends(get_pb),
 ):
     try:
-        res = pb["playbooks"].disparar(
+        res = await run_blocking(
+            pb["playbooks"].disparar,
             ctx["org_id"], playbook_id, mo, ctx,
+            endpoint="/mo/playbooks/{id}/run",
             audit_logger=mo.audit_logger, actor=_user(ctx),
+            audit=lambda: mo.audit_logger.event(
+                ctx["org_id"], "consulta_timeout", _user(ctx),
+                {"playbook_id": playbook_id},
+            ),
         )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -648,9 +746,11 @@ async def actualizar_playbook(
     pb: dict = Depends(get_pb),
 ):
     pasos = [p.model_dump() for p in body.pasos] if body.pasos is not None else None
-    actualizado = pb["playbooks"].actualizar(
-        ctx["org_id"], playbook_id, nombre=body.nombre,
-        descripcion=body.descripcion, pasos=pasos,
+    actualizado = await run_blocking(
+        pb["playbooks"].actualizar,
+        ctx["org_id"], playbook_id,
+        endpoint="/mo/playbooks/{id} (patch)",
+        nombre=body.nombre, descripcion=body.descripcion, pasos=pasos,
     )
     if actualizado is None:
         raise HTTPException(status_code=404, detail="Playbook no encontrado.")
@@ -664,10 +764,15 @@ async def borrar_playbook(
     mo: MasterOrchestrator = Depends(get_mo),
     pb: dict = Depends(get_pb),
 ):
-    ok = pb["playbooks"].borrar(ctx["org_id"], playbook_id)
+    def _work() -> bool:
+        ok = pb["playbooks"].borrar(ctx["org_id"], playbook_id)
+        if ok:
+            mo.audit_logger.event(
+                ctx["org_id"], "playbook_borrado", _user(ctx), {"playbook_id": playbook_id}
+            )
+        return ok
+
+    ok = await run_blocking(_work, endpoint="/mo/playbooks/{id} (delete)")
     if not ok:
         raise HTTPException(status_code=404, detail="Playbook no encontrado.")
-    mo.audit_logger.event(
-        ctx["org_id"], "playbook_borrado", _user(ctx), {"playbook_id": playbook_id}
-    )
     return {"playbook_id": playbook_id, "borrado": True}

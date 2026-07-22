@@ -38,8 +38,13 @@ logger = logging.getLogger("docyan.api.demo")
 # Los 5 CoDos del handoff (lab/maq/pharma/min/agri) + el hero (consulta multilingüe).
 # Cada uno es un tenant demo REAL, poblado una vez por el pipeline (script de siembra).
 DEMO_TENANTS: dict[str, str] = {
-    # Demo principal del sitio público (/demo): mezcladora MAXI-10ND, 3 PDFs reales.
-    # Sembrar: scripts/seed_demo_tenants.py --manifest docs/demo/manifest_maxi.json
+    # Dos CoDos del corredor CIPSA, cada tenant nombrado por el equipo que contiene
+    # (aislamiento = multi-tenancy strict; una consulta de un CoDo JAMÁS cita el otro):
+    #   "bomba" → Bomba de concreto LS-400 (3 docs: operación/partes/ficha).
+    #   "maxi"  → Revolvedora MAXI-10 (3 docs: operación/partes/ficha).
+    # Son equipos DISTINTOS de CIPSA — no mezclar. Cada tenant demo REAL, poblado por
+    # el pipeline de ingesta (siembra directa a la cola).
+    "bomba": os.getenv("DEMO_TENANT_BOMBA", "demo-bomba"),
     "maxi": os.getenv("DEMO_TENANT_MAXI", "demo-maxi"),
     "hero": os.getenv("DEMO_TENANT_HERO", "demo-hero"),
     "lab": os.getenv("DEMO_TENANT_LAB", "demo-lab"),
@@ -219,5 +224,11 @@ async def demo_codo_documentos(
             headers={"Retry-After": str(rl.retry_after)},
         )
 
-    docs = dkg_codos.documentos_tenant(onb.get_dkg(), tenant_demo)
+    # Descarga a thread + corte duro (9s del demo): el grafo no bloquea el loop.
+    from app.api.blocking import run_blocking
+
+    docs = await run_blocking(
+        dkg_codos.documentos_tenant, onb.get_dkg(), tenant_demo,
+        timeout=DEMO_QUERY_TIMEOUT_S, endpoint="/demo/codo/{key}",
+    )
     return DemoCodoDocumentosOut(documentos=[DocumentoRefOut(**d) for d in docs])

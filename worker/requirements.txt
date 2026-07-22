@@ -39,6 +39,13 @@ openai==2.30.0
 # Cotizador / conteo de tokens (también lo arrastra graphrag-sdk).
 tiktoken==0.12.0
 
+# Escaneo de la capa de texto por página para el gate de OCR (ED-0e): decide si
+# Docling corre OCR (solo páginas SIN texto nativo). Puro-python, sin deps pesadas.
+# Sin esto, analizar_ocr_paginas() caía en ImportError → do_ocr=True → OCR
+# redundante → OOM del worker (verificado en prod con LS-400). También habilita el
+# conteo de páginas real de _contar_paginas() (antes None por el mismo ImportError).
+pypdf==6.13.1
+
 # Cliente HTTP al embedder BGE-M3 self-hosted (app/embeddings/bge_client.py).
 httpx==0.28.1
 

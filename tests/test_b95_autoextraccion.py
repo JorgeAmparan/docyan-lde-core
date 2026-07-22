@@ -93,7 +93,7 @@ def test_extraer_diagrama_desde_vision():
         "leyenda_simbolica": [{"simbolo": "⚠", "significado": "Punto caliente"}],
     })
     figuras = [FiguraExtraida(titulo="Fig 1", png_bytes=b"\x89PNGfake")]
-    drafts = extraer_diagramas(
+    drafts, fid = extraer_diagramas(
         "tenantX", figuras,
         complete_vision=lambda _p, _img: salida,
         put_asset=lambda t, n, b: f"https://assets/{t}/{n}",
@@ -101,16 +101,27 @@ def test_extraer_diagrama_desde_vision():
     assert len(drafts) == 1
     d = drafts[0]
     assert d.titulo == "Rotor y cabezal"
-    assert d.recurso_url == "https://assets/tenantX/figura_0.png"
+    # ED-0c §5bis: el asset se nombra por hash de la imagen (no por índice).
+    assert d.recurso_url.startswith("https://assets/tenantX/figura_")
+    assert d.hash_imagen and d.recurso_url.endswith(".png")
     assert len(d.etiquetas) == 2
     assert d.etiquetas[0].texto == "Tapa del rotor"
     assert d.etiquetas[0].w == 0.1 and d.etiquetas[0].h == 0.06
+    assert fid["portadas"] == 1 and fid["con_callouts"] == 1
 
-def test_extraer_diagrama_figura_sin_rotulos_se_omite():
+
+def test_extraer_diagrama_figura_sin_rotulos_SE_PORTA_igual():
+    # ED-0c: una figura SIN callouts (foto/plano sin rótulos) YA NO se descarta —
+    # se porta su imagen como recurso renderable (etiquetas vacías). Antes se perdía.
     salida = json.dumps({"titulo": "", "etiquetas": [], "leyenda_simbolica": []})
     figuras = [FiguraExtraida(titulo="foto", png_bytes=b"x")]
-    drafts = extraer_diagramas("t", figuras, complete_vision=lambda _p, _i: salida, put_asset=lambda *_: "u")
-    assert drafts == []
+    drafts, fid = extraer_diagramas(
+        "t", figuras, complete_vision=lambda _p, _i: salida, put_asset=lambda *_: "u",
+    )
+    assert len(drafts) == 1                      # se porta igual
+    assert drafts[0].recurso_url == "u"          # imagen servible guardada
+    assert drafts[0].etiquetas == []             # sin callouts (no es gate)
+    assert fid["portadas"] == 1 and fid["con_callouts"] == 0
 
 
 # ── Wiring del worker — persiste el borrador según el tipo de schema ──────────
@@ -151,12 +162,17 @@ def test_worker_materializa_diagrama_t3(monkeypatch):
     dkg = _FakeDKG()
     pipe = ip.IngestPipeline(dkg_client=dkg)
     monkeypatch.setattr(df, "extraer_figuras", lambda _doc: [FiguraExtraida("f", b"x")])
-    monkeypatch.setattr(de, "extraer_diagramas", lambda *_a, **_k: [
-        DraftDiagrama(titulo="D", recurso_url="u", etiquetas=[EtiquetaBorrador(texto="x", x=0.1, y=0.2, w=0.1, h=0.1)])
-    ])
+    # ED-0c: extraer_diagramas devuelve (drafts, fidelidad).
+    monkeypatch.setattr(de, "extraer_diagramas", lambda *_a, **_k: (
+        [DraftDiagrama(titulo="D", recurso_url="u",
+                       etiquetas=[EtiquetaBorrador(texto="x", x=0.1, y=0.2, w=0.1, h=0.1)])],
+        {"procesadas": 1, "portadas": 1, "con_callouts": 1, "sin_imagen_utilizable": 0,
+         "store_fallo": 0, "vision_fallo": 0, "omitidas_por_tope": 0, "figuras_deduplicadas": 0},
+    ))
 
     counters = pipe._auto_materializar_visuales(_FakeSchema([3]), "md", object(), _job(), "doc2")
     assert counters["diagramas"] == 1
+    assert counters["fidelidad_visual"]["portadas"] == 1
     assert "RecursoVisual" in dkg.labels_creadas()
     assert "Etiqueta" in dkg.labels_creadas()
 

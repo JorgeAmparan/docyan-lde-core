@@ -20,12 +20,17 @@ LGPGIR sin llamar a la API.
 from __future__ import annotations
 
 import json
+import os
 from typing import Callable
 
 from app.schemas_documentales.base import DocumentSchema
 
 # Prefijo OBLIGATORIO (Adenda §3): sin `gemini/`, LiteLLM defaultea a Vertex AI.
 GENERATOR_MODEL = "gemini/gemini-2.5-flash"
+
+# Timeout explícito de la llamada LLM (ED-0 §3.2): ningún cliente de red sin
+# timeout. LiteLLM lo propaga a su cliente httpx (connect + read).
+GENERATOR_LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 
 # Tamaño de muestra del documento que se envía al generador (chars). Suficiente
 # para inferir estructura sin facturar el documento completo.
@@ -43,6 +48,7 @@ def _default_llm_caller(prompt: str) -> str:
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0,
         response_format={"type": "json_object"},
+        timeout=GENERATOR_LLM_TIMEOUT,
     )
     return str(resp["choices"][0]["message"]["content"])
 

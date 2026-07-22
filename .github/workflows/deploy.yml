@@ -46,6 +46,54 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+  # ED-0b §1: el worker de ingesta (docyan-lde-ingest) se despliega en CADA push a
+  # main, igual que el backend. Antes NO estaba en este workflow, por eso corría
+  # imagen del 13-jul (sin los fixes de timeouts/temperature/serialización) — la
+  # causa del bloqueo de la siembra demo-maxi. Mismo gate de migraciones.
+  deploy-worker:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: check-migrations  # no desplegar si la DB de prod está desfasada
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy ingest worker (docyan-lde-ingest) to Fly.io
+        # Comando BLINDADO (B2.2, ver worker/fly.toml): --config worker/fly.toml +
+        # --app y --dockerfile EXPLÍCITOS. El build context es la raíz del repo
+        # (el Dockerfile COPYa app/ y worker/); se corre desde el checkout (cwd=raíz).
+        run: >-
+          flyctl deploy --remote-only
+          --config worker/fly.toml
+          --app docyan-lde-ingest
+          --dockerfile worker/Dockerfile
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  # ED-0d §4: el embedder (docyan-lde-embedder) se despliega en cada push a main.
+  # Antes no estaba en el workflow — su código (event loop, health, carga) quedaba
+  # stale como el worker pre-ED-0b. El build context es embedder/ (el Dockerfile
+  # sólo COPYa main.py + requirements.txt), por eso corre desde ese directorio.
+  deploy-embedder:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: check-migrations
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy embedder (docyan-lde-embedder) to Fly.io
+        working-directory: embedder
+        run: flyctl deploy --remote-only --config fly.toml --app docyan-lde-embedder
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
   deploy-frontend:
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
