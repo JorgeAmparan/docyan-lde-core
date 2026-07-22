@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from time import perf_counter
 from typing import Any, Callable
 
@@ -45,6 +46,30 @@ logger = logging.getLogger("docyan.pcl.facade")
 #: respuestas synthesis-first. Configurable; el dato real lo afina el piloto vía la
 #: instrumentación (doc §4.4: las cifras se cierran con datos del primer cliente).
 PRECIO_CENTAVOS_POR_1K = float(os.getenv("PCL_PRECIO_CENTAVOS_POR_1K", "0.04"))
+
+
+def _puede_servir_cache(pregunta: str, contexto: dict | None) -> bool:
+    """
+    ¿Es seguro SERVIR una respuesta cacheada para esta consulta? (§3.3 guard PCL)
+
+    NO se sirve caché cuando:
+      · la consulta es CORTA/AMBIGUA (≤1 token de contenido o <6 chars, p. ej.
+        "aceite?", "EPP?"): un match semántico de una sola palabra colisiona con
+        entradas ajenas — se fuerza cómputo fresco; y
+      · la consulta NO tiene SCOPE de documento (sin `documento_id`, `entidad_id`
+        ni `token_qr`): sin scope, una respuesta cacheada de OTRO documento del
+        mismo tenant puede servirse por cercanía (directiva de Jorge: exigir
+        `documento_id` para servir caché).
+
+    Es una compuerta de SERVIR, no de escribir: la respuesta fresca igual se cachea,
+    de modo que una consulta acotada y no-corta idéntica sí aprovecha el caché.
+    """
+    ctx = contexto or {}
+    tiene_scope = bool(ctx.get("documento_id") or ctx.get("entidad_id") or ctx.get("token_qr"))
+    norm = re.sub(r"\s+", " ", (pregunta or "").strip().lower())
+    tokens = [t for t in re.findall(r"[0-9a-záéíóúñü]+", norm) if len(t) >= 3]
+    corta = len(norm) < 6 or len(tokens) <= 1
+    return tiene_scope and not corta
 
 
 def _contar_tokens(texto: str) -> int:
@@ -133,7 +158,11 @@ class PCL:
         Devuelve `(RespuestaCCP, extras)`.
         """
         t0 = perf_counter()
-        hit = self.cache.lookup(tenant_id, pregunta, contexto)
+        # §3.3 — guard de servicio: consultas cortas/ambiguas o sin scope de documento
+        # NO se sirven de caché (se fuerza cómputo fresco). Evita que "aceite?" sirva
+        # una respuesta cacheada ajena por colisión semántica de una sola palabra.
+        hit = self.cache.lookup(tenant_id, pregunta, contexto) \
+            if _puede_servir_cache(pregunta, contexto) else None
 
         if hit is not None:
             # Doc §5.4: el hit NO bypasea gobernanza.

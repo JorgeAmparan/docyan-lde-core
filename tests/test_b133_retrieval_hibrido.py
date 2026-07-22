@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import hashlib
 
+import math
+
 from app.pipelines.retrieval_hibrido import (
+    PISO_COSENO_CRUDO,
     PISO_RELEVANCIA_SEMANTICA,
     UMBRAL_BANDA_ALTA,
     UMBRAL_LEXICO_VECTORIAL,
     Candidato,
     combinar,
     coseno,
+    coseno_crudo,
     es_match_estricto,
     levenshtein,
     nivel_tabulador,
@@ -168,3 +172,70 @@ def test_constantes_decision_2():
     assert UMBRAL_LEXICO_VECTORIAL == 0.30
     assert UMBRAL_BANDA_ALTA == 0.85
     assert 0.0 < PISO_RELEVANCIA_SEMANTICA < 1.0
+    assert 0.0 < PISO_COSENO_CRUDO < 1.0
+
+
+# ── §3 · Piso de coseno CRUDO — no rellenar con ruido semántico ─────────────────
+#
+# Regresión nombrada del caso wordfluent/MAXI-10: "lubricante?" devolvía specs del
+# catálogo de partes (2400 rpm, tuercas) porque el piso operaba sobre el coseno
+# REESCALADO (0.5·(cos+1)), que mapea un coseno crudo de 0.10 a 0.55 → todo pasaba.
+# El piso ahora es sobre el coseno CRUDO: solo el dato que DESTACA entra.
+
+
+class _EjeEmbedder:
+    """Query → eje [1,0,…]; los candidatos traen embedding con coseno crudo EXACTO
+    contra ese eje (para calibrar la admisión sin depender de BGE-M3)."""
+
+    def embed(self, text: str) -> list[float]:
+        return [1.0, 0.0, 0.0, 0.0]
+
+
+def _emb_cos(r: float) -> list[float]:
+    """Vector unitario cuyo coseno crudo con el eje [1,0,…] es exactamente `r`."""
+    return [r, math.sqrt(max(0.0, 1.0 - r * r)), 0.0, 0.0]
+
+
+def test_coseno_crudo_vs_reescalado():
+    eje = [1.0, 0.0, 0.0, 0.0]
+    # El crudo conserva el signo/rango real; el reescalado lo comprime a [0,1].
+    assert abs(coseno_crudo(eje, eje) - 1.0) < 1e-9
+    assert abs(coseno_crudo(eje, _emb_cos(0.50)) - 0.50) < 1e-9
+    # Un coseno crudo de 0.10 (ruido) reescala a 0.55 — el bug que hacía pasar todo.
+    assert abs(coseno(eje, _emb_cos(0.10)) - 0.55) < 1e-9
+
+
+def test_lubricante_no_arrastra_specs_de_partes():
+    emb = _EjeEmbedder()
+    # "lubricante" casa fuzzy contra "lubricacion" (dispara la vectorial) pero NO por
+    # substring → su admisión depende del coseno crudo (0.60, destaca).
+    engrase = Candidato(texto_match="puntos de lubricacion soporte de horquilla",
+                        embedding=_emb_cos(0.60), data={"k": "engrase"})
+    rpm = Candidato(texto_match="2400 rpm", embedding=_emb_cos(0.50), data={"k": "rpm"})
+    tuerca = Candidato(texto_match="tuerca 1/2 nc nylon", embedding=_emb_cos(0.48),
+                       data={"k": "tuerca"})
+    res = rankear("lubricante", [engrase, rpm, tuerca], embedder=emb)
+    claves = {c.data["k"] for c in res}
+    assert claves == {"engrase"}  # el ruido de partes (0.50/0.48 < piso) NO entra
+
+
+def test_sin_destacado_semantico_lista_vacia_degradacion_honesta():
+    # Todo el pool por debajo del piso crudo (cluster plano, caso "capacidad?"/"banda?"
+    # sobre extracción ruidosa): NADA se admite por semántica → lista vacía → el
+    # pipeline degrada honesto en vez de rellenar. Un candidato dispara la vectorial.
+    emb = _EjeEmbedder()
+    disparo = Candidato(texto_match="lubricacion", embedding=_emb_cos(0.55),
+                        data={"k": "a"})  # fuzzy≥0.30 invoca vectorial, pero 0.55<0.58
+    ruido = Candidato(texto_match="atencion", embedding=_emb_cos(0.56), data={"k": "b"})
+    res = rankear("lubricante", [disparo, ruido], embedder=emb)
+    assert res == []
+
+
+def test_match_lexico_estricto_pasa_aunque_el_coseno_sea_bajo():
+    # El puente semántico se endurece, pero la desambiguación léxica precisa (CONTAINS)
+    # sigue admitiendo siempre: una spec cuyo nombre CONTIENE el token no se pierde.
+    emb = _EjeEmbedder()
+    directo = Candidato(texto_match="nivel de aceite del motor", embedding=_emb_cos(0.20),
+                        data={"k": "aceite"})
+    res = rankear("aceite", [directo], embedder=emb)
+    assert [c.data["k"] for c in res] == ["aceite"]  # estricto entra pese a coseno 0.20

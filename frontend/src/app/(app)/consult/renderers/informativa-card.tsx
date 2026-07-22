@@ -38,6 +38,22 @@ export function InformativaCard({
   // Texto de respuesta: la definición; o el valor cuando trae la prosa (no es número corto).
   const answerText = (payload.definicion ?? "").trim() || (!hasBig ? valor : "");
 
+  // §3.2 — degradación honesta: sin especificación relevante ni definición, la tarjeta
+  // DICE que el documento no trae ese dato, en vez de un cuerpo vacío o (peor) relleno
+  // de datos irrelevantes con citas correctas. El backend ya no emite ruido semántico
+  // (§3.1 piso de coseno crudo); aquí se cierra el caso "nada relevante" honestamente.
+  if (especs.length === 0 && !answerText) {
+    return (
+      <div className="acard">
+        <div className="q">{payload.titulo}</div>
+        <p className="note" style={{ fontSize: 14.5, color: "var(--fg-muted)" }}>
+          No encontré ese dato en este documento. Prueba reformular la pregunta o
+          consultar otro documento del CoDo.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="acard">
       <div className="q">{payload.titulo}</div>

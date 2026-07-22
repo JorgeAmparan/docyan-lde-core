@@ -212,3 +212,40 @@ def test_facade_metricas_delega_en_metrics():
     m = pcl.metricas(TENANT, (hoy, hoy))
     assert m.tenant_id == TENANT
     assert m.ventana == (hoy, hoy)
+
+
+# ── §3.3 · Guard de servicio de caché (consultas cortas + exigir scope) ─────────
+
+from app.pcl.pcl_facade import _puede_servir_cache  # noqa: E402
+
+
+def test_puede_servir_cache_exige_scope_y_no_corta():
+    # Sirve: consulta con scope de documento y de ≥2 tokens de contenido.
+    assert _puede_servir_cache("qué tipo de aceite usa", {"documento_id": "d1"}) is True
+    assert _puede_servir_cache("par de apriete", {"entidad_id": "e1"}) is True
+    assert _puede_servir_cache("banda de transmisión", {"token_qr": "q1"}) is True
+    # NO sirve: consulta corta/ambigua (una sola palabra), aunque tenga scope.
+    assert _puede_servir_cache("aceite?", {"documento_id": "d1"}) is False
+    assert _puede_servir_cache("EPP?", {"documento_id": "d1"}) is False
+    # NO sirve: sin scope de documento/entidad/QR (riesgo de servir de otro doc).
+    assert _puede_servir_cache("qué tipo de aceite usa", {}) is False
+    assert _puede_servir_cache("qué tipo de aceite usa", None) is False
+
+
+def test_consulta_corta_no_sirve_de_cache_fuerza_fresco():
+    # Aunque exista una entrada cacheada, una consulta corta la recomputa (no colisiona
+    # con una entrada ajena de una sola palabra).
+    pcl, _ = make_inmemory_pcl()
+    contador = []
+    # 1er ask corto: miss + ejecuta.
+    pcl.consultar_o_cachear(
+        tenant_id=TENANT, user_id="u1", pregunta="aceite?",
+        contexto={"documento_id": "d1"}, clasificacion=_clasif(), ejecutar=_ejecutor(contador),
+    )
+    # 2do ask corto idéntico: NO se sirve de caché (guard) → ejecuta otra vez.
+    resp, _ = pcl.consultar_o_cachear(
+        tenant_id=TENANT, user_id="u1", pregunta="aceite?",
+        contexto={"documento_id": "d1"}, clasificacion=_clasif(), ejecutar=_ejecutor(contador),
+    )
+    assert len(contador) == 2  # ambas ejecutaron; la corta nunca sirvió de caché
+    assert resp.cache_hit is False

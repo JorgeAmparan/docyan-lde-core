@@ -40,9 +40,20 @@ UMBRAL_LEXICO_VECTORIAL = 0.30
 # Frontera del tabulador entre "bandas altas" (≥85%, ponderación 70/30 a favor del
 # léxico) y "bandas bajas" (<85%, ponderación 30/70 a favor de la semántica).
 UMBRAL_BANDA_ALTA = 0.85
-# Piso de relevancia para que un candidato no-léxico (encontrado solo por semántica)
-# entre al resultado. Evita inundar la InfoCard con ruido semántico lejano.
+# Piso de relevancia (score reescalado) — legado; ya NO es la compuerta de admisión
+# semántica (ver PISO_COSENO_CRUDO). Se conserva por compat de imports/tests viejos.
 PISO_RELEVANCIA_SEMANTICA = 0.55
+# Compuerta de admisión semántica sobre el coseno CRUDO ([-1,1]), NO el reescalado.
+# El reescalado `0.5·(cos+1)` mapeaba un coseno crudo de 0.10 al piso de 0.55, así que
+# TODO candidato pasaba (BGE-M3 da cosenos positivos ~0.5 aun para texto no relacionado).
+# Medición en prod (tenant wordfluent, MAXI-10 · §3): el dato relevante destaca en crudo
+# ("lubricante?"→"nivel de aceite" 0.60) mientras el ruido del catálogo de partes se
+# apiña en 0.48-0.56 ("2400 rpm" 0.48, "3 350 Lts" 0.51). Un piso crudo de 0.58 deja
+# pasar el dato relevante y CORTA el relleno. Sin destacado (cluster plano < 0.58) →
+# lista vacía → degradación honesta (mejor "no encontrado" que tarjeta de ruido con
+# citas correctas — directiva de Jorge). El match léxico estricto NO pasa por aquí:
+# la desambiguación léxica precisa (CONTAINS) admite siempre, como antes.
+PISO_COSENO_CRUDO = 0.58
 
 
 def _sin_acentos(s: str) -> str:
@@ -127,8 +138,10 @@ def score_lexico(query: str, texto: str) -> float:
     return total / len(q_tokens)
 
 
-def coseno(a: list[float] | None, b: list[float] | None) -> float:
-    """Similitud coseno reescalada a [0,1] (0.5·(cos+1)). None/cero → 0."""
+def coseno_crudo(a: list[float] | None, b: list[float] | None) -> float:
+    """Coseno CRUDO en [-1,1] (0.0 si falta un vector). Es la señal de relevancia
+    real que gobierna la admisión semántica (`PISO_COSENO_CRUDO`); el reescalado de
+    `coseno` sirve solo para el score/banda de display."""
     if not a or not b or len(a) != len(b):
         return 0.0
     dot = sum(x * y for x, y in zip(a, b))
@@ -136,8 +149,16 @@ def coseno(a: list[float] | None, b: list[float] | None) -> float:
     nb = math.sqrt(sum(y * y for y in b))
     if na == 0.0 or nb == 0.0:
         return 0.0
-    cos = dot / (na * nb)
-    return max(0.0, min(1.0, 0.5 * (cos + 1.0)))
+    return dot / (na * nb)
+
+
+def coseno(a: list[float] | None, b: list[float] | None) -> float:
+    """Similitud coseno reescalada a [0,1] (0.5·(cos+1)), para el score/banda de
+    display. NO se usa para admitir (eso lo decide `coseno_crudo`). None/dim
+    distinta → 0."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    return max(0.0, min(1.0, 0.5 * (coseno_crudo(a, b) + 1.0)))
 
 
 def nivel_tabulador(score: float) -> str:
@@ -196,6 +217,9 @@ class Candidato:
     lex: float = 0.0
     estricto: bool = False
     vec: float | None = None
+    # Coseno CRUDO ([-1,1]) — la señal de relevancia real que gobierna la admisión
+    # semántica. `vec` (reescalado) es solo score/banda de display. None ⇒ sin pasada.
+    vec_raw: float | None = None
     banda: str = field(default="")
     # Sesgo de ORDEN por intención×label (B13.3 §ranking). NO es relevancia: el
     # `score`/`banda` siguen siendo la confianza honesta (léxico+semántica) que se
@@ -248,16 +272,20 @@ def rankear(
     # Pasada 2 — semántico (solo si el léxico lo amerita y hay embedder).
     q_emb = _embeder_query(query, embedder) if invocar_vectorial else None
     for c in candidatos:
+        c.vec_raw = coseno_crudo(q_emb, c.embedding) if q_emb is not None else None
         c.vec = coseno(q_emb, c.embedding) if q_emb is not None else None
         c.score = combinar(c.lex, c.vec)
         c.banda = nivel_tabulador(c.score)
     # Admisión: match léxico estricto (paridad CONTAINS) SIEMPRE entra; un candidato
-    # hallado solo por semántica entra si su score supera el piso de relevancia (y
-    # por tanto hubo embedder real). Sin embedder, esto colapsa al recall léxico
-    # histórico — ningún candidato no-substring se cuela. Orden estable por score.
+    # hallado SOLO por semántica entra si su coseno CRUDO supera el piso de relevancia
+    # (`PISO_COSENO_CRUDO`) — no el score reescalado, que apenas discrimina. Sin
+    # destacado semántico real (todo el pool por debajo del piso), NADA se admite por
+    # semántica → la lista queda vacía y el pipeline degrada honesto en vez de rellenar
+    # con las entidades más cercanas (§3). Sin embedder (vec_raw None), colapsa al
+    # recall léxico histórico. Orden estable por score.
     relevantes = [
         c for c in candidatos
-        if c.estricto or (c.vec is not None and c.score >= PISO_RELEVANCIA_SEMANTICA)
+        if c.estricto or (c.vec_raw is not None and c.vec_raw >= PISO_COSENO_CRUDO)
     ]
     # Orden = relevancia honesta (`score`) + sesgo de intención (`prioridad`). El
     # `prioridad` reordena pero NO admite (la admisión de arriba es solo por score/
