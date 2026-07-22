@@ -52,6 +52,19 @@ describe("Tipo 1 · InformativaCard", () => {
     expect(screen.getByText("N·m")).toBeInTheDocument();
     expect(screen.getByText(/Manual Rotina 380 · §4\.2\.1 · p\.12/)).toBeInTheDocument();
   });
+
+  it("§3.2 — sin especificación ni definición muestra 'no encontrado' honesto, no una tarjeta vacía", () => {
+    const payload: InfoCardPayload = {
+      kind: "info_card",
+      titulo: "¿Qué tipo de aceite usa?",
+      match_multiple: false,
+      especificaciones: [],
+      citas: [],
+    };
+    render(<InformativaCard payload={payload} saved={false} onSave={noop} onCite={noop} />);
+    // La tarjeta lo DICE en vez de rellenar con datos irrelevantes con cita correcta.
+    expect(screen.getByText(/No encontré ese dato en este documento/i)).toBeInTheDocument();
+  });
 });
 
 describe("Tipo 2 · GuiaPasoAPaso", () => {
