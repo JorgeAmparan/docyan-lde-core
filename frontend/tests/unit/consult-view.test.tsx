@@ -52,6 +52,40 @@ describe("ConsultView — DEF-4 (§1.2.6): nunca el SHA crudo en la cabecera", (
   });
 });
 
+describe("ConsultView — chip de procedencia = TIPO REAL del documento citado (PRIORIDAD 0 §4)", () => {
+  async function preguntarYResolver(payload: Record<string, unknown>) {
+    let resolveQuery: (v: unknown) => void = () => {};
+    post.mockImplementation((url: string) =>
+      url === "/mo/sessions"
+        ? Promise.resolve({ session_id: "s1" })
+        : new Promise((r) => { resolveQuery = r; }));
+    render(<ConsultView context={ctx({ entityName: "Manual MAXI-10.pdf" })} />);
+    const input = screen.getByPlaceholderText(/Pregunta sobre/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "¿Qué lubricante usa?" } });
+    fireEvent.submit(input.closest("form")!);
+    resolveQuery({ resultado: { payload, contexto_ccp: { cache_hit: false } } });
+  }
+
+  it("una Informativa sobre un manual_tecnico muestra 'Manual técnico', NO 'Ficha técnica'", async () => {
+    // El bug: KIND_SCHEMA['info']='ficha_tecnica' pintaba "Ficha técnica" en toda
+    // respuesta Informativa aunque la fuente fuera un manual. El chip debe leer
+    // Cita.documento_tipo (dato real del backend).
+    await preguntarYResolver({
+      kind: "info_card",
+      titulo: "Lubricación",
+      especificaciones: [],
+      citas: [{ documento_tipo: "manual_tecnico", documento_nombre: "Manual MAXI-10", documento_id: "d1" }],
+    });
+    await waitFor(() => expect(screen.getByText("Manual técnico")).toBeInTheDocument());
+    expect(screen.queryByText("Ficha técnica")).toBeNull();
+  });
+
+  it("sin cita tipada cae al respaldo heurístico (comportamiento previo intacto)", async () => {
+    await preguntarYResolver({ kind: "info_card", titulo: "X", especificaciones: [], citas: [] });
+    await waitFor(() => expect(screen.getByText("Ficha técnica")).toBeInTheDocument());
+  });
+});
+
 describe("ConsultView — lag del input (§1.2.8): la pregunta se pinta al instante", () => {
   it("la burbuja del usuario aparece y el campo se limpia ANTES de la respuesta", async () => {
     // La respuesta del motor queda PENDIENTE (deferred): si la pregunta dependiera

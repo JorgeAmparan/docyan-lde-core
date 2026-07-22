@@ -206,6 +206,17 @@ const SCHEMA_LABEL: Record<string, string> = {
   memoria_traduccion: "Memoria de traducción",
 };
 
+/** Tipo documental REAL de la fuente citada (`Cita.documento_tipo`, B13.3 §2.3).
+ *  El chip de procedencia (`.dc-prov`) usa ESTO — el tipo del documento del que
+ *  de verdad proviene la respuesta — no la heurística por tipo de render. La
+ *  heurística `KIND_SCHEMA` queda solo como respaldo cuando la respuesta no trae
+ *  cita con tipo (p.ej. degradación honesta sin procedencia). */
+function provenanceTipo(a: Answer): string | null {
+  const citas = (a.payload as { citas?: Array<{ documento_tipo?: string | null }> } | undefined)
+    ?.citas;
+  return citas?.find((c) => c?.documento_tipo)?.documento_tipo ?? null;
+}
+
 /** Envoltura de respuesta del prototipo (answers.jsx → AnswerBody): `.dc-answer`
  *  con `.dc-prov` (línea de modo + chip del tipo documental de origen) sobre la
  *  tarjeta de tipo. El error no lleva provenance. */
@@ -227,7 +238,15 @@ function AnswerCard({
   if (a.kind === "error") {
     return <AnswerBody a={a} saved={saved} onSave={onSave} onCite={onCite} onNavigate={onNavigate} />;
   }
-  const label = SCHEMA_LABEL[KIND_SCHEMA[a.kind] ?? "ficha_tecnica"];
+  // El chip de procedencia refleja el TIPO REAL del documento citado
+  // (`Cita.documento_tipo`), NO el tipo de render. Antes, toda respuesta
+  // Informativa (`kind:"info"`) pintaba "Ficha técnica" aunque la fuente fuera
+  // un `manual_tecnico` — la heurística `KIND_SCHEMA["info"]="ficha_tecnica"`
+  // ignoraba el tipo real. El respaldo heurístico solo aplica sin cita tipada.
+  const provTipo = provenanceTipo(a);
+  const label = provTipo
+    ? resolveDocTipo(provTipo)?.label ?? null
+    : SCHEMA_LABEL[KIND_SCHEMA[a.kind] ?? "ficha_tecnica"];
   return (
     <div className="dc-answer">
       <div className="dc-prov">
