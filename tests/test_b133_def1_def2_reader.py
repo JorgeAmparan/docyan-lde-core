@@ -91,7 +91,7 @@ def test_def1_sustancia_es_consultable_con_cita_y_atribucion():
         documento_id="msds_sha", documento_nombre="msds_am002.pdf", documento_tipo="msds",
     )
     g = FakeGraph({"Sustancia": [sust]}, chunks={CHUNK_ID: CHUNK_TEXT})
-    pay = _pay(DKGReader(g), "¿cuál es el nombre del químico?")
+    pay = _pay(DKGReader(g, embedder=None), "¿cuál es el nombre del químico?")
     nombres = {e.nombre for e in pay.especificaciones}
     assert "Sustancia" in nombres
     espec = next(e for e in pay.especificaciones if e.nombre == "Sustancia")
@@ -110,7 +110,7 @@ def test_def1_no_fabrica_fragmento_si_el_termino_no_esta_en_el_chunk():
     sust = _row(id="s2", nombre="Óxido de aluminio (traducido)", spans=_spans(),
                 documento_id="d", documento_nombre="x.pdf", documento_tipo="msds")
     g = FakeGraph({"Sustancia": [sust]}, chunks={CHUNK_ID: CHUNK_TEXT})
-    pay = _pay(DKGReader(g), "sustancia química")
+    pay = _pay(DKGReader(g, embedder=None), "sustancia química")
     espec = next(e for e in pay.especificaciones if e.nombre == "Sustancia")
     assert espec.cita is not None and espec.cita.fragmento is None
 
@@ -171,7 +171,7 @@ def test_def1_fechavencimiento_responde_vence_con_cita():
               documento_id="cert", documento_nombre="mitutoyo_cert.pdf",
               documento_tipo="calibracion")
     g = FakeGraph({"FechaVencimiento": [fv]}, chunks={CHUNK_ID: chunk})
-    pay = _pay(DKGReader(g), "¿cuándo vence la calibración?")
+    pay = _pay(DKGReader(g, embedder=None), "¿cuándo vence la calibración?")
     item = next((e for e in pay.especificaciones if e.nombre == "Vence"), None)
     assert item is not None
     assert item.valor == "15 January 2027"           # vencimiento (2027), no emisión (2026)
@@ -193,3 +193,52 @@ def test_informativa_combina_especificacion_y_labels_def1():
     for e in pay.especificaciones:
         if e.cita:
             assert e.cita.documento_tipo == "msds"
+
+
+# ── §B · Embedder caído (503) → degradación honesta, NUNCA flood léxico ─────────
+
+
+class _EmbedderCaido:
+    def embed(self, text: str):  # noqa: ANN201
+        raise ConnectionError("embed 503")
+
+
+def test_informativa_propaga_embedder_caido_no_floodea():
+    import pytest
+
+    from app.pipelines.retrieval_hibrido import EmbedderNoDisponibleError
+
+    # Universo con una spec que casa léxico el query (dispara la vectorial). Con el
+    # embedder configurado-pero-caído, el reader NO cae a admitir todo el universo:
+    # propaga para degradación honesta.
+    fg = FakeGraph({"Especificacion": [_row(id="s1", nombre="OSHA PEL", valor="15 mg/m3")]})
+    reader = DKGReader(client=fg, embedder=_EmbedderCaido())
+    ctx = ContextoPipeline(tenant_id="t", pregunta="OSHA PEL", params={"termino": "OSHA PEL"})
+    with pytest.raises(EmbedderNoDisponibleError):
+        tipo1_informativa.resolver(ctx, reader)
+
+
+def test_coordinator_degrada_honesto_ante_embedder_caido():
+    from app.orchestrator.clasificacion.tipos import (
+        RUTA_POR_TIPO,
+        ResultadoClasificacion,
+        TipoIntencion,
+    )
+    from app.orchestrator.pipeline_coordinator import PipelineCoordinator
+    from app.pipelines.retrieval_hibrido import EmbedderNoDisponibleError
+
+    class ReaderCaido:
+        def informativa(self, *a, **k):
+            raise EmbedderNoDisponibleError("503")
+
+    coord = PipelineCoordinator(graph_reader=ReaderCaido())
+    ctx = ContextoPipeline(tenant_id="t", pregunta="lubricante?", params={})
+    clasif = ResultadoClasificacion(
+        tipo=TipoIntencion.INFORMATIVA, score=0.9,
+        ruta=RUTA_POR_TIPO[TipoIntencion.INFORMATIVA], metodo="heuristico")
+    envelope, extras = coord.ejecutar_pipeline(clasif, ctx)
+
+    assert envelope.degradado is True
+    assert "temporalmente" in (envelope.nota or "").lower()
+    assert envelope.payload.especificaciones == []          # CERO flood con citas
+    assert "embedder_no_disponible" in extras["error"]      # queda en FAT vía el MO

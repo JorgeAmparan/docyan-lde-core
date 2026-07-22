@@ -181,6 +181,7 @@ class PipelineCoordinator:
         no responde → payload vacío VÁLIDO + nota honesta, nunca contenido falso).
         """
         from app.pipelines.registry import payload_vacio, resolver_para
+        from app.pipelines.retrieval_hibrido import EmbedderNoDisponibleError
         from app.schemas.pipeline_payloads import ConsultaResuelta
 
         resolver = resolver_para(clasificacion.tipo)
@@ -196,6 +197,28 @@ class PipelineCoordinator:
             )
             extras = {"alertas_cuarentena": ctx.params.get("_alertas_cuarentena", [])}
             return envelope, extras
+        except EmbedderNoDisponibleError as exc:
+            # §B — el motor de embeddings está caído (503/timeout). NO se rellena con
+            # matches léxicos del universo (sería ruido con citas): degradación HONESTA.
+            # El mensaje va en `definicion` para que la InfoCard lo MUESTRE; `extras.error`
+            # lo registra en FAT (el MO loguea `system`). Es transitorio (cold-start).
+            from app.schemas.pipeline_payloads import InfoCardPayload
+
+            nota = ("La búsqueda no está disponible temporalmente (motor de embeddings). "
+                    "Reintenta en un momento.")
+            envelope = ConsultaResuelta(
+                tipo_intencion=clasificacion.tipo.value,
+                score=clasificacion.score,
+                ruta=clasificacion.ruta,
+                metodo=clasificacion.metodo,
+                cruces=[],
+                payload=InfoCardPayload(
+                    titulo=ctx.pregunta or "Consulta", definicion=nota, especificaciones=[]
+                ),
+                degradado=True,
+                nota=nota,
+            )
+            return envelope, {"error": f"embedder_no_disponible: {exc}"}
         except Exception as exc:  # noqa: BLE001 — degradación HONESTA, no se finge.
             nota = "El grafo de conocimiento no respondió; respuesta degradada."
             envelope = ConsultaResuelta(

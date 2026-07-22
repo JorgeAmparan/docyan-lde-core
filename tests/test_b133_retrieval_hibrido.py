@@ -20,6 +20,7 @@ from app.pipelines.retrieval_hibrido import (
     UMBRAL_BANDA_ALTA,
     UMBRAL_LEXICO_VECTORIAL,
     Candidato,
+    EmbedderNoDisponibleError,
     combinar,
     coseno,
     coseno_crudo,
@@ -152,13 +153,16 @@ def test_rankear_semantico_admite_no_lexico_via_puente():
     assert "pel" in claves and "tlv" in claves  # ambos admitidos (léxico + semántico)
 
 
-def test_rankear_degrada_a_lexico_si_embedder_cae():
+def test_rankear_embedder_caido_propaga_para_degradacion_honesta():
+    # §B — el embedder CONFIGURADO pero caído NO degrada a léxico sobre el universo
+    # (sería relleno con citas): propaga `EmbedderNoDisponibleError` para que el
+    # coordinator degrade honesto. (Embedder AUSENTE = None sí es léxico histórico.)
+    import pytest
+
     emb = EmbedderCaido()
     pel = _cand("OSHA PEL exposure limit", data={"k": "pel"}, emb=[0.1] * 16)
-    tlv = _cand("ACGIH TLV", data={"k": "tlv"}, emb=[0.1] * 16)
-    res = rankear("exposure limit", [pel, tlv], embedder=emb)
-    # Embedder caído → vec None → solo el estricto (PEL) entra; nada se rompe.
-    assert [c.data["k"] for c in res] == ["pel"]
+    with pytest.raises(EmbedderNoDisponibleError):
+        rankear("exposure limit", [pel], embedder=emb)
 
 
 def test_rankear_ordena_por_score_desc():
