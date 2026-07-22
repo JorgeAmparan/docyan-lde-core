@@ -11,7 +11,6 @@ léxico cuando el embedder no responde. Sin FalkorDB, sin red.
 from __future__ import annotations
 
 import hashlib
-
 import math
 
 from app.pipelines.retrieval_hibrido import (
