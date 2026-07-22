@@ -47,7 +47,6 @@ jobs:
       GEMINI_API_KEY: fake-key-for-ci
       OPENAI_API_KEY: fake-key-for-ci
       ANTHROPIC_API_KEY: fake-key-for-ci
-      BGE_M3_URL: http://localhost:8080
       REDIS_URL: redis://localhost:6379/0
       FALKORDB_HOST: localhost
       # Deben coincidir con los defaults de tests/conftest.py: los tests de
@@ -148,7 +147,6 @@ jobs:
       SUPABASE_SERVICE_KEY: fake
       GEMINI_API_KEY: fake-key-for-ci
       OPENAI_API_KEY: fake-key-for-ci
-      BGE_M3_URL: http://localhost:8080
       REDIS_URL: redis://localhost:6379/0
       FALKORDB_HOST: localhost
       ORG_ID: ci-gen-types

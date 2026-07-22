@@ -35,6 +35,17 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger("docyan.retrieval.hibrido")
 
+
+class EmbedderNoDisponibleError(RuntimeError):
+    """El embedder ESTÁ configurado pero falló en la consulta (503/timeout/red).
+
+    Se distingue del embedder AUSENTE (nunca configurado → léxico histórico): aquí el
+    reader ya jaló el universo COMPLETO esperando rankear por semántica, y sin el
+    vector caería a admitir todo match léxico estricto del universo → relleno con
+    citas correctas. Por eso se PROPAGA: el coordinator degrada honesto ("búsqueda no
+    disponible temporalmente") en vez de rellenar con ruido (directiva de Jorge, §B).
+    """
+
 # Umbral léxico mínimo para invocar la pasada vectorial (Decisión #2).
 UMBRAL_LEXICO_VECTORIAL = 0.30
 # Frontera del tabulador entre "bandas altas" (≥85%, ponderación 70/30 a favor del
@@ -239,15 +250,21 @@ class Candidato:
 
 
 def _embeder_query(query: str, embedder) -> list[float] | None:
-    """Vectoriza el query con el embedder (decisión #1). None si no hay/falla."""
+    """Vectoriza el query con el embedder (decisión #1).
+
+    · embedder AUSENTE (None) → None: retrieval léxico histórico (B13.2), sin error.
+    · embedder PRESENTE pero FALLA (503/timeout) → RAISE `EmbedderNoDisponibleError`:
+      NO se degrada a léxico sobre el universo completo (sería relleno con citas). El
+      coordinator lo convierte en degradación honesta (§B). NUNCA ruido.
+    """
     if embedder is None:
         return None
     try:
         return embedder.embed(query)
-    except Exception as exc:  # noqa: BLE001 — degradación honesta a léxico-only
-        logger.warning("embedder no disponible (%s) → retrieval léxico-only",
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("embedder configurado pero caído (%s) → degradación honesta",
                        type(exc).__name__)
-        return None
+        raise EmbedderNoDisponibleError(str(exc)) from exc
 
 
 def rankear(

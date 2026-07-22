@@ -33,10 +33,19 @@ primary_region = "dfw"
   [[services.ports]]
     port = 8000
 
-  [[services.tcp_checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "120s"
+  # Readiness REAL (ED-0d, deuda del checklist): el check ejercita `/health`, que
+  # sólo responde 200 cuando el modelo BGE-M3 cargó + hizo un embed de warmup ("ok").
+  # El `tcp_check` anterior pasaba apenas uvicorn bindeaba (ANTES de cargar el modelo)
+  # → la máquina se marcaba healthy mientras /embed 503-eaba en el cold-start (flood
+  # léxico transitorio observado 2026-07-22). `grace_period` amplio (300s) cubre la
+  # carga del modelo (≈150s en 8 GB) sin disparar reinicio; sólo tras la gracia un
+  # /health que siga 503 se considera no-sano.
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "10s"
+    grace_period = "300s"
+    method = "get"
+    path = "/health"
 
 # BGE-M3 necesita RAM para el modelo en memoria. El contrato sugería 4 GB, pero
 # en verificación 4 GB resultó insuficiente: el modelo fp32 (~2.3 GB) + overhead
