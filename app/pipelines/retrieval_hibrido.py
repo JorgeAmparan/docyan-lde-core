@@ -51,9 +51,17 @@ PISO_RELEVANCIA_SEMANTICA = 0.55
 # apiña en 0.48-0.56 ("2400 rpm" 0.48, "3 350 Lts" 0.51). Un piso crudo de 0.58 deja
 # pasar el dato relevante y CORTA el relleno. Sin destacado (cluster plano < 0.58) →
 # lista vacía → degradación honesta (mejor "no encontrado" que tarjeta de ruido con
-# citas correctas — directiva de Jorge). El match léxico estricto NO pasa por aquí:
-# la desambiguación léxica precisa (CONTAINS) admite siempre, como antes.
+# citas correctas — directiva de Jorge). El match léxico estricto usa un piso MÁS BAJO
+# (PISO_COSENO_ESTRICTO): el token casó literal, señal de precisión.
 PISO_COSENO_CRUDO = 0.58
+# Piso para el match LÉXICO ESTRICTO cuando hay embedder. El substring CONTAINS es
+# preciso, pero un token GENÉRICO del query ("tipo", "usa") casa literal descripciones
+# de extracción irrelevantes ("Especificación del TIPO de rodamiento") e inunda la
+# tarjeta con cita correcta pero contenido ajeno. Esos matches espurios tienen coseno
+# crudo bajo (medición prod: ULTRA 0.45, tornillo 0.44), mientras el match de contenido
+# real es alto ("nivel de aceite" 0.73). Con embedder, un estricto también debe superar
+# este piso; SIN embedder, admite incondicional (recall léxico histórico intacto).
+PISO_COSENO_ESTRICTO = 0.50
 
 
 def _sin_acentos(s: str) -> str:
@@ -276,17 +284,23 @@ def rankear(
         c.vec = coseno(q_emb, c.embedding) if q_emb is not None else None
         c.score = combinar(c.lex, c.vec)
         c.banda = nivel_tabulador(c.score)
-    # Admisión: match léxico estricto (paridad CONTAINS) SIEMPRE entra; un candidato
-    # hallado SOLO por semántica entra si su coseno CRUDO supera el piso de relevancia
-    # (`PISO_COSENO_CRUDO`) — no el score reescalado, que apenas discrimina. Sin
-    # destacado semántico real (todo el pool por debajo del piso), NADA se admite por
-    # semántica → la lista queda vacía y el pipeline degrada honesto en vez de rellenar
-    # con las entidades más cercanas (§3). Sin embedder (vec_raw None), colapsa al
-    # recall léxico histórico. Orden estable por score.
-    relevantes = [
-        c for c in candidatos
-        if c.estricto or (c.vec_raw is not None and c.vec_raw >= PISO_COSENO_CRUDO)
-    ]
+    # Admisión en dos niveles sobre el coseno CRUDO (no el score reescalado, que apenas
+    # discrimina — mapea 0.10→0.55). Sin embedder (vec_raw None), colapsa al recall
+    # léxico histórico: el estricto admite incondicional. Con embedder:
+    #   · estricto (CONTAINS, señal de precisión) → piso BAJO `PISO_COSENO_ESTRICTO`:
+    #     corta el match espurio por token genérico ("tipo" en descripciones ajenas)
+    #     sin perder el match de contenido real (coseno alto).
+    #   · solo-semántico (puente cross-vocabulario) → piso ALTO `PISO_COSENO_CRUDO`.
+    # Todo el pool por debajo de su piso → lista vacía → el pipeline degrada honesto en
+    # vez de rellenar con las entidades más cercanas (§3). Orden estable por score.
+    def _admite(c: Candidato) -> bool:
+        if c.vec_raw is None:  # sin pasada vectorial → recall léxico histórico
+            return c.estricto
+        if c.estricto:
+            return c.vec_raw >= PISO_COSENO_ESTRICTO
+        return c.vec_raw >= PISO_COSENO_CRUDO
+
+    relevantes = [c for c in candidatos if _admite(c)]
     # Orden = relevancia honesta (`score`) + sesgo de intención (`prioridad`). El
     # `prioridad` reordena pero NO admite (la admisión de arriba es solo por score/
     # estricto): un candidato ruidoso no entra por tener buen sesgo, y un :Riesgo

@@ -16,6 +16,7 @@ import math
 
 from app.pipelines.retrieval_hibrido import (
     PISO_COSENO_CRUDO,
+    PISO_COSENO_ESTRICTO,
     PISO_RELEVANCIA_SEMANTICA,
     UMBRAL_BANDA_ALTA,
     UMBRAL_LEXICO_VECTORIAL,
@@ -172,7 +173,7 @@ def test_constantes_decision_2():
     assert UMBRAL_LEXICO_VECTORIAL == 0.30
     assert UMBRAL_BANDA_ALTA == 0.85
     assert 0.0 < PISO_RELEVANCIA_SEMANTICA < 1.0
-    assert 0.0 < PISO_COSENO_CRUDO < 1.0
+    assert 0.0 < PISO_COSENO_ESTRICTO < PISO_COSENO_CRUDO < 1.0
 
 
 # ── §3 · Piso de coseno CRUDO — no rellenar con ruido semántico ─────────────────
@@ -231,11 +232,37 @@ def test_sin_destacado_semantico_lista_vacia_degradacion_honesta():
     assert res == []
 
 
-def test_match_lexico_estricto_pasa_aunque_el_coseno_sea_bajo():
-    # El puente semántico se endurece, pero la desambiguación léxica precisa (CONTAINS)
-    # sigue admitiendo siempre: una spec cuyo nombre CONTIENE el token no se pierde.
+def test_match_lexico_estricto_usa_piso_mas_bajo_que_el_semantico():
+    # El estricto tiene un piso MÁS BAJO que el solo-semántico: un match de contenido
+    # con coseno moderado (0.52) — por debajo del piso semántico 0.58 pero por encima
+    # del estricto 0.50 — SÍ entra. La desambiguación léxica precisa se conserva.
     emb = _EjeEmbedder()
-    directo = Candidato(texto_match="nivel de aceite del motor", embedding=_emb_cos(0.20),
+    directo = Candidato(texto_match="nivel de aceite del motor", embedding=_emb_cos(0.52),
                         data={"k": "aceite"})
     res = rankear("aceite", [directo], embedder=emb)
-    assert [c.data["k"] for c in res] == ["aceite"]  # estricto entra pese a coseno 0.20
+    assert [c.data["k"] for c in res] == ["aceite"]
+
+
+def test_estricto_por_token_generico_con_coseno_bajo_se_corta():
+    # Regresión del segundo vector de relleno (medido en prod): "¿qué TIPO de aceite
+    # usa?" — el token genérico "tipo" casa literal descripciones de partes irrelevantes
+    # ("Especificación del TIPO de rodamiento") con coseno bajo. Con embedder, ese match
+    # estricto espurio (coseno 0.44 < piso estricto 0.50) se corta; el de contenido real
+    # (coseno alto) se conserva.
+    emb = _EjeEmbedder()
+    real = Candidato(texto_match="nivel de aceite del motor", embedding=_emb_cos(0.73),
+                     data={"k": "aceite"})
+    espurio = Candidato(texto_match="especificacion del tipo de rodamiento conico",
+                        embedding=_emb_cos(0.44), data={"k": "conico"})
+    res = rankear("tipo aceite", [real, espurio], embedder=emb)
+    claves = {c.data["k"] for c in res}
+    assert claves == {"aceite"}  # el match por "tipo" con coseno 0.44 NO entra
+
+
+def test_estricto_sin_embedder_admite_incondicional():
+    # Sin embedder (recall léxico histórico) el piso estricto NO aplica: el CONTAINS
+    # admite aunque no haya señal semántica — paridad con B13.2.
+    espurio = Candidato(texto_match="especificacion del tipo de rodamiento",
+                        embedding=None, data={"k": "conico"})
+    res = rankear("tipo", [espurio], embedder=None)
+    assert [c.data["k"] for c in res] == ["conico"]
