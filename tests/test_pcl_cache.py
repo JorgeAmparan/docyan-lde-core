@@ -4,6 +4,7 @@ TTL (B8.5 §1.3, doc §5).
 
 DOCYAN LDE™ by XCID.
 """
+import json
 import time
 
 from app.pcl.pcl_cache import (
@@ -125,3 +126,50 @@ def test_lookup_degrada_a_miss_si_embedder_falla():
     c = PCLCache(backend=InMemoryCacheBackend(), embedder=EmbedderRoto(),
                  state_hasher=lambda t, e: "v")
     assert c.lookup("t1", "q", {"entidad_id": "e1"}) is None  # no rompe, degrada
+
+
+# ── Purga de entradas pre-fix envenenadas (PRIORIDAD 0, paso 2) ───────────────
+
+
+def _backdate(backend, tenant, pregunta, cached_at):
+    """Simula una entrada ANTES del fix de fingerprint: cached_at antiguo."""
+    for k in backend.scan(f"pcl:cache:{tenant}:*"):
+        entry = json.loads(backend.get(k))
+        if entry["pregunta"] == pregunta:
+            entry["cached_at"] = cached_at
+            backend.setex(k, 999999, json.dumps(entry))
+
+
+def test_purga_solo_afecta_entradas_anteriores_al_cutoff():
+    backend = InMemoryCacheBackend()
+    c = _cache(backend)
+    ctx_a = {"documento_id": "docA"}
+    ctx_b = {"documento_id": "docB"}
+    c.write("t1", "pregunta A", ctx_a, RESP, "retrieval_first", 0.0)
+    c.write("t1", "pregunta B", ctx_b, RESP, "retrieval_first", 0.0)
+    _backdate(backend, "t1", "pregunta A", cached_at=1000.0)  # pre-fix
+
+    # dry-run: cuenta la candidata pero NO borra.
+    dry = c.purgar_anteriores_a(2000.0, tenant_id="t1", dry_run=True)
+    assert dry == {"escaneadas": 2, "purgadas": 1}
+    assert c.lookup("t1", "pregunta A", ctx_a) is not None  # sigue viva tras dry-run
+
+    # purga real: la pre-fix desaparece, la post-fix sobrevive.
+    res = c.purgar_anteriores_a(2000.0, tenant_id="t1")
+    assert res["purgadas"] == 1
+    assert c.lookup("t1", "pregunta A", ctx_a) is None
+    assert c.lookup("t1", "pregunta B", ctx_b) is not None
+
+
+def test_purga_cross_tenant_cuando_tenant_id_es_none():
+    backend = InMemoryCacheBackend()
+    c = _cache(backend)
+    c.write("t1", "q vieja t1", {"documento_id": "d1"}, RESP, "retrieval_first", 0.0)
+    c.write("t2", "q vieja t2", {"documento_id": "d2"}, RESP, "retrieval_first", 0.0)
+    _backdate(backend, "t1", "q vieja t1", cached_at=1000.0)
+    _backdate(backend, "t2", "q vieja t2", cached_at=1000.0)
+
+    res = c.purgar_anteriores_a(2000.0, tenant_id=None)  # todos los tenants
+    assert res["purgadas"] == 2
+    assert c.lookup("t1", "q vieja t1", {"documento_id": "d1"}) is None
+    assert c.lookup("t2", "q vieja t2", {"documento_id": "d2"}) is None

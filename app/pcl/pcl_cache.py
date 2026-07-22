@@ -496,6 +496,55 @@ class PCLCache:
             self.backend.delete(*claves)
         return len(cache_keys)
 
+    def purgar_anteriores_a(
+        self, cutoff_epoch: float, tenant_id: str | None = None, dry_run: bool = False
+    ) -> dict[str, int]:
+        """
+        Purga entradas de caché PCL escritas ANTES de `cutoff_epoch` (Unix, s).
+
+        Uso (PRIORIDAD 0): limpiar entradas ENVENENADAS pre-fix — las anteriores al
+        fix de `contexto_fingerprint` (que añadió `doc=`, commit 5b31f09,
+        2026-06-15). Antes de ese fix, dos documentos sueltos del mismo tenant
+        (con `documento_id` vacío) compartían bucket de contexto, así que la misma
+        pregunta sobre el doc B podía servir la respuesta cacheada del doc A. Esas
+        entradas están envenenadas POR DISEÑO y deben purgarse en TODOS los tenants.
+
+        `tenant_id=None` ⇒ cross-tenant. `dry_run=True` ⇒ solo cuenta, no borra.
+        Best-effort: el caché es optimización (doc §11); si Redis falla, no rompe.
+        Devuelve {escaneadas, purgadas}.
+        """
+        patron = f"pcl:cache:{tenant_id}:*" if tenant_id else "pcl:cache:*"
+        try:
+            claves = self.backend.scan(patron)
+        except Exception:  # noqa: BLE001 — caché es optimización, no dependencia
+            logger.warning("no se pudo escanear caché PCL para purga (patrón %s)", patron)
+            return {"escaneadas": 0, "purgadas": 0}
+
+        purgadas = 0
+        for ck in claves:
+            raw = self.backend.get(ck)
+            if raw is None:
+                continue
+            try:
+                entry = json.loads(raw)
+            except Exception:  # noqa: BLE001 — entrada corrupta ⇒ candidata a purga
+                entry = None
+            cached_at = float((entry or {}).get("cached_at") or 0.0)
+            if cached_at >= cutoff_epoch:
+                continue
+            purgadas += 1
+            if dry_run:
+                continue
+            partes = ck.split(":")
+            tid = partes[2] if len(partes) > 2 else (tenant_id or "")
+            ctx_fp = (entry or {}).get("contexto_fingerprint") or ck.rsplit(":", 1)[-1]
+            self._eliminar_entrada(tid, ck, entry, ctx_fp)
+        logger.info(
+            "purga PCL pre-fix | patrón=%s cutoff=%.0f escaneadas=%d purgadas=%d dry_run=%s",
+            patron, cutoff_epoch, len(claves), purgadas, dry_run,
+        )
+        return {"escaneadas": len(claves), "purgadas": purgadas}
+
     def _eliminar_entrada(self, tenant_id: str, ck: str, entry: dict | None, ctx_fp: str) -> None:
         """Borra una entrada y la descuelga de los índices de contexto y entidad."""
         try:
