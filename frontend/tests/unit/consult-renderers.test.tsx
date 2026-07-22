@@ -165,12 +165,29 @@ describe("Tipo 7 · AlertasDashboard — línea ABSOLUTA §11.1", () => {
 
   it("never uses ANSI danger red — only warn/caution severities", () => {
     const { container } = render(<AlertasDashboard payload={payload} saved={false} onSave={vi.fn()} onCite={vi.fn()} />);
-    const cards = container.querySelectorAll(".alert-card");
+    const cards = container.querySelectorAll(".al-card");
     expect(cards.length).toBeGreaterThan(0);
     cards.forEach((c) => {
       expect(c.className).not.toContain("danger");
       expect(c.className).toMatch(/s-(warn|caution)/);
     });
+  });
+
+  it("shows the source citation per alert (.al-cite) when the backend provides one", () => {
+    const conCita: AlertsDashboardPayload = {
+      ...payload,
+      alertas: [
+        {
+          descripcion: "Calibración vence el 2026-06-20",
+          fecha_vencimiento: "2026-06-20",
+          urgencia: "alta",
+          administrativa: true,
+          cita: { documento_nombre: "Certificado de calibración", pagina: 2 },
+        },
+      ],
+    };
+    render(<AlertasDashboard payload={conCita} saved={false} onSave={vi.fn()} onCite={vi.fn()} />);
+    expect(screen.getByText(/Certificado de calibración · p\.2/)).toBeInTheDocument();
   });
 });
 

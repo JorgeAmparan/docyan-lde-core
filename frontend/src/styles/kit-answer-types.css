@@ -77,17 +77,19 @@
 /* árbol de fallas del manual (tipo 3) */
 .dc-answer .ans-banner{display:flex;align-items:center;gap:8px;font-size:12px;color:#2F5A63;background:var(--info-100);border-radius:6px;padding:9px 11px;margin-top:11px;line-height:1.4;}
 .dc-answer .ans-banner svg{flex:none;color:var(--info-600);width:15px;height:15px;}
-.dc-answer .ts-tree{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;}
-.dc-answer .ts-branch{display:block;width:100%;text-align:left;font:inherit;color:inherit;border:1px solid var(--border);border-radius:8px;padding:11px 12px;cursor:pointer;background:var(--surface);}
-.dc-answer button.ts-branch:hover{border-color:var(--cinnabar-300);background:var(--cinnabar-50);}
-.dc-answer .ts-branch.on{border-color:var(--cinnabar-300);background:var(--cinnabar-50);}
-.dc-answer .tsb-cond{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:500;}
-.dc-answer .tsb-cond>svg:first-child{width:14px;height:14px;color:var(--cinnabar-500);flex:none;}
+.dc-answer .ts-tree{list-style:none;margin:14px 0 0;padding:0;}
+/* `.ts-branch` es un <button> dentro del <li> (no el <li> clicable como en el
+   prototipo) por accesibilidad de teclado; los valores de layout son verbatim
+   de cotizador.css, con el reset mínimo de <button> que ese cambio exige. */
+.dc-answer .ts-branch{display:block;width:100%;text-align:left;font:inherit;color:inherit;border:1px solid var(--border);border-radius:10px;margin-bottom:9px;overflow:hidden;cursor:pointer;background:var(--surface);}
+.dc-answer .ts-branch.on{border-color:var(--cinnabar-300);}
+.dc-answer .tsb-cond{display:flex;align-items:center;gap:9px;padding:12px 14px;font-size:13.5px;font-weight:600;color:var(--fg);}
+.dc-answer .tsb-cond>svg:first-child{color:var(--cinnabar-500);flex:none;}
 .dc-answer .tsb-cond span{flex:1;min-width:0;}
-.dc-answer .tsb-chev{width:15px;height:15px;color:var(--fg-subtle);flex:none;}
+.dc-answer .tsb-chev{margin-left:auto;color:var(--fg-subtle);transition:transform .2s;}
 .dc-answer .ts-branch.on .tsb-chev{transform:rotate(90deg);}
-.dc-answer .tsb-body{margin-top:9px;padding-top:9px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:7px;}
-.dc-answer .tsb-body p{margin:0;font-size:13px;color:var(--fg-muted);line-height:1.45;}
+.dc-answer .tsb-body{padding:0 14px 13px 37px;}
+.dc-answer .tsb-body p{margin:6px 0;font-size:13.5px;color:var(--fg);line-height:1.5;}
 .dc-answer .tsb-lab{display:block;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:2px;}
 
 /* placeholder rayado compartido (diagrama / video) */
@@ -98,8 +100,6 @@
 .dc-answer .diag-img{position:relative;width:100%;aspect-ratio:16/11;border:1px solid var(--border);border-radius:8px;margin-top:11px;overflow:hidden;background-size:cover;background-position:center;}
 .dc-answer .diag-img .pin{position:absolute;transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%;border:2px solid var(--surface);background:var(--cinnabar-500);color:#fff;font-family:var(--font-mono);font-size:12px;font-weight:600;cursor:pointer;box-shadow:var(--shadow-sm);transition:all .12s var(--ease-out);}
 .dc-answer .diag-img .pin.on{background:var(--ink-900);transform:translate(-50%,-50%) scale(1.18);}
-.dc-answer .diag-img .diag-box{position:absolute;border:2px solid var(--cinnabar-500);border-radius:4px;background:rgba(207,65,36,.10);cursor:pointer;}
-.dc-answer .diag-img .diag-box.on{background:rgba(33,28,22,.18);border-color:var(--ink-900);}
 .dc-answer .diag-zoom{position:absolute;right:10px;bottom:10px;display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--fg-muted);background:rgba(250,247,241,.85);padding:4px 8px;border-radius:6px;}
 .dc-answer .diag-zoom svg{width:13px;height:13px;}
 .dc-answer .legend{list-style:none;margin:11px 0 0;padding:0;display:flex;flex-direction:column;}
