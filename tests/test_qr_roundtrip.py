@@ -37,7 +37,7 @@ def setup():
     store = InMemoryQrTokenStore()
     dkg = FakeDKG()
     gen = QrGenerator(store=store, base_url="https://docyan-lde-api.fly.dev")
-    res = QrResolver(store=store, dkg=dkg, frontend_base_url="https://consulta.docyan.com")
+    res = QrResolver(store=store, dkg=dkg, frontend_base_url="https://docyan-lde.vercel.app")
     return store, dkg, gen, res
 
 
@@ -57,8 +57,9 @@ def test_roundtrip_resuelve_entidad_correcta(setup):
     assert resuelto.entidad_id == "ent-1"
     assert resuelto.entidad["tipo"] == "extintor"
     assert resuelto.documentos == [{"id": "doc-1", "tipo_documento": "manual"}]
-    assert "tenant=tenant-a" in resuelto.frontend_url
-    assert "entidad=ent-1" in resuelto.frontend_url
+    # El QR resuelve a la ruta pública REAL del frontend `/q/{token}` (no `/consulta`,
+    # que no existe): self-contained por token, la página re-resuelve el contexto.
+    assert resuelto.frontend_url == f"https://docyan-lde.vercel.app/q/{token}"
 
 
 def test_firma_invalida_rechazada(setup):

@@ -35,6 +35,12 @@ primary_region = "dfw"
   # Modelos Docling precargados en build (docling-tools models download); el
   # pipeline los usa como artifacts_path para convertir offline (B2.2).
   DOCLING_ARTIFACTS_PATH = "/root/.cache/docling/models"
+  # DEMO-READY: auto-detección de docs "header-only" (capa de texto = solo encabezados
+  # corridos, contenido real en las figuras — caso LS-400). Si la densidad de contenido
+  # (descontando boilerplate) < este valor, se fuerza OCR aunque el gate por-página diga
+  # que hay texto. Densidad medida: LS-400=59 (header-only) vs maxi_op=210, SDS≥3577.
+  # 120 cae holgado entre ambos. Default del código = 0 (off); aquí se activa en prod.
+  OCR_MIN_CONTENIDO_POR_PAGINA = "120"
   # Resiliencia de extracción (B2.2): el modelo PRIMARIO sigue siendo Gemini 2.5
   # Flash (default del código, CLAUDE.md/Adenda §3). Si falla (presupuesto/quota/
   # rate-limit/API error) el worker reintenta el documento con este FALLBACK.

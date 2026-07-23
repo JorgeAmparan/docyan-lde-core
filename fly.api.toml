@@ -17,6 +17,10 @@ primary_region = "dfw"
   # IPv4↔IPv6. Con .internal directo la conexión es rechazada (B2.2).
   EMBEDDER_URL = "http://docyan-lde-embedder.flycast:8000"
   BGE_M3_TIMEOUT = "30"
+  # DEMO-READY: el QR redirige a la ruta pública REAL del frontend en Vercel
+  # (`/q/{token}`). `consulta.docyan.com` aún no existe (sin dominio) → daba 404.
+  # Cuando exista el dominio, es solo cambiar este valor (o el secret que lo pise).
+  QR_FRONTEND_BASE_URL = "https://docyan-lde.vercel.app"
 
 [http_service]
   internal_port = 8000

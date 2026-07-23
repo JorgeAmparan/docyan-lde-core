@@ -56,13 +56,42 @@ def _doc_spec(entry) -> dict:
     return {"path": entry["path"], "tipo": entry.get("tipo"), "nombre": entry.get("nombre")}
 
 
-def _ingest_one(tenant_id: str, spec: dict, *, dry_run: bool, tipo_override: str | None = None) -> dict:
+def _reset_documento(tenant_id: str, content_sha256: str) -> None:
+    """Borra el `:DocumentoSource` del grafo + limpia la marca de idempotencia ANTES
+    de re-encolar el MISMO archivo. Sin esto, re-subir el mismo contenido hace
+    idempotency-skip (el worker cierra el job `completed` reusando el resultado viejo,
+    sin re-extraer) — el footgun del 'wipe salta la idempotencia' (ED-0e/B13.3). El
+    `doc_id` en el grafo ES el content_sha256 (verificado). Best-effort: si el doc no
+    existe en el grafo, `eliminar_documento` no falla."""
+    from app.graph import dkg_documents
+    from app.ingesta.providers import get_dispatcher
+    from app.onboarding import providers as onb
+
+    try:
+        dkg_documents.eliminar_documento(onb.get_dkg(), tenant_id, content_sha256)
+    except Exception as exc:  # noqa: BLE001 — grafo sin ese doc ⇒ nada que borrar
+        print(f"    · reset grafo: {type(exc).__name__} (¿doc inexistente?) — sigo")
+    get_dispatcher().borrar_idempotencia(tenant_id, content_sha256)
+    print(f"    · reset OK (grafo + idempotencia) sha={content_sha256[:12]}")
+
+
+def _ingest_one(
+    tenant_id: str,
+    spec: dict,
+    *,
+    dry_run: bool,
+    tipo_override: str | None = None,
+    reset: bool = False,
+) -> dict:
     """Cotiza y (si no es dry-run) confirma+encola la ingesta de un documento.
 
     `spec` = {path, tipo, nombre}. El `tipo` por-doc del manifiesto manda sobre el
     `tipo_override` global (CLI) y sobre el heurístico — p. ej. un manual de operación
     que el heurístico clasifica como `especificacion` pero debe ir como `manual_tecnico`
     para extraer `:Procedimiento`. `nombre` fija la atribución display de la cita.
+
+    `reset=True` borra el doc del grafo + idempotencia antes de re-encolar (para
+    RE-INGERIR el mismo archivo, p. ej. el LS-400 con OCR forzado por env en el worker).
     """
     import hashlib
     import uuid
@@ -101,11 +130,15 @@ def _ingest_one(tenant_id: str, spec: dict, *, dry_run: bool, tipo_override: str
         return {"doc": nombre_display, "ok": True, "dry_run": True,
                 "tipo": tipo_documento, "costo_usd": cot.costo_estimado_usd}
 
+    content_sha256 = hashlib.sha256(data).hexdigest()
+    if reset:
+        _reset_documento(tenant_id, content_sha256)
+
     store = get_document_store()
     ref = store.put(tenant_id, path.name, data)
     job = IngestJob(
         job_id=uuid.uuid4().hex, tenant_id=tenant_id, documento_ref=ref,
-        nombre_archivo=nombre_display, content_sha256=hashlib.sha256(data).hexdigest(),
+        nombre_archivo=nombre_display, content_sha256=content_sha256,
         tipo_documento=tipo_documento,  # ← el worker lo usa para elegir el schema
         bytes_originales=len(data),
         cotizacion=CotizacionSnapshot(
@@ -127,6 +160,9 @@ def main() -> int:
     ap.add_argument("--manifest", required=True, help="JSON {tenant_id: [paths]}")
     ap.add_argument("--dry-run", action="store_true", help="Solo cotiza, no encola.")
     ap.add_argument("--tipo", default=None, help="Forzar tipo_documento (schema), p. ej. manual_tecnico.")
+    ap.add_argument("--reset", action="store_true",
+                    help="Borra doc del grafo + idempotencia antes de re-encolar "
+                         "(RE-INGESTA del mismo archivo, p. ej. LS-400 con OCR forzado).")
     args = ap.parse_args()
 
     manifest = json.loads(Path(args.manifest).read_text())
@@ -141,7 +177,8 @@ def main() -> int:
                 total_fail += 1
                 continue
             try:
-                res = _ingest_one(tenant_id, spec, dry_run=args.dry_run, tipo_override=args.tipo)
+                res = _ingest_one(tenant_id, spec, dry_run=args.dry_run,
+                                  tipo_override=args.tipo, reset=args.reset)
             except Exception as exc:  # noqa: BLE001 — un doc no debe tumbar la siembra.
                 print(f"  ✗ {p.name}: error {type(exc).__name__}: {exc}")
                 total_fail += 1

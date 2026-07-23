@@ -112,10 +112,11 @@ class QrResolver:
 
         documentos = self._documentos_de(payload.tenant_id, payload.entidad_id)
 
-        frontend_url = (
-            f"{self.frontend_base_url}/consulta"
-            f"?tenant={payload.tenant_id}&entidad={payload.entidad_id}"
-        )
+        # Ruta pública REAL del frontend para el QR: `(qr-public)/q/[token]` (fetch
+        # de `/qr/{token}?format=json`, self-contained por token, fuera del auth
+        # middleware). NO existe `/consulta` en el frontend — apuntar ahí daba 404.
+        # El token basta: la página re-resuelve el contexto (tenant/entidad/aislamiento).
+        frontend_url = f"{self.frontend_base_url}/q/{token}"
         return ResolvedQr(
             tenant_id=payload.tenant_id,
             entidad_id=payload.entidad_id,
