@@ -83,7 +83,11 @@ export function InformativaCard({
         <div style={{ marginTop: 10, display: "flex" }}>
           <SolicitarBtn
             onClick={() =>
-              onSolicitar({ cita, tipoSugerido: primary?.tipo_sugerido ?? null })
+              onSolicitar({
+                cita,
+                tipoSugerido: primary?.tipo_sugerido ?? null,
+                dato: valor || answerText || payload.titulo,
+              })
             }
           />
         </div>
