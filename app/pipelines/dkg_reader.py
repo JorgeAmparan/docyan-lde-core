@@ -610,11 +610,21 @@ class DKGReader:
         ids = sorted({cid for _, cid, _ in pendientes})
         chunks = self.client.query(
             tenant_id,
-            "MATCH (c:Chunk) WHERE c.id IN $ids RETURN c.id AS id, c.text AS text",
+            "MATCH (c:Chunk) WHERE c.id IN $ids "
+            "RETURN c.id AS id, c.text AS text, c.pagina AS pagina, c.seccion AS seccion",
             {"ids": ids},
         )
         textos = {c.get("id"): c.get("text") for c in chunks}
+        # DEMO-CIERRE: page-provenance — la página/sección viven en el :Chunk de origen
+        # (el SDK no las pone en la entidad). Se surten a la cita desde su chunk cuando
+        # la entidad no las trae (coalesce: no pisa un dato ya presente en el nodo).
+        chunk_meta = {c.get("id"): (c.get("pagina"), c.get("seccion")) for c in chunks}
         for e, chunk_id, pista in pendientes:
+            pagina_c, seccion_c = chunk_meta.get(chunk_id, (None, None))
+            if e.get("pagina") is None and pagina_c is not None:
+                e["pagina"] = pagina_c
+            if not e.get("seccion") and seccion_c:
+                e["seccion"] = seccion_c
             texto = textos.get(chunk_id)
             if not isinstance(texto, str):
                 continue

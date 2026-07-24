@@ -676,6 +676,19 @@ class IngestPipeline:
         # el cierre del SDK. Best-effort acotado: es parte del cierre de la ingesta,
         # no un gate del cobro — si fallara, se loguea y el documento queda ingerido
         # (las citas degradan, no se pierde contenido).
+        # DEMO-CIERRE — markdown POR PÁGINA de Docling para el page-provenance del
+        # bridge (`export_to_markdown(page_no=N)`, docling 2.96). Best-effort: si el
+        # doc no expone páginas o el export falla, el bridge deja las citas sin página.
+        paginas_texto: dict[int, str] = {}
+        try:
+            for pno in list(getattr(docling_doc, "pages", {}) or {}):
+                try:
+                    paginas_texto[int(pno)] = docling_doc.export_to_markdown(page_no=int(pno))
+                except Exception:  # noqa: BLE001 — una página que no exporta no rompe el resto
+                    continue
+        except Exception:  # noqa: BLE001 — sin páginas ⇒ sin page-provenance, no rompe
+            paginas_texto = {}
+
         bridge_counters: dict = {}
         try:
             from app.graph.dkg_client import DKGClient
@@ -689,6 +702,8 @@ class IngestPipeline:
                 nombre_archivo=job.nombre_archivo,
                 content_sha256=job.content_sha256,
                 entidad_id=job.contexto.get("entidad_id"),
+                paginas_texto=paginas_texto,
+                markdown=markdown,
             )
         except Exception as exc:  # noqa: BLE001 — el bridge no es gate del cobro
             logger.warning("bridge de procedencia falló (citas degradan): %s", exc)
