@@ -36,9 +36,99 @@ incrementales del SDK).
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger("docyan.dkg.provenance")
+
+_WS_RE = re.compile(r"\s+")
+
+
+def _norm_ws(s: str | None) -> str:
+    """Normaliza whitespace + minúsculas para contención robusta (la deriva de
+    newlines/espacios del SDK vs Docling hace fallar el match crudo)."""
+    return _WS_RE.sub(" ", s or "").strip().lower()
+
+
+def _mapa_secciones(markdown: str) -> list[tuple[str, str]]:
+    """Divide el markdown en segmentos (seccion, texto_normalizado) por encabezados
+    Markdown (# … ####). La `seccion` es el encabezado que precede al segmento."""
+    segmentos: list[tuple[str, str]] = []
+    seccion = ""
+    buf: list[str] = []
+    for linea in (markdown or "").splitlines():
+        m = re.match(r"^\s*#{1,4}\s+(.*)", linea)
+        if m:
+            if buf:
+                segmentos.append((seccion, _norm_ws(" ".join(buf))))
+                buf = []
+            seccion = m.group(1).strip()
+        else:
+            buf.append(linea)
+    if buf:
+        segmentos.append((seccion, _norm_ws(" ".join(buf))))
+    return segmentos
+
+
+def _asignar_pagina_seccion_chunks(
+    client: Any, tenant_id: str, paginas_texto: dict | None, markdown: str | None
+) -> dict[str, int]:
+    """
+    DEMO-CIERRE — page-provenance + contexto de sección en los `:Chunk`.
+
+    Escribe `chunk.pagina` por **contención verbatim** (normalizada por whitespace)
+    del texto del chunk contra el markdown POR PÁGINA de Docling
+    (`export_to_markdown(page_no=N)`), y `chunk.seccion` = el encabezado Markdown que
+    contiene el chunk. CORRECTO-POR-CONSTRUCCIÓN: si el chunk no cae en EXACTAMENTE
+    una página → `pagina` null (nunca una página equivocada; el frontend ya muestra
+    null con honestidad). Idempotente (solo chunks sin página) y best-effort.
+
+    El reader (`_hidratar_fragmentos`) lee `c.pagina`/`c.seccion` y los pone en la
+    cita — por eso el número de página aparece tras esta pasada + reingesta.
+    """
+    if not paginas_texto:
+        return {"chunks_con_pagina": 0, "chunks_con_seccion": 0}
+    try:
+        paginas_norm = {int(n): _norm_ws(t) for n, t in paginas_texto.items() if t}
+    except Exception:  # noqa: BLE001 — mapa malformado ⇒ no asigna, no rompe
+        return {"chunks_con_pagina": 0, "chunks_con_seccion": 0}
+    secciones = _mapa_secciones(markdown) if markdown else []
+
+    rows = client.query(
+        tenant_id,
+        "MATCH (c:Chunk) WHERE c.pagina IS NULL RETURN c.id AS id, c.text AS text",
+        {},
+    )
+    updates: list[dict] = []
+    for c in rows:
+        cid, texto = c.get("id"), c.get("text")
+        if not cid or not isinstance(texto, str) or len(texto.strip()) < 20:
+            continue
+        ct = _norm_ws(texto)
+        if not ct:
+            continue
+        # Página: contención en EXACTAMENTE una página (0/varias ⇒ null, no se arriesga).
+        hits = [n for n, pt in paginas_norm.items() if ct in pt]
+        pagina = hits[0] if len(hits) == 1 else None
+        # Sección: el primer segmento (encabezado) que contiene el chunk.
+        seccion = next((sec for sec, seg in secciones if sec and ct in seg), None)
+        if pagina is not None or seccion:
+            updates.append({"id": cid, "pagina": pagina, "seccion": seccion})
+    if updates:
+        client.query(
+            tenant_id,
+            """
+            UNWIND $rows AS row
+            MATCH (c:Chunk {id: row.id})
+            SET c.pagina = coalesce(c.pagina, row.pagina),
+                c.seccion = coalesce(c.seccion, row.seccion)
+            """,
+            {"rows": updates},
+        )
+    return {
+        "chunks_con_pagina": sum(1 for u in updates if u["pagina"] is not None),
+        "chunks_con_seccion": sum(1 for u in updates if u["seccion"]),
+    }
 
 # Etiquetas de contenido extraído que, de existir en el grafo, se enlazan al
 # `:DocumentoSource` de su ingesta vía `:CONTIENE` (procedencia para citas). Es el
@@ -71,6 +161,8 @@ def bridge_and_normalize(
     idioma_origen: str = "es",
     entidad_id: str | None = None,
     url_publica: str | None = None,
+    paginas_texto: dict | None = None,
+    markdown: str | None = None,
 ) -> dict[str, int]:
     """
     Ejecuta el bridge de procedencia + la normalización sobre el grafo del tenant.
@@ -149,6 +241,15 @@ def bridge_and_normalize(
     #       `:RELATES` del SDK, por pares contenedor→hijo de la ontología.
     counters["props_normalizadas"] = _proyectar_campos_canonicos(client, tenant_id)
     counters["aristas_lectura"] = _materializar_aristas_lectura(client, tenant_id)
+
+    # ── §1.0.4 (DEMO-CIERRE) — page-provenance + sección en los :Chunk ──────────
+    # Escribe chunk.pagina (contención verbatim vs markdown por-página de Docling) y
+    # chunk.seccion (encabezado). El reader los surte en la cita. Best-effort.
+    try:
+        pag_sec = _asignar_pagina_seccion_chunks(client, tenant_id, paginas_texto, markdown)
+        counters.update(pag_sec)
+    except Exception as exc:  # noqa: BLE001 — la página es enriquecimiento, no gate
+        logger.warning("page-provenance falló (citas quedan sin página): %s", type(exc).__name__)
 
     # ── §1.0.2 — Enlazar contenido a la :EntidadOperativa del QR (T6/T8) ─────────
     # Si la ingesta vino atada a una entidad operativa (el equipo del QR), se
