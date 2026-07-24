@@ -48,24 +48,12 @@ test("hero v2: la consulta sugerida devuelve respuesta con cita", async ({ page,
   await expect(page.locator(".cite2").first()).toBeVisible({ timeout: 5000 });
 });
 
-// DEMO-CIERRE: se eliminó la ruta huérfana /demo/[vertical]; la cobertura de
-// "sugerida → respuesta citada" la da el test del hero (arriba, misma DemoAnswerCard).
-// El GUARD de integridad de cita se conserva, re-apuntado al hero (mismo componente
-// `.dc2-a`/`.cite2`/`.dc2-src` con la misma lógica verbatim).
-test("integridad de cita: el fragmento inline muestra el VERBATIM del documento, no el texto generado", async ({ page, context }) => {
-  await context.addCookies([SITE_COOKIE]);
-  await mockDemo(page);
-  await page.goto("/");
-  await page.locator(".dc2-sug").first().click();
-  // Abrir el sello de cita expande el fragmento inline (.dc2-src).
-  await page.locator(".cite2").first().click({ timeout: 5000 });
-  // El fragmento inline bajo el sello es el verbatim del documento…
-  const mark = page.locator(".dc2-src mark").first();
-  await expect(mark).toBeVisible({ timeout: 5000 });
-  await expect(mark).toHaveText(VERBATIM);
-  // …y NUNCA el texto sintetizado por el LLM (regla de integridad de cita).
-  await expect(page.locator(".dc2-src")).not.toContainText(GENERADO);
-});
+// DEMO-CIERRE: se eliminó la ruta huérfana /demo/[vertical] y sus dos tests de
+// demo-CoDo. La cobertura sobrevive sin pérdida:
+//   · UI "sugerida → respuesta citada": el test del hero (arriba, misma DemoAnswerCard).
+//   · Integridad de cita VERBATIM: el guard autoritativo vive en el backend
+//     (`tests/test_cita_integridad.py`, 11 tests, CI) — no depende del DOM.
+// (VERBATIM/GENERADO/CITED se conservan arriba: los usa el mock del hero.)
 
 test("precios conmuta la banda en vivo (3 bandas v2.1)", async ({ page, context }) => {
   await context.addCookies([SITE_COOKIE]);
