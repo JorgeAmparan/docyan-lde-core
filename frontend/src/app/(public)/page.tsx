@@ -275,14 +275,15 @@ function HeroA() {
             <span className="eyebrow">DOCYAN LDE · Live Document Environment</span>
             <h1>{t({ es: "El dato está en tus documentos. Ahora también está a una pregunta.", en: "The answer is in your documents. Now it's also one question away." })}</h1>
             <p className="sub">{t({
-              es: "Tus manuales, fichas y procedimientos, consultables al instante frente al equipo — con la respuesta lista para leerse de un vistazo y la cita al documento original.",
-              en: "Your manuals, datasheets and procedures, instantly consultable at the machine — with the answer readable at a glance and a citation to the original document.",
+              es: "Tus manuales, fichas y procedimientos, vivos frente al equipo: consulta con cita al documento original, alertas antes de que venza una fecha crítica, y del dato a la acción con una solicitud dirigida.",
+              en: "Your manuals, datasheets and procedures, alive at the machine: query with a citation to the original document, alerts before a critical date lapses, and from data to action with a directed request.",
             })}</p>
             <div className="cta">
               <Link className="btn primary lg" href="/signup">{t({ es: "Pruébalo gratis — 3 documentos", en: "Try it free — 3 documents" })}<Icon name="arrow-right" size={16} /></Link>
               <Link className="btn sec lg" href="/codigo">{t({ es: "Agendar demo", en: "Book a demo" })}</Link>
             </div>
             <p className="cta-note">{t({ es: "Sin tarjeta · 30 días · todas las capacidades", en: "No card · 30 days · all capabilities" })}</p>
+            <Link className="vlink" href="/demo"><Icon name="scan-line" size={14} />{t({ es: "Ver la demo sin registro — un documento real", en: "See the no-signup demo — a real document" })}</Link>
             <div className="hero-trust">
               <span><Icon name="quote" size={14} />{t({ es: "Cita trazable a la fuente", en: "Citation traceable to source" })}</span>
               <span><Icon name="shield-check" size={14} />{t({ es: "Sin alucinaciones", en: "No hallucinations" })}</span>
@@ -424,6 +425,72 @@ function StepsSection() {
         </div>
         <div style={{ marginTop: 26 }}>
           <Link className="vlink" href="/como-funciona"><Icon name="git-branch" size={14} />{t({ es: "Ver la arquitectura completa — sin caja negra", en: "See the full architecture — no black box" })}</Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================ */
+/* Los tres pilares (LANDING-3P)                                */
+/* ============================================================ */
+
+function PillarsSection() {
+  const t = useT();
+  // Los tres pilares de la propuesta de valor (lenguaje de la postulación). Cada
+  // uno es una capacidad VIVA en producción HOY: consulta citada, alertas
+  // administrativas (ED-1) y datos accionables → solicitud (ED-2). Nada aspiracional.
+  const pillars: { ic: string; k: Bilingual; h: Bilingual; p: Bilingual }[] = [
+    {
+      ic: "quote",
+      k: { es: "Consulta", en: "Query" },
+      h: { es: "El documento hablando", en: "The document speaking" },
+      p: {
+        es: "Tu gente pregunta en su idioma sobre un procedimiento, una especificación o cómo resolver un problema —incluso de un manual en inglés— y recibe en segundos la respuesta en su idioma, con la cita al documento, la página y el fragmento exacto, expansible en un clic.",
+        en: "Your people ask in their language about a procedure, a spec or how to fix a problem —even from a manual in English— and get the answer in seconds in their language, with the citation to the document, page and exact passage, expandable in one click.",
+      },
+    },
+    {
+      ic: "calendar-clock",
+      k: { es: "Alertas", en: "Alerts" },
+      h: { es: "Antes de que venza", en: "Before it expires" },
+      p: {
+        es: "DOCYAN extrae las fechas críticas de tus documentos y avisa antes del vencimiento, protegiendo la continuidad de la operación. Son alertas administrativas por arquitectura: informan fechas y frecuencias; nunca sugieren decisiones operativas ni clínicas.",
+        en: "DOCYAN extracts the critical dates from your documents and warns before they lapse, protecting operational continuity. They are administrative alerts by architecture: they report dates and frequencies; they never suggest operational or clinical decisions.",
+      },
+    },
+    {
+      ic: "send",
+      k: { es: "Datos accionables", en: "Actionable data" },
+      h: { es: "Del dato a la acción", en: "From data to action" },
+      p: {
+        es: "Cuando la respuesta contiene un dato que en sí mismo pide una acción —cotizar una pieza, reabastecer un insumo, agendar una inspección— DOCYAN muestra un botón que genera la solicitud por tipo, dirigida a un proveedor interno o externo. Cierra la brecha entre la especificación y la acción.",
+        en: "When the answer contains a data point that itself calls for action —quote a part, restock a supply, schedule an inspection— DOCYAN shows a button that generates the request by type, directed to an internal or external provider. It closes the gap between the spec and the action.",
+      },
+    },
+  ];
+  return (
+    <section className="band" data-screen-label="Home — Los tres pilares">
+      <div className="wrap">
+        <span className="eyebrow">{t({ es: "La propuesta completa", en: "The full proposition" })}</span>
+        <h2 className="sec-title">{t({ es: "No es solo consultar. Son tres capacidades vivas.", en: "It's not just querying. It's three live capabilities." })}</h2>
+        <p className="sec-lead">{t({
+          es: "El mismo documento vivo consulta, avisa y acciona — de la pregunta en el punto de uso, a la fecha crítica que no se escapa, al dato que se convierte en una solicitud dirigida.",
+          en: "The same live document queries, warns and acts — from the question at the point of use, to the critical date that doesn't slip, to the data point that becomes a directed request.",
+        })}</p>
+        <div className="steps3">
+          {pillars.map((p, i) => (
+            <div className="step3" key={i}>
+              <span className="n">{String(i + 1).padStart(2, "0")}</span>
+              <span className="si"><Icon name={p.ic} size={22} /></span>
+              <span className="eyebrow" style={{ marginTop: 2 }}>{t(p.k)}</span>
+              <h3>{t(p.h)}</h3>
+              <p>{t(p.p)}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 26 }}>
+          <Link className="vlink" href="/demo"><Icon name="scan-line" size={14} />{t({ es: "Vívelo en la demo sin registro", en: "Live it in the no-signup demo" })}</Link>
         </div>
       </div>
     </section>
@@ -666,6 +733,7 @@ export default function HomePage() {
       <MomentSection />
       <ParadigmSection />
       <StepsSection />
+      <PillarsSection />
       <TrustSection />
       <MoatSection />
       <CodoBridge />
