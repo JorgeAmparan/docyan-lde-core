@@ -34,6 +34,9 @@ export interface SolicitarPrefill {
   entidadId?: string;
   codoId?: string;
   consultaId?: string;
+  /** El dato accionable en sí (valor/frase de la respuesta). Lo usa el flujo DEMO
+   *  (solicitud pública sin auth); el flujo autenticado no lo requiere. Opcional. */
+  dato?: string;
 }
 
 const OTRA = "__otra__";

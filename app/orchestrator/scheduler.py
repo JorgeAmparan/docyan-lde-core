@@ -173,6 +173,66 @@ def fat_retention_job() -> dict:
     return {"evaluado": True, "tipo": "fat_retention", "resultados": resultados}
 
 
+def warm_path_demo_job() -> dict:
+    """
+    Warm-path del demo público (DEMO-READY, jul 2026). Cada N min corre una consulta
+    demo mínima para mantener TIBIOS los servicios que tienen arranque frío y tumban
+    el recorrido del jurado:
+
+      · Embedder BGE-M3 (cold-start ~2-4 min si la máquina se recicla): la consulta
+        dispara la pasada semántica → mantiene el modelo cargado y el primer-encode hecho.
+      · FalkorDB + caché de retrieval: consultadas → calientes.
+      · Supabase: un `SELECT` barato evita la auto-pausa por inactividad del free tier
+        (fue incidente real: Supabase pausado tumbó toda consulta). Con un ping cada
+        10 min el proyecto nunca queda ocioso → nunca pausa.
+
+    Best-effort: NUNCA lanza (un fallo de warm-up no debe ensuciar el scheduler). La
+    consulta default clasifica por HEURÍSTICA (sin fallback LLM) → costo ~$0. Config por
+    env: DEMO_WARMPATH_ENABLED (default 1), DEMO_WARMPATH_CODO (default "hero"),
+    DEMO_WARMPATH_QUERY, DEMO_WARMPATH_INTERVAL_MIN (default 10, en DEFAULT_JOBS).
+    """
+    if os.getenv("DEMO_WARMPATH_ENABLED", "1").strip().lower() in {"0", "false", "no", "off"}:
+        return {"evaluado": False, "tipo": "warm_path_demo", "motivo": "deshabilitado"}
+    resultado: dict = {"evaluado": True, "tipo": "warm_path_demo"}
+
+    # 1) Embedder + grafo + caché: consulta demo mínima vía MO (auth sintético viewer,
+    #    idéntico a /demo/query — solo lectura, scopeado al tenant demo).
+    try:
+        from app.api.routers.demo import DEMO_TENANTS
+        from app.orchestrator import providers
+        from app.orchestrator.models import Canal, MORequest
+
+        codo = os.getenv("DEMO_WARMPATH_CODO", "hero")
+        tenant = DEMO_TENANTS.get(codo) or DEMO_TENANTS.get("hero") or "demo-hero"
+        texto = os.getenv("DEMO_WARMPATH_QUERY", "especificaciones tecnicas")
+        req = MORequest(
+            auth={"org_id": tenant, "user_id": "warmup", "role": "viewer", "demo": True},
+            canal=Canal.pwa, texto=texto, accion="consulta",
+            payload={"documento_id": None, "params": {}}, session_id=None,
+        )
+        providers.get_master_orchestrator().handle_request(req)
+        resultado["embedder"] = "tibio"
+    except Exception as exc:  # noqa: BLE001 — warm-up nunca debe fallar el scheduler
+        logger.warning("warm_path_demo: consulta demo falló (%s)", type(exc).__name__)
+        resultado["embedder"] = f"error:{type(exc).__name__}"
+
+    # 2) Supabase: lectura barata (mantiene el proyecto activo → sin auto-pausa).
+    try:
+        from supabase import create_client
+
+        from app.core.supabase_client import require_supabase_config
+
+        url, key = require_supabase_config("warmpath", service=True)
+        create_client(url, key).table("users").select("org_id").limit(1).execute()
+        resultado["supabase"] = "activo"
+    except Exception as exc:  # noqa: BLE001 — el ping es cinturón, no gate
+        logger.warning("warm_path_demo: ping Supabase falló (%s)", type(exc).__name__)
+        resultado["supabase"] = f"error:{type(exc).__name__}"
+
+    logger.info("warm_path_demo: %s", resultado)
+    return resultado
+
+
 @dataclass(frozen=True)
 class JobSpec:
     job_id: str
@@ -192,6 +252,9 @@ DEFAULT_JOBS: tuple[JobSpec, ...] = (
     JobSpec("pcl_metrics_aggregation", pcl_metrics_aggregation_job, "cron", {"hour": 3}),
     # F3 §C: reposición del cupo de ingestas el día 1 de cada mes a las 00:00.
     JobSpec("cupo_reposicion_mensual", cupo_reposicion_mensual_job, "cron", {"day": 1, "hour": 0}),
+    # DEMO-READY: warm-path del demo público (embedder + Supabase + caché tibios).
+    JobSpec("warm_path_demo", warm_path_demo_job, "interval",
+            {"minutes": max(1, int(os.getenv("DEMO_WARMPATH_INTERVAL_MIN", "10")))}),
 )
 
 

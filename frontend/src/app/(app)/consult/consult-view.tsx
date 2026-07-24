@@ -38,6 +38,7 @@ import { AlertasDashboard } from "./renderers/alertas-dashboard";
 import { ComparativaView } from "./renderers/comparativa-view";
 import { BilingualAlignment } from "./renderers/bilingual-alignment";
 import { SolicitudModal, type SolicitarPrefill } from "./renderers/solicitud-modal";
+import { DemoSolicitudModal } from "./renderers/demo-solicitud-modal";
 
 /** Lookup tipo documental (id de schema) → schema, para el chip `.doc-tipo` del
  *  prototipo (consult.jsx). Espejo de `SCHEMA_BY_ID` del design system. */
@@ -288,6 +289,8 @@ export function ConsultView({
   embedded = false,
   onFirstAnswer,
   queryFn,
+  demoSolicitud = false,
+  demoCodo,
 }: {
   /** Contexto REAL del CoDo/entidad. Requerido: el llamador lo resuelve del backend
    *  (`/mo/codos/{id}` o `/qr/{token}`). No hay contexto enlatado de respaldo. */
@@ -301,6 +304,11 @@ export function ConsultView({
   /** Consulta inyectada (demo público): si se pasa, la vista enruta por aquí en vez
    *  de pegar a `/mo/query`. Sin ella, comportamiento idéntico al autenticado. */
   queryFn?: QueryFn;
+  /** Demo público: habilita el botón "Solicitar" SIN auth → abre el modal de
+   *  solicitud de DEMOSTRACIÓN (envío real a destino fijo, `/demo/solicitud`). */
+  demoSolicitud?: boolean;
+  /** CoDo demo activo (para la solicitud demo). Requerido si `demoSolicitud`. */
+  demoCodo?: string;
 }) {
   const ctx = context;
   const router = useRouter();
@@ -317,6 +325,8 @@ export function ConsultView({
   // PROVISIONAL-ED2 (§2.8): estado del formulario de solicitud. Solo en sesión
   // autenticada (con token); el demo público no crea solicitudes reales.
   const [solicitarPrefill, setSolicitarPrefill] = useState<SolicitarPrefill | null>(null);
+  // Demo público: prefill de la solicitud de DEMOSTRACIÓN (sin auth, envío real fijo).
+  const [demoSolicitarPrefill, setDemoSolicitarPrefill] = useState<SolicitarPrefill | null>(null);
   // Chat persistente (Pieza 6): una SESIÓN por CoDo. El backend acumula el historial
   // por session_id (multi-turno nativo del SDK); sin enviarlo, cada consulta sería
   // stateless y el seguimiento perdería el contexto. Se crea al montar / al cambiar
@@ -523,8 +533,11 @@ export function ConsultView({
   };
   const delObs = (i: number) => persistObs(obs.filter((_, k) => k !== i));
 
-  // Solo autenticado: el botón "Solicitar" abre el formulario prellenado con la cita
-  // y el contexto de CoDo. Sin token (demo público) queda undefined → sin botón.
+  // El botón "Solicitar" abre el formulario prellenado con la cita y el contexto.
+  //  · Autenticado (con token): flujo real ED-2 (Directorio) → SolicitudModal.
+  //  · Demo público (demoSolicitud): flujo de DEMOSTRACIÓN sin auth (envío real a
+  //    destino fijo) → DemoSolicitudModal.
+  //  · Sin token y sin demo: undefined → sin botón (comportamiento previo).
   const onSolicitar = token
     ? (p: SolicitarPrefill) =>
         setSolicitarPrefill({
@@ -533,7 +546,9 @@ export function ConsultView({
           codoId: ctx.codo,
           consultaId: sessionId ?? undefined,
         })
-    : undefined;
+    : demoSolicitud
+      ? (p: SolicitarPrefill) => setDemoSolicitarPrefill(p)
+      : undefined;
 
   // Se MONTA solo cuando hay un dato seleccionado (tras pulsar "Solicitar"). Así el
   // uso de react-query del modal no exige un QueryClientProvider en superficies que
@@ -545,6 +560,13 @@ export function ConsultView({
         onOpenChange={(o) => !o && setSolicitarPrefill(null)}
         prefill={solicitarPrefill}
         token={token}
+      />
+    ) : demoSolicitarPrefill !== null ? (
+      <DemoSolicitudModal
+        open
+        onOpenChange={(o) => !o && setDemoSolicitarPrefill(null)}
+        prefill={demoSolicitarPrefill}
+        codo={demoCodo ?? ctx.codo}
       />
     ) : null;
 

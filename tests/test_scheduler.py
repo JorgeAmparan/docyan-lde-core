@@ -62,3 +62,37 @@ def test_trigger_tarea_desconocida():
     with pytest.raises(KeyError):
         sched.trigger("no_existe")
     sched.shutdown()
+
+
+# ── DEMO-READY — warm-path del demo público ───────────────────────────────────
+def test_warm_path_deshabilitado_por_env(monkeypatch):
+    """DEMO_WARMPATH_ENABLED=0 → no-op limpio, no toca servicios."""
+    from app.orchestrator import scheduler as sch
+
+    monkeypatch.setenv("DEMO_WARMPATH_ENABLED", "0")
+    out = sch.warm_path_demo_job()
+    assert out["evaluado"] is False and out["motivo"] == "deshabilitado"
+
+
+def test_warm_path_best_effort_no_lanza(monkeypatch):
+    """Aunque el MO y Supabase fallen, el warm-path degrada sin lanzar (no ensucia
+    el scheduler) y reporta el estado de cada servicio."""
+    from app.orchestrator import providers
+    from app.orchestrator import scheduler as sch
+
+    monkeypatch.setenv("DEMO_WARMPATH_ENABLED", "1")
+
+    def _boom():
+        raise RuntimeError("embedder caído")
+
+    monkeypatch.setattr(providers, "get_master_orchestrator", _boom)
+    out = sch.warm_path_demo_job()  # no debe lanzar
+    assert out["evaluado"] is True
+    assert out["embedder"].startswith("error:")
+    # Supabase también reporta estado (activo o error), sin tumbar el job.
+    assert "supabase" in out
+
+
+def test_warm_path_es_job_registrado():
+    """El warm-path está en DEFAULT_JOBS (se registra en producción)."""
+    assert any(spec.job_id == "warm_path_demo" for spec in DEFAULT_JOBS)

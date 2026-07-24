@@ -36,32 +36,29 @@ import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
    docs/demo/manifest_maxi.json` en el backend DOCYAN (Supabase + worker). */
 const DEMO_CODO = "maxi";
 
+// Documentos REALES sembrados en el tenant `demo-maxi` (ids = SHA-256 del archivo,
+// verificados contra `GET /demo/codo/maxi`). Solo 2 docs viven en el grafo demo
+// (operación + ficha); la "lista de partes" NO está sembrada → se retiró (poda: sin
+// docs fantasma). Las sugerencias están CURADAS y VERIFICADAS contra prod
+// (`POST /demo/query codo=maxi`): cada una devuelve respuesta citada HOY. Se
+// eliminaron las que daban VACÍO ("¿cómo arranco de forma segura?", "¿qué EPP?").
 const DEMO_DOCS: NonNullable<ConsultContext["documentos"]> = [
   {
-    id: "demo-maxi-operacion",
+    id: "dbf76a6d6c248fc54e5f0dbdcfcd33b44b4f7364ee82d505e43f140219ba0876",
     nombre: "Manual de operación — MAXI-10ND",
     tipo: "manual_tecnico",
     sugerencias: [
       "¿A cuántas RPM debe girar la olla?",
-      "¿Cómo arranco la mezcladora de forma segura?",
-      "¿Qué EPP requiere la operación?",
+      "¿Cuál es la capacidad de la olla?",
+      "¿Cuánto pesa la mezcladora?",
     ],
   },
   {
-    id: "demo-maxi-ficha",
+    id: "b2a2dcb531f2fc72c36fe20c4710b5571c8c4b7d0e8532eef0e0ab149b6f1c69",
     nombre: "Ficha técnica — MAXI-10ND",
     tipo: "ficha_tecnica",
     sugerencias: [
-      "¿Cuál es la capacidad de la mezcladora?",
       "¿Qué motor usa y a qué potencia?",
-    ],
-  },
-  {
-    id: "demo-maxi-partes",
-    nombre: "Lista de partes — MAXI-10ND",
-    tipo: "especificacion",
-    sugerencias: [
-      "¿Qué número de parte tiene el acople motor-eje?",
       "¿Qué refacciones lleva el sistema de transmisión?",
     ],
   },
@@ -72,7 +69,7 @@ const DEMO_DOCS: NonNullable<ConsultContext["documentos"]> = [
 const DEMO_CONTEXT: ConsultContext = {
   codo: "MAXI-10ND",
   entityName: "Mezcladora de concreto MAXI-10ND",
-  entityTitle: "CoDo demo · 3 documentos vivos",
+  entityTitle: "CoDo demo · 2 documentos vivos",
   entityMeta: "demo-maxi · solo lectura",
   documentos: DEMO_DOCS,
 };
@@ -109,8 +106,8 @@ export default function DemoPage() {
           </h1>
           <p className="ds-lead">
             {t({
-              es: "Mezcladora de concreto MAXI-10ND · 3 documentos vivos. Pregunta lo que preguntarías frente al equipo — la respuesta llega citada a la fuente, en tu idioma.",
-              en: "MAXI-10ND concrete mixer · 3 live documents. Ask what you'd ask at the machine — the answer arrives cited to its source, in your language.",
+              es: "Mezcladora de concreto MAXI-10ND · 2 documentos vivos. Pregunta lo que preguntarías frente al equipo: la respuesta llega citada a la fuente y en tu idioma; y cuando un dato pide acción, generas la solicitud ahí mismo.",
+              en: "MAXI-10ND concrete mixer · 2 live documents. Ask what you'd ask at the machine: the answer arrives cited to its source, in your language — and when a data point calls for action, you raise the request right there.",
             })}
           </p>
           <div className="ds-devtoggle" role="tablist" aria-label={t({ es: "Dispositivo", en: "Device" })}>
@@ -142,7 +139,12 @@ export default function DemoPage() {
                   ConsultView de /consult, pero con la consulta enrutada al backend
                   demo (demoQuery) — sin token, sin sesión autenticada. El marco
                   `phone`/`tablet` cambia el ancho; ConsultView responde (CSS). */}
-              <ConsultView context={DEMO_CONTEXT} queryFn={demoQueryFn} />
+              <ConsultView
+                context={DEMO_CONTEXT}
+                queryFn={demoQueryFn}
+                demoSolicitud
+                demoCodo={DEMO_CODO}
+              />
             </div>
           </div>
         </div>

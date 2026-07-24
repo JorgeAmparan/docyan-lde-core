@@ -65,6 +65,95 @@ def _ocr_langs_list() -> list[str]:
     return [x for x in re.split(r"[+,\s]+", OCR_LANGS.strip()) if x]
 
 
+def _env_bool(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+# ── DEMO-READY (jul 2026) — refuerzo del gate: "¿hay CONTENIDO?", no solo "¿capa?" ──
+# El gate por-página (≥16 chars) detecta "¿la página tiene capa de texto?", NO "¿tiene
+# CONTENIDO?". El manual LS-400 (88pp) trae ~115 chars/pág que son SOLO encabezados y
+# pies corridos ("BOMBA LS-400 / 500N — MANTENIMIENTO / PAG 36 / MANUAL DE OPERACIÓN"):
+# el gate lo contó como texto-nativo y apagó el OCR, dejando el cuerpo real (dentro de
+# las 244 figuras/dibujos) sin extraer → grafo casi vacío → retrieval VACÍO en prod
+# (diagnóstico DEMO-READY: `cebado/presión/RPM/especificaciones` = 0 páginas de texto).
+# Dos palancas, ambas por env, sin cambiar el baseline ED-0e por default:
+#   1. OCR_FORCE=1 — fuerza do_ocr=True incondicional (para REINGERIR un doc concreto
+#      con OCR, sin tocar la lógica del gate). Es la palanca del pase de reingesta.
+#   2. OCR_MIN_CONTENIDO_POR_PAGINA — densidad de CONTENIDO (descontando boilerplate
+#      corto y repetido) por debajo de la cual se fuerza OCR aunque el gate por-página
+#      diga que hay texto. Default 0 = DESACTIVADO (preserva ED-0e byte-idéntico).
+#      Recomendado ~120 para auto-detectar docs header-only con margen amplio. Densidad
+#      medida en el corpus demo (descontando boilerplate): LS-400=59 (header-only),
+#      maxi_op=210, partes=790, SDS≥3577 (texto real). 120 cae holgado entre 59 y 210.
+OCR_FORCE = _env_bool("OCR_FORCE")
+OCR_MIN_CONTENIDO_POR_PAGINA = int(os.getenv("OCR_MIN_CONTENIDO_POR_PAGINA", "0"))
+# Boilerplate = línea CORTA (≤ este largo) repetida en > umbral de páginas. Los headers
+# corridos son cortos; el cuerpo de párrafo es largo (no se descuenta aunque se repita).
+_BOILERPLATE_MAX_CHARS = 80
+
+
+def _contenido_por_pagina(textos_por_pagina: list[str | None]) -> float:
+    """
+    Densidad de CONTENIDO por página, descontando el boilerplate (encabezados/pies
+    corridos): líneas CORTAS (≤ `_BOILERPLATE_MAX_CHARS`) que se repiten en > 25 % de
+    las páginas. Un manual con solo headers da densidad ~0 aunque el gate por-página lo
+    cuente como "texto nativo". NO se descuentan líneas largas aunque se repitan (el
+    cuerpo real puede repetir frases): solo el boilerplate corto y repetido. Los números
+    se normalizan a `#` (así "PAG 27"/"PAG 36" cuentan como el mismo pie).
+    """
+    n = len(textos_por_pagina)
+    if n == 0:
+        return 0.0
+    from collections import Counter
+
+    freq: Counter[str] = Counter()
+    for t in textos_por_pagina:
+        vistas = set()
+        for ln in (t or "").splitlines():
+            s = re.sub(r"\d+", "#", ln.strip().lower())
+            if 4 <= len(s) <= _BOILERPLATE_MAX_CHARS:
+                vistas.add(s)
+        freq.update(vistas)
+    umbral_rep = max(2, n // 4)  # repetida en > 25 % de las páginas ⇒ boilerplate
+    boiler = {s for s, c in freq.items() if c >= umbral_rep}
+    contenido = 0
+    for t in textos_por_pagina:
+        for ln in (t or "").splitlines():
+            crudo = ln.strip()
+            if not crudo:
+                continue
+            norm = re.sub(r"\d+", "#", crudo.lower())
+            if len(norm) <= _BOILERPLATE_MAX_CHARS and norm in boiler:
+                continue  # boilerplate corto repetido: no cuenta como contenido
+            contenido += len(crudo)
+    return contenido / n
+
+
+def _aplicar_overrides_ocr(g: dict) -> dict:
+    """
+    Aplica los overrides de OCR (DEMO-READY) sobre la decisión del gate por-página y
+    anota `motivo_ocr`. Prioridad: OCR_FORCE > baja densidad de contenido > gate.
+    No cambia el baseline: con OCR_FORCE apagado y OCR_MIN_CONTENIDO_POR_PAGINA=0 la
+    decisión es idéntica a ED-0e.
+    """
+    g.setdefault("motivo_ocr", "gate_por_pagina" if g.get("do_ocr") else "texto_nativo")
+    if OCR_FORCE:
+        g["do_ocr"] = True
+        g["motivo_ocr"] = "forzado"
+        return g
+    dens = g.get("contenido_por_pagina")
+    if (
+        not g.get("do_ocr")
+        and OCR_MIN_CONTENIDO_POR_PAGINA > 0
+        and dens is not None
+        and g.get("paginas_totales")
+        and dens < OCR_MIN_CONTENIDO_POR_PAGINA
+    ):
+        g["do_ocr"] = True
+        g["motivo_ocr"] = "baja_densidad"
+    return g
+
+
 def _clasificar_paginas(textos_por_pagina: list[str | None]) -> dict:
     """
     Gate de OCR POR PÁGINA (ED-0e). Dada la lista de texto extraíble por página,
@@ -114,10 +203,10 @@ def analizar_ocr_paginas(path: str) -> dict:
     no_aplica = {
         "aplica": False, "paginas_totales": None, "paginas_texto_nativo": 0,
         "paginas_ocr": 0, "do_ocr": True, "umbral_chars": OCR_MIN_CHARS_POR_PAGINA,
-        "ocr_langs": OCR_LANGS,
+        "ocr_langs": OCR_LANGS, "contenido_por_pagina": None,
     }
     if not _es_pdf(path):
-        return no_aplica
+        return _aplicar_overrides_ocr(no_aplica)
     try:
         from pypdf import PdfReader
 
@@ -128,12 +217,14 @@ def analizar_ocr_paginas(path: str) -> dict:
                 textos.append(pg.extract_text() or "")
             except Exception:  # noqa: BLE001 — página ilegible cuenta como sin texto (OCR)
                 textos.append("")
-        return _clasificar_paginas(textos)
+        g = _clasificar_paginas(textos)
+        g["contenido_por_pagina"] = round(_contenido_por_pagina(textos), 1)
+        return _aplicar_overrides_ocr(g)
     except Exception as exc:  # noqa: BLE001 — el gate es optimización, no gate del cobro
         logger.warning(
             "gate OCR: no se pudo escanear %s (%s) — OCR por default", path, type(exc).__name__
         )
-        return no_aplica
+        return _aplicar_overrides_ocr(no_aplica)
 
 
 # ── Conversión Docling ────────────────────────────────────────────────────────
@@ -203,10 +294,13 @@ def convertir(path: str):
     # Log ANTES de convert(): si la conversión OOM-mata al proceso, la decisión del
     # gate queda registrada igual (regresión ED-0e).
     logger.info(
-        "gate OCR | %s | do_ocr=%s | paginas=%s texto_nativo=%s ocr=%s | langs=%s umbral=%d queue=%d",
-        path, ocr_gate["do_ocr"], ocr_gate.get("paginas_totales"),
-        ocr_gate.get("paginas_texto_nativo"), ocr_gate.get("paginas_ocr"),
-        OCR_LANGS, OCR_MIN_CHARS_POR_PAGINA, DOCLING_QUEUE_MAX_SIZE,
+        "gate OCR | %s | do_ocr=%s motivo=%s | paginas=%s texto_nativo=%s ocr=%s "
+        "contenido/pp=%s | langs=%s umbral=%d densidad_min=%d force=%s queue=%d",
+        path, ocr_gate["do_ocr"], ocr_gate.get("motivo_ocr"),
+        ocr_gate.get("paginas_totales"), ocr_gate.get("paginas_texto_nativo"),
+        ocr_gate.get("paginas_ocr"), ocr_gate.get("contenido_por_pagina"),
+        OCR_LANGS, OCR_MIN_CHARS_POR_PAGINA, OCR_MIN_CONTENIDO_POR_PAGINA,
+        OCR_FORCE, DOCLING_QUEUE_MAX_SIZE,
     )
     converter = DocumentConverter(
         format_options={

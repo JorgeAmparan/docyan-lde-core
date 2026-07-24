@@ -39,6 +39,40 @@ export async function demoQuery(
   }
 }
 
+/** Pilar 3 en el demo público: un dato accionable citado → solicitud REAL por correo.
+ *  `POST /demo/solicitud`, sin auth, rate-limited estricto por IP. Destino FIJO en el
+ *  backend (correo demo del fundador) → jamás un correo libre del visitante. El correo
+ *  va etiquetado como "solicitud de demostración". Real, limitado, jamás fingido. */
+export interface DemoSolicitudPayload {
+  tipo: string;
+  dato: string;
+  codo: string;
+  documento_nombre?: string | null;
+  pagina?: number | null;
+  fragmento?: string | null;
+  contacto_nombre?: string | null;
+  contacto_email?: string | null;
+}
+
+export interface DemoSolicitudResult {
+  enviada: boolean;
+  mensaje: string;
+}
+
+export async function demoSolicitud(
+  payload: DemoSolicitudPayload,
+): Promise<DemoSolicitudResult> {
+  try {
+    return await api.post<DemoSolicitudResult>("/demo/solicitud", payload);
+  } catch {
+    // El demo nunca finge: ante error de red/límite, se declara honesto.
+    return {
+      enviada: false,
+      mensaje: "No se pudo enviar la solicitud de demostración. Intenta de nuevo.",
+    };
+  }
+}
+
 export interface DemoDocumentoOut {
   id: string;
   nombre?: string | null;

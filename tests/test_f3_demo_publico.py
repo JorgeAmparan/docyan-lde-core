@@ -252,3 +252,101 @@ def test_demo_codo_documentos_rate_limit_429(demo_codo_client):
     blocked = client.get("/demo/codo/lab")
     assert blocked.status_code == 429
     assert "retry-after" in {k.lower() for k in blocked.headers}
+
+
+# ── POST /demo/solicitud — Pilar 3 anónimo, envío REAL etiquetado demostración ────
+
+
+@pytest.fixture
+def demo_solicitud_client():
+    from fastapi.testclient import TestClient
+
+    from app.api.main import app
+    from app.notifications.email import CapturingEmailSender
+
+    sender = CapturingEmailSender()
+    limiter = InMemoryRateLimiter(limit=3, window_seconds=60)
+    app.dependency_overrides[demo_router.get_solicitud_rate_limiter] = lambda: limiter
+    app.dependency_overrides[demo_router.get_email_sender] = lambda: sender
+    yield TestClient(app), sender
+    app.dependency_overrides.pop(demo_router.get_solicitud_rate_limiter, None)
+    app.dependency_overrides.pop(demo_router.get_email_sender, None)
+
+
+def test_demo_solicitud_envia_correo_real_etiquetado(demo_solicitud_client):
+    client, sender = demo_solicitud_client
+    r = client.post(
+        "/demo/solicitud",
+        json={
+            "tipo": "Cotización de refacción",
+            "dato": "Filtro hidráulico P/N 517-923",
+            "codo": "bomba",
+            "documento_nombre": "Manual de Partes — LS-400N",
+            "pagina": 12,
+            "fragmento": "Filtro de retorno, número de parte 517-923",
+            "contacto_nombre": "Visitante Jurado",
+            "contacto_email": "jurado@example.com",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["enviada"] is True
+    # Se envió UN correo real (capturado), al destino FIJO demo, etiquetado demostración.
+    assert len(sender.sent) == 1
+    msg = sender.sent[0]
+    assert msg.to == demo_router.DEMO_SOLICITUD_TO
+    assert "demostración" in msg.subject.lower()
+    assert "Filtro hidráulico P/N 517-923" in msg.body_text
+    assert "Manual de Partes — LS-400N" in msg.body_text
+    assert "517-923" in msg.body_text  # fragmento citado (trazabilidad)
+    assert msg.reply_to == "jurado@example.com"  # reply-to = contacto del visitante
+
+
+def test_demo_solicitud_sin_contacto_sin_replyto(demo_solicitud_client):
+    client, sender = demo_solicitud_client
+    r = client.post(
+        "/demo/solicitud",
+        json={"tipo": "Reabastecimiento", "dato": "Aceite hidráulico ISO 68", "codo": "bomba"},
+    )
+    assert r.status_code == 200 and r.json()["enviada"] is True
+    assert sender.sent[0].reply_to is None  # sin contacto → sin reply-to
+
+
+def test_demo_solicitud_email_invalido_no_es_replyto(demo_solicitud_client):
+    client, sender = demo_solicitud_client
+    r = client.post(
+        "/demo/solicitud",
+        json={"tipo": "X", "dato": "Y", "contacto_email": "no-es-un-email"},
+    )
+    assert r.status_code == 200 and r.json()["enviada"] is True
+    assert sender.sent[0].reply_to is None
+
+
+def test_demo_solicitud_rate_limit_estricto_429(demo_solicitud_client):
+    client, _ = demo_solicitud_client
+    for _ in range(3):
+        ok = client.post("/demo/solicitud", json={"tipo": "X", "dato": "Y"})
+        assert ok.status_code == 200
+    blocked = client.post("/demo/solicitud", json={"tipo": "X", "dato": "Y"})
+    assert blocked.status_code == 429
+    assert "retry-after" in {k.lower() for k in blocked.headers}
+
+
+def test_demo_solicitud_sin_canal_es_honesto_no_finge():
+    """Sin proveedor de correo (email_sender=None): NO finge el envío → enviada=False."""
+    from fastapi.testclient import TestClient
+
+    from app.api.main import app
+
+    app.dependency_overrides[demo_router.get_solicitud_rate_limiter] = (
+        lambda: InMemoryRateLimiter(limit=100)
+    )
+    app.dependency_overrides[demo_router.get_email_sender] = lambda: None
+    try:
+        client = TestClient(app)
+        r = client.post("/demo/solicitud", json={"tipo": "X", "dato": "Y"})
+        assert r.status_code == 200
+        assert r.json()["enviada"] is False  # honesto, no fingido
+    finally:
+        app.dependency_overrides.pop(demo_router.get_solicitud_rate_limiter, None)
+        app.dependency_overrides.pop(demo_router.get_email_sender, None)

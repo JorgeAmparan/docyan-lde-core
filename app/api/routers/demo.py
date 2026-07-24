@@ -80,6 +80,26 @@ def get_rate_limiter():
     )
 
 
+def get_solicitud_rate_limiter():
+    """Rate limiter ESTRICTO para el envío de solicitudes demo (anti-spam): por
+    IP, pocas por minuto. El envío dispara un correo real → cota más baja que la
+    consulta. Override en tests."""
+    from app.cache.rate_limiter import RedisRateLimiter
+
+    return RedisRateLimiter(
+        limit=int(os.getenv("DEMO_SOLICITUD_RATE_LIMIT_PER_MIN", "3")),
+        window_seconds=60,
+        prefix="rate:demo:sol:",
+    )
+
+
+def get_email_sender():
+    """Sender de correo de producción (Resend). Override en tests (Capturing)."""
+    from app.notifications.email import get_email_sender as _factory
+
+    return _factory()
+
+
 def _client_ip(request: Request) -> str:
     """IP del cliente, respetando el proxy de Vercel/Fly (X-Forwarded-For)."""
     xff = request.headers.get("x-forwarded-for")
@@ -108,6 +128,31 @@ class DemoQueryResponse(BaseModel):
     fallback: str | None = None    # mensaje honesto cuando el grafo demo no la sostiene
     codo: str
     tenant_demo: str
+
+
+DEMO_SOLICITUD_TO = os.getenv("DEMO_SOLICITUD_TO", "jamparan@lappicerostudio.com")
+DEMO_SOLICITUD_FROM_LABEL = os.getenv("DEMO_SOLICITUD_FROM_LABEL", "Proveedor Demo DOCYAN")
+
+
+class DemoSolicitudRequest(BaseModel):
+    """Un dato accionable de la respuesta demo → solicitud REAL por correo (Pilar 3).
+    Sin auth (visitante anónimo): el destino es FIJO (correo demo del fundador), NUNCA
+    un correo libre del visitante → no es vector de spam saliente. El `contacto_email`
+    (opcional) solo se usa como reply-to para que el destinatario pueda responder."""
+
+    tipo: str = Field(min_length=1, max_length=80)          # "Cotización de refacción", …
+    dato: str = Field(min_length=1, max_length=400)         # el dato accionable citado
+    codo: str = "hero"
+    documento_nombre: str | None = Field(default=None, max_length=200)
+    pagina: int | None = None
+    fragmento: str | None = Field(default=None, max_length=1500)  # cita verbatim (trazabilidad)
+    contacto_nombre: str | None = Field(default=None, max_length=120)
+    contacto_email: str | None = Field(default=None, max_length=200)
+
+
+class DemoSolicitudResponse(BaseModel):
+    enviada: bool
+    mensaje: str
 
 
 class DemoCodoDocumentosOut(BaseModel):
@@ -232,3 +277,93 @@ async def demo_codo_documentos(
         timeout=DEMO_QUERY_TIMEOUT_S, endpoint="/demo/codo/{key}",
     )
     return DemoCodoDocumentosOut(documentos=[DocumentoRefOut(**d) for d in docs])
+
+
+def _cuerpo_solicitud_demo(body: DemoSolicitudRequest, ip: str) -> tuple[str, str]:
+    """Arma (subject, texto) del correo de solicitud demo. Etiquetado VISIBLE como
+    demostración (regla del sprint: real, limitado, jamás fingido)."""
+    subject = f"[DEMO DOCYAN] Solicitud de demostración — {body.tipo}"
+    cita = "—"
+    if body.documento_nombre:
+        cita = body.documento_nombre
+        if body.pagina:
+            cita += f", p. {body.pagina}"
+    contacto = "(el visitante no dejó contacto)"
+    if body.contacto_nombre or body.contacto_email:
+        contacto = " · ".join(x for x in (body.contacto_nombre, body.contacto_email) if x)
+    frag = f"\n\nFragmento citado:\n«{body.fragmento.strip()}»" if body.fragmento else ""
+    texto = (
+        "SOLICITUD DE DEMOSTRACIÓN — DOCYAN LDE™\n"
+        "Generada por un visitante ANÓNIMO del demo público. Es una demostración del\n"
+        "Pilar 3 (dato accionable → solicitud), no un pedido comercial real.\n"
+        "──────────────────────────────────────────\n"
+        f"Tipo de solicitud: {body.tipo}\n"
+        f"Dato / necesidad:  {body.dato}\n"
+        f"Procedencia:       {cita}\n"
+        f"CoDo demo:         {body.codo}\n"
+        f"Contacto visitante: {contacto}"
+        f"{frag}\n"
+        "──────────────────────────────────────────\n"
+        f"(origen: demo público · IP {ip})\n"
+    )
+    return subject, texto
+
+
+@router.post("/solicitud", response_model=DemoSolicitudResponse)
+async def demo_solicitud(
+    body: DemoSolicitudRequest,
+    request: Request,
+    response: Response,
+    limiter=Depends(get_solicitud_rate_limiter),
+    email_sender=Depends(get_email_sender),
+) -> DemoSolicitudResponse:
+    """
+    Pilar 3 en el demo público: convierte un dato accionable citado en una solicitud
+    REAL por correo, SIN auth, con destino FIJO (correo demo del fundador → único que
+    entrega el sandbox de Resend). Rate-limited estricto por IP (anti-spam). El correo
+    va etiquetado como "solicitud de demostración". NUNCA se finge el envío: si el canal
+    no está configurado o Resend rechaza, se devuelve el fallo honesto.
+    """
+    ip = _client_ip(request)
+    rl = limiter.hit(ip)
+    response.headers["X-RateLimit-Limit"] = str(rl.limit)
+    response.headers["X-RateLimit-Remaining"] = str(rl.remaining)
+    if not rl.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Demasiadas solicitudes demo. Intenta en un momento.",
+            headers={"Retry-After": str(rl.retry_after)},
+        )
+
+    if email_sender is None:
+        # Canal no configurado (sin RESEND_API_KEY): honesto, no fingido.
+        logger.warning("demo_solicitud: sin proveedor de correo — no se envió")
+        return DemoSolicitudResponse(
+            enviada=False,
+            mensaje="El envío de demostración no está disponible en este momento.",
+        )
+
+    from app.notifications.email import EmailMessage, EmailSendError
+
+    subject, texto = _cuerpo_solicitud_demo(body, ip)
+    reply_to = body.contacto_email if (body.contacto_email and "@" in body.contacto_email) else None
+    msg = EmailMessage(to=DEMO_SOLICITUD_TO, subject=subject, body_text=texto, reply_to=reply_to)
+    try:
+        await asyncio.to_thread(email_sender.send, msg)
+    except EmailSendError as exc:
+        logger.warning("demo_solicitud: Resend rechazó (%s)", type(exc).__name__)
+        return DemoSolicitudResponse(
+            enviada=False,
+            mensaje="No se pudo enviar la solicitud de demostración. Intenta de nuevo.",
+        )
+    except Exception as exc:  # noqa: BLE001 — el demo nunca 500 al visitante
+        logger.warning("demo_solicitud: error inesperado (%s)", type(exc).__name__)
+        return DemoSolicitudResponse(
+            enviada=False, mensaje="No se pudo enviar la solicitud de demostración."
+        )
+
+    logger.info("demo_solicitud enviada tipo=%s codo=%s", body.tipo, body.codo)
+    return DemoSolicitudResponse(
+        enviada=True,
+        mensaje="Solicitud de demostración enviada. Así viaja un dato accionable a su destinatario.",
+    )
