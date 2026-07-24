@@ -34,43 +34,35 @@ import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
    (3 PDFs de la mezcladora MAXI-10ND). Nada enlatado: el clic/escrito va a `demoQuery`.
    El tenant `demo-maxi` se siembra con `scripts/seed_demo_tenants.py --manifest
    docs/demo/manifest_maxi.json` en el backend DOCYAN (Supabase + worker). */
-const DEMO_CODO = "maxi";
+// ⚠️ TEMPORAL (validación Jorge): el /demo apunta al tenant scratch `demo-min` con el
+// CUARTO de validación del LS-400 (pp 12-33). Es para que Jorge vea cómo renderiza
+// (texto citado con página + figuras). Tras su "go" + la ingesta completa, esto se
+// re-apunta a `bomba` (LS-400 88pp) como protagonista definitivo. NO es el demo final.
+const DEMO_CODO = "min";
 
-// Documentos REALES sembrados en el tenant `demo-maxi` (ids = SHA-256 del archivo,
-// verificados contra `GET /demo/codo/maxi`). Solo 2 docs viven en el grafo demo
-// (operación + ficha); la "lista de partes" NO está sembrada → se retiró (poda: sin
-// docs fantasma). Las sugerencias están CURADAS y VERIFICADAS contra prod
-// (`POST /demo/query codo=maxi`): cada una devuelve respuesta citada HOY. Se
-// eliminaron las que daban VACÍO ("¿cómo arranco de forma segura?", "¿qué EPP?").
+// Sugerencias CURADAS y VERIFICADAS contra prod (`POST /demo/query codo=min`): cada una
+// responde HOY con cita. La de "diagrama" devuelve una FIGURA con imagen renderizada.
 const DEMO_DOCS: NonNullable<ConsultContext["documentos"]> = [
   {
-    id: "dbf76a6d6c248fc54e5f0dbdcfcd33b44b4f7364ee82d505e43f140219ba0876",
-    nombre: "Manual de operación — MAXI-10ND",
+    id: "0b3179fa7f79ca891be8ec143ae86ad9f138049d53232d00a5d9f1078e586ef7",
+    nombre: "Manual de Operación — LS-400 (validación pp 12-33)",
     tipo: "manual_tecnico",
     sugerencias: [
-      "¿A cuántas RPM debe girar la olla?",
-      "¿Cuál es la capacidad de la olla?",
-      "¿Cuánto pesa la mezcladora?",
-    ],
-  },
-  {
-    id: "b2a2dcb531f2fc72c36fe20c4710b5571c8c4b7d0e8532eef0e0ab149b6f1c69",
-    nombre: "Ficha técnica — MAXI-10ND",
-    tipo: "ficha_tecnica",
-    sugerencias: [
-      "¿Qué motor usa y a qué potencia?",
-      "¿Qué refacciones lleva el sistema de transmisión?",
+      "¿Qué aceite hidráulico usa la bomba?",
+      "¿Cuál es el voltaje del sistema eléctrico?",
+      "Muestra el diagrama de componentes del motor",
+      "¿Qué se debe revisar en la inspección?",
+      "¿Cuáles son las reglas de seguridad?",
     ],
   },
 ];
 
-/* El contexto del CoDo demo (real, sembrado). `codo` legible (no SHA) → la cabecera
-   lo muestra. Documentos reales del grafo `demo-maxi` (mezcladora MAXI-10ND). */
+/* Contexto del CoDo (validación). Documentos reales del grafo `demo-min`. */
 const DEMO_CONTEXT: ConsultContext = {
-  codo: "MAXI-10ND",
-  entityName: "Mezcladora de concreto MAXI-10ND",
-  entityTitle: "CoDo demo · 2 documentos vivos",
-  entityMeta: "demo-maxi · solo lectura",
+  codo: "LS-400 (validación)",
+  entityName: "Bomba de concreto LS-400",
+  entityTitle: "CoDo demo · validación (22 páginas)",
+  entityMeta: "demo-min · solo lectura",
   documentos: DEMO_DOCS,
 };
 
@@ -106,8 +98,8 @@ export default function DemoPage() {
           </h1>
           <p className="ds-lead">
             {t({
-              es: "Mezcladora de concreto MAXI-10ND · 2 documentos vivos. Pregunta lo que preguntarías frente al equipo: la respuesta llega citada a la fuente y en tu idioma; y cuando un dato pide acción, generas la solicitud ahí mismo.",
-              en: "MAXI-10ND concrete mixer · 2 live documents. Ask what you'd ask at the machine: the answer arrives cited to its source, in your language — and when a data point calls for action, you raise the request right there.",
+              es: "Bomba de concreto LS-400 · manual de operación. Pregunta lo que preguntarías frente al equipo: la respuesta llega citada a la fuente con su página, en tu idioma, y las figuras técnicas se ven en la respuesta.",
+              en: "LS-400 concrete pump · operating manual. Ask what you'd ask at the machine: the answer arrives cited to its source with its page, in your language, and the technical figures render in the response.",
             })}
           </p>
           <div className="ds-devtoggle" role="tablist" aria-label={t({ es: "Dispositivo", en: "Device" })}>
