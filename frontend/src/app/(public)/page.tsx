@@ -43,6 +43,10 @@ interface DemoQA {
 
 interface DemoDoc {
   key: string;
+  /** doc_id real (=content_sha256) del `:DocumentoSource` en `demo-hero`. Acota
+   *  `/demo/query` a ESE documento y evita cross-citation entre los 2 SDS del
+   *  tenant (sin él, una pregunta de acetona podía citar el SDS de metanol). */
+  docId: string;
   name: Bilingual;
   langTag: string;
   icon: string;
@@ -57,6 +61,7 @@ const _NA = { cite: null, page: null, span: null, mark: null, spanLang: null };
 const DEMO_DOCS: DemoDoc[] = [
   {
     key: "msds",
+    docId: "83c4594f733274f051916bb836e6bb3a346171a38a51cb974f2c1c3df5314abb",
     name: { es: "SDS — Acetona", en: "SDS — Acetone" },
     langTag: "EN",
     icon: "file-text",
@@ -68,6 +73,7 @@ const DEMO_DOCS: DemoDoc[] = [
   },
   {
     key: "metanol",
+    docId: "176c34a8ea79fedeea3aeadd74eb1c86fa29723635f6c29d3cc25693b266e357",
     name: { es: "SDS — Metanol", en: "SDS — Methanol" },
     langTag: "EN",
     icon: "file-text",
@@ -116,7 +122,7 @@ function LiveDemo() {
     // honesto si el documento no la sostiene — nunca se fabrica.
     let res: AnswerState;
     try {
-      const o = await demoQuery(question, "hero");
+      const o = await demoQuery(question, "hero", doc.docId);
       const payload = ((o.resultado || {}) as Record<string, unknown>).payload as Record<string, unknown> | undefined;
       const especs = (payload?.especificaciones as Array<{ nombre?: string; valor?: string; cita?: { documento_nombre?: string; fragmento?: string | null } }>) || [];
       if (o.servido && especs.length > 0) {
@@ -599,11 +605,6 @@ const CODOS_REALES: { icon: string; name: Bilingual; detail: Bilingual }[] = [
     icon: "droplets",
     name: { es: "Bomba de concreto LS-400", en: "LS-400 concrete pump" },
     detail: { es: "Manual industrial de 88 páginas y 244 figuras técnicas.", en: "88-page industrial manual with 244 technical figures." },
-  },
-  {
-    icon: "factory",
-    name: { es: "Mezcladora MAXI-10ND", en: "MAXI-10ND mixer" },
-    detail: { es: "Manual de operación y ficha técnica.", en: "Operating manual and datasheet." },
   },
   {
     icon: "languages",

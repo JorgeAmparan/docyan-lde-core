@@ -34,35 +34,34 @@ import { demoQuery, DEMO_FALLBACK } from "@/lib/demo-query";
    (3 PDFs de la mezcladora MAXI-10ND). Nada enlatado: el clic/escrito va a `demoQuery`.
    El tenant `demo-maxi` se siembra con `scripts/seed_demo_tenants.py --manifest
    docs/demo/manifest_maxi.json` en el backend DOCYAN (Supabase + worker). */
-// ⚠️ TEMPORAL (validación Jorge): el /demo apunta al tenant scratch `demo-min` con el
-// CUARTO de validación del LS-400 (pp 12-33). Es para que Jorge vea cómo renderiza
-// (texto citado con página + figuras). Tras su "go" + la ingesta completa, esto se
-// re-apunta a `bomba` (LS-400 88pp) como protagonista definitivo. NO es el demo final.
-const DEMO_CODO = "min";
+// El /demo apunta al CoDo REAL `bomba` (graph `demo-bomba`): el Manual de Operación
+// LS-400 completo (88pp, OCR forzado), protagonista del demo. Sembrado por el pipeline
+// real (cotizador → worker → Docling/OCR/Gemini/GraphRAG-SDK). Cero enlatado.
+const DEMO_CODO = "bomba";
 
-// Sugerencias CURADAS y VERIFICADAS contra prod (`POST /demo/query codo=min`): cada una
-// responde HOY con cita. La de "diagrama" devuelve una FIGURA con imagen renderizada.
+// Sugerencias CURADAS y VERIFICADAS una-a-una contra prod (`POST /demo/query codo=bomba`,
+// 24 jul 2026): cada una responde con VALOR CONCRETO citado a la fuente con su página.
+// Acotadas al doc de operación (id) para evitar cross-citation con partes/ficha del CoDo.
 const DEMO_DOCS: NonNullable<ConsultContext["documentos"]> = [
   {
-    id: "0b3179fa7f79ca891be8ec143ae86ad9f138049d53232d00a5d9f1078e586ef7",
-    nombre: "Manual de Operación — LS-400 (validación pp 12-33)",
+    id: "65dd1dfdfee4d858139e5fbe75febfb1a9f8a525cc48fa82667c4f1e222d3f44",
+    nombre: "Manual de Operación — LS-400",
     tipo: "manual_tecnico",
     sugerencias: [
-      "¿Qué aceite hidráulico usa la bomba?",
+      "¿Cuál es la presión del acumulador?",
       "¿Cuál es el voltaje del sistema eléctrico?",
-      "Muestra el diagrama de componentes del motor",
-      "¿Qué se debe revisar en la inspección?",
-      "¿Cuáles son las reglas de seguridad?",
+      "¿Cuánto concreto puede contener la tolva?",
+      "¿Cuál es la capacidad del líquido hidráulico?",
     ],
   },
 ];
 
-/* Contexto del CoDo (validación). Documentos reales del grafo `demo-min`. */
+/* Contexto del CoDo. Documentos reales del grafo `demo-bomba`. */
 const DEMO_CONTEXT: ConsultContext = {
-  codo: "LS-400 (validación)",
+  codo: "LS-400",
   entityName: "Bomba de concreto LS-400",
-  entityTitle: "CoDo demo · validación (22 páginas)",
-  entityMeta: "demo-min · solo lectura",
+  entityTitle: "CoDo demo · manual de operación (88 páginas)",
+  entityMeta: "demo-bomba · solo lectura",
   documentos: DEMO_DOCS,
 };
 
