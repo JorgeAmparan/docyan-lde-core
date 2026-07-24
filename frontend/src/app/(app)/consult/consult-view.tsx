@@ -489,6 +489,23 @@ export function ConsultView({
     if (c) c.scrollTop = c.scrollHeight;
   }, [msgs]);
 
+  // DEMO-CIERRE: en el demo público (móvil) el hilo vive DEBAJO de la lista de
+  // sugerencias; el scroll interno de arriba mueve el hilo pero no el VIEWPORT, así
+  // que la respuesta queda fuera de vista. Al llegar una respuesta, si el hilo está
+  // fuera de pantalla, lo traemos al viewport. Solo en modo demo (queryFn) para no
+  // perturbar la vista autenticada de escritorio (dos columnas, hilo ya visible).
+  useEffect(() => {
+    if (!queryFn) return;
+    const last = msgs[msgs.length - 1];
+    if (!last || last.role !== "answer") return;
+    const c = convoRef.current;
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    if (r.top < 8 || r.top > window.innerHeight * 0.5) {
+      c.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [msgs, queryFn]);
+
   const onSave = useCallback(
     async (id: number, a: Answer) => {
       if (savedIds.includes(id)) return;

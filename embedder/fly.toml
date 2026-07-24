@@ -37,13 +37,18 @@ primary_region = "dfw"
   # sólo responde 200 cuando el modelo BGE-M3 cargó + hizo un embed de warmup ("ok").
   # El `tcp_check` anterior pasaba apenas uvicorn bindeaba (ANTES de cargar el modelo)
   # → la máquina se marcaba healthy mientras /embed 503-eaba en el cold-start (flood
-  # léxico transitorio observado 2026-07-22). `grace_period` amplio (300s) cubre la
-  # carga del modelo (≈150s en 8 GB) sin disparar reinicio; sólo tras la gracia un
-  # /health que siga 503 se considera no-sano.
+  # léxico transitorio observado 2026-07-22). `grace_period` amplio cubre la carga del
+  # modelo sin disparar reinicio; sólo tras la gracia un /health que siga 503 se
+  # considera no-sano.
+  # DEMO-CIERRE (jul 2026): el cold-start REAL medido fue ~6 min (03:08→03:14), NO ~150s
+  # — reinicio espontáneo de la máquina tumbó TODO el demo 6 min y el deploy de #54 dio
+  # "failure" falso (health no pasó en 300s pese a que la máquina sí levantó). 600s da
+  # holgura al cold-start real → sin falsos-failure de deploy ni riesgo de restart-loop.
+  # (El cero-downtime real es min_machines_running=2 — decisión de costo de Jorge.)
   [[services.http_checks]]
     interval = "15s"
     timeout = "10s"
-    grace_period = "300s"
+    grace_period = "600s"
     method = "get"
     path = "/health"
 
