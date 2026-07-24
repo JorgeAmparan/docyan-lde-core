@@ -255,6 +255,19 @@ def test_densidad_default_off_preserva_baseline(monkeypatch):
     assert g["do_ocr"] is False and g["motivo_ocr"] == "texto_nativo"
 
 
+def test_memory_peak_sampler_best_effort():
+    """El sampler de memoria (DEMO-READY) no rompe y degrada a None sin /proc
+    (macOS/tests). Con /proc (Linux) reporta un pico > 0."""
+    import os
+
+    with pipeline._MemoryPeakSampler(intervalo_s=0.05) as mem:
+        _ = [i for i in range(10000)]  # algo de trabajo
+    # pico_gb es None (sin /proc) o un float >= 0 (Linux). Nunca lanza.
+    assert mem.pico_gb is None or (isinstance(mem.pico_gb, float) and mem.pico_gb >= 0)
+    if os.path.exists("/proc/meminfo"):
+        assert mem.pico_kb is not None and mem.pico_kb > 0
+
+
 def test_analizar_ls400_real_es_header_only():
     """El PDF REAL del LS-400 (si está presente) debe medir densidad de header-only.
     Es la evidencia dura del diagnóstico DEMO-READY (retrieval VACÍO en prod)."""
