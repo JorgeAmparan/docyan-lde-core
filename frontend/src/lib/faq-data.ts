@@ -1,8 +1,9 @@
 /**
  * FAQ del sitio público (F3 N1) — copy canónico ES/EN de
- * `DOCYAN_FAQ_Sitio_Publico.md`. NO retraducir: ES y EN vienen provistos. 4 bloques,
- * 17 preguntas. Reglas: sin "traducción"; frecuencia-sí/causa-no; alertas
- * administrativas; sin promesas legales que dependan de los TyC pendientes.
+ * `DOCYAN_FAQ_Sitio_Publico.md`. NO retraducir: ES y EN vienen provistos. 4 bloques.
+ * Reglas: sin "traducción"; frecuencia-sí/causa-no; alertas administrativas; sin
+ * promesas legales que dependan de los TyC pendientes. (LANDING-3P añadió las entradas
+ * de alertas-vencimientos y datos-accionables, y honestó el tiempo de ingesta OCR.)
  */
 import type { Bilingual } from "@/lib/site-i18n";
 
@@ -65,8 +66,8 @@ export const FAQ_BLOCKS: FaqBlock[] = [
         id: "tiempo-ingesta",
         q: { es: "¿Cuánto tarda un documento en estar consultable?", en: "How long until a document is queryable?" },
         a: {
-          es: "Minutos, no días. Subes el documento, confirmas, y el análisis corre en automático; la pantalla te muestra el avance y te avisa cuando está listo para consultarse. Un manual típico está vivo el mismo día en que lo subes — sin proyectos de implementación de meses.",
-          en: "Minutes, not days. You upload, confirm, and analysis runs automatically; the screen shows progress and tells you when it's ready to query. A typical manual is live the same day you upload it — no months-long implementation projects.",
+          es: "De minutos a un rato, según el documento; el mismo día en que lo subes. Un manual o ficha con texto está vivo en minutos; un documento escaneado o con cientos de figuras técnicas que requiere reconocimiento de imagen (OCR) tarda más —hasta cerca de una hora—, y la pantalla te muestra el avance y te avisa cuando está listo. Es un costo de una sola vez: la ingesta tarda lo que tarde, pero la consulta es en segundos para siempre. Sin proyectos de implementación de meses.",
+          en: "From minutes to a little while, depending on the document; the same day you upload it. A manual or datasheet with text is live in minutes; a scanned document or one with hundreds of technical figures that needs image recognition (OCR) takes longer —up to about an hour— and the screen shows progress and tells you when it's ready. It's a one-time cost: ingestion takes what it takes, but querying is in seconds forever. No months-long implementation projects.",
         },
       },
       {
@@ -75,6 +76,28 @@ export const FAQ_BLOCKS: FaqBlock[] = [
         a: {
           es: "No, y es deliberado. DOCYAN te sirve el dato verificable —la especificación, el procedimiento, el historial— y la decisión la toma tu gente, como lo exige la operación regulada. Las alertas que genera son administrativas (vencimientos, documentos por expirar, fechas de calibración), nunca instrucciones de qué hacer. DOCYAN es capa de conocimiento, no sistema de registro primario ni sistema de decisión.",
           en: "No, by design. DOCYAN serves the verifiable fact — the specification, the procedure, the history — and your people make the decision, as regulated operations require. Its alerts are administrative (expirations, documents about to lapse, calibration dates), never instructions on what to do. DOCYAN is a knowledge layer, not a system of record and not a decision system.",
+        },
+      },
+      {
+        id: "alertas-vencimientos",
+        q: {
+          es: "¿DOCYAN me avisa antes de que venza una fecha crítica?",
+          en: "Does DOCYAN warn me before a critical date expires?",
+        },
+        a: {
+          es: "Sí. DOCYAN extrae las fechas críticas de tus documentos —vencimientos, calibraciones, fechas de expiración— y emite una alerta antes del vencimiento para proteger la continuidad de la operación. Por arquitectura, esas alertas son exclusivamente administrativas: informan qué vence y cuándo, con su cita al documento fuente; nunca sugieren una decisión operativa ni clínica. El aviso te llega para que tu gente actúe a tiempo.",
+          en: "Yes. DOCYAN extracts the critical dates from your documents —expirations, calibrations, due dates— and issues an alert before they lapse to protect operational continuity. By architecture, those alerts are strictly administrative: they tell you what expires and when, with a citation to the source document; they never suggest an operational or clinical decision. The heads-up reaches you so your people act in time.",
+        },
+      },
+      {
+        id: "datos-accionables",
+        q: {
+          es: "¿Qué es un «dato accionable» y cómo genera una solicitud?",
+          en: "What is an “actionable data point” and how does it generate a request?",
+        },
+        a: {
+          es: "Cuando la respuesta a una consulta contiene un dato que en sí mismo representa una necesidad —el número de una pieza que hay que cotizar, un insumo por reabastecer, una inspección por agendar— DOCYAN muestra un botón que genera una solicitud por tipo, dirigida a un proveedor interno o externo (compras, aseguramiento de calidad, almacén, o un proveedor externo). La solicitud viaja con la cita al documento de origen, cerrando la brecha entre la especificación y la acción, sin tener que tomar fotos ni encadenar llamadas.",
+          en: "When the answer to a query contains a data point that itself represents a need —the number of a part to quote, a supply to restock, an inspection to schedule— DOCYAN shows a button that generates a request by type, directed to an internal or external provider (purchasing, quality assurance, the warehouse, or an outside supplier). The request travels with the citation to its source document, closing the gap between the spec and the action, with no photos or chains of phone calls.",
         },
       },
     ],

@@ -277,6 +277,73 @@ def _pdf_pipeline_options(ocr_gate: dict):
     return opts
 
 
+class _MemoryPeakSampler:
+    """
+    Muestrea el pico de memoria USADA de la máquina durante `convert()` (DEMO-READY).
+
+    Motivo: la reingesta OCR del LS-400 (88pp/244 figuras) topó los 4 GB y hubo que
+    subir a 8 GB a mano, PERO el pico real NO se pudo medir a posteriori (sin
+    `cgroup memory.peak`, con `max_usage_in_bytes=0`, y sin traza en el worker). Sin
+    medición no hay auto-dimensionamiento honesto. Este sampler cierra ese hueco: cada
+    ingesta reporta su pico → el cotizador calibra el requisito de memoria por perfil
+    de documento (páginas × densidad × OCR) y el sistema decide solo (escalar/rechazar).
+
+    Lee `MemTotal - MemAvailable` de /proc/meminfo (memoria usada de la máquina, no solo
+    el RSS del proceso — incluye los subprocesos `tesseract` del OCR). Hilo daemon,
+    best-effort: si /proc no está (no-Linux/tests), el pico queda en None y no rompe.
+    """
+
+    def __init__(self, intervalo_s: float = 2.0) -> None:
+        self.intervalo_s = intervalo_s
+        self.pico_kb: int | None = None
+        self._stop = False
+        self._thread = None
+
+    @staticmethod
+    def _usado_kb() -> int | None:
+        try:
+            total = disp = None
+            with open("/proc/meminfo") as fh:
+                for ln in fh:
+                    if ln.startswith("MemTotal:"):
+                        total = int(ln.split()[1])
+                    elif ln.startswith("MemAvailable:"):
+                        disp = int(ln.split()[1])
+                    if total is not None and disp is not None:
+                        break
+            if total is None or disp is None:
+                return None
+            return total - disp
+        except Exception:  # noqa: BLE001 — no-Linux/sin /proc ⇒ sin medición
+            return None
+
+    def _run(self) -> None:
+        import time
+
+        while not self._stop:
+            u = self._usado_kb()
+            if u is not None and (self.pico_kb is None or u > self.pico_kb):
+                self.pico_kb = u
+            time.sleep(self.intervalo_s)
+
+    def __enter__(self) -> "_MemoryPeakSampler":
+        import threading
+
+        self.pico_kb = self._usado_kb()  # muestra inicial
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self._stop = True
+        if self._thread is not None:
+            self._thread.join(timeout=self.intervalo_s + 1)
+
+    @property
+    def pico_gb(self) -> float | None:
+        return round(self.pico_kb / 1_000_000, 2) if self.pico_kb is not None else None
+
+
 def convertir(path: str):
     """
     Convierte un documento con Docling → `(markdown, docling_document, ocr_gate)`.
@@ -307,8 +374,16 @@ def convertir(path: str):
             InputFormat.PDF: PdfFormatOption(pipeline_options=_pdf_pipeline_options(ocr_gate))
         }
     )
-    result = converter.convert(path)
+    # Mide el pico de memoria de la conversión (fase pesada; OCR incluido) para calibrar
+    # el requisito por perfil de documento (DEMO-READY — cierra el hueco de medición).
+    with _MemoryPeakSampler() as mem:
+        result = converter.convert(path)
     doc = result.document
+    ocr_gate["pico_memoria_gb"] = mem.pico_gb
+    logger.info(
+        "convert OK | %s | pico_memoria=%s GB | do_ocr=%s paginas=%s",
+        path, mem.pico_gb, ocr_gate.get("do_ocr"), ocr_gate.get("paginas_totales"),
+    )
     if ocr_gate.get("paginas_totales") is None:
         try:
             ocr_gate = {**ocr_gate, "paginas_totales": len(doc.pages) or None}
