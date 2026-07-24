@@ -591,12 +591,25 @@ function MoatSection() {
 /* Puente CoDos (demos sin registro)                            */
 /* ============================================================ */
 
-const CODOS_BRIDGE: { key: string; label: string; icon: string; entity: string }[] = [
-  { key: "lab", label: "Laboratorios", icon: "flask-conical", entity: "Centrífuga Hettich Rotina 380" },
-  { key: "maq", label: "Manufactura", icon: "factory", entity: "Centro de maquinado Haas VF-4" },
-  { key: "pharma", label: "Farma", icon: "pill", entity: "Bioreactor B-3" },
-  { key: "min", label: "Minería", icon: "mountain", entity: "Excavadora Komatsu PC-2000" },
-  { key: "agri", label: "Agroindustria", icon: "sprout", entity: "Tanque enfriamiento leche T-7" },
+// DEMO-CIERRE: los CoDos de demostración REALES (verificados en producción). NADA
+// aspiracional: cada uno existe y responde. (Antes había 5 verticales fantasma —
+// Hettich/Haas/Bioreactor/Komatsu/Tanque T-7 — que no existían en el demo; eliminadas.)
+const CODOS_REALES: { icon: string; name: Bilingual; detail: Bilingual }[] = [
+  {
+    icon: "droplets",
+    name: { es: "Bomba de concreto LS-400", en: "LS-400 concrete pump" },
+    detail: { es: "Manual industrial de 88 páginas y 244 figuras técnicas.", en: "88-page industrial manual with 244 technical figures." },
+  },
+  {
+    icon: "factory",
+    name: { es: "Mezcladora MAXI-10ND", en: "MAXI-10ND mixer" },
+    detail: { es: "Manual de operación y ficha técnica.", en: "Operating manual and datasheet." },
+  },
+  {
+    icon: "languages",
+    name: { es: "Consulta multilingüe", en: "Multilingual query" },
+    detail: { es: "Hoja de seguridad en inglés, respondida en español con cita al original.", en: "English safety data sheet, answered in Spanish with a citation to the original." },
+  },
 ];
 
 function CodoBridge() {
@@ -606,21 +619,23 @@ function CodoBridge() {
       <div className="wrap">
         <div className="cb-grid">
           <div>
-            <span className="eyebrow">{t({ es: "Demos sin registro", en: "No-signup demos" })}</span>
-            <h2 className="sec-title">{t({ es: "¿Quieres verlo con documentos de tu sector?", en: "Want to see it with documents from your industry?" })}</h2>
+            <span className="eyebrow">{t({ es: "Demo sin registro", en: "No-signup demo" })}</span>
+            <h2 className="sec-title">{t({ es: "¿Quieres verlo en vivo?", en: "Want to see it live?" })}</h2>
             <p className="sec-lead">{t({
-              es: "Cinco Conjuntos de Documentos ya analizados — pregunta lo que preguntarías en tu operación, sin registrarte.",
-              en: "Five Document Sets already analyzed — ask what you'd ask in your operation, without signing up.",
+              es: "Pregunta sobre documentos reales, sin registrarte. El mismo motor sirve laboratorios, manufactura, flotillas y más — la demo abre con dos equipos reales y la consulta multilingüe.",
+              en: "Ask about real documents, no signup. The same engine serves laboratories, manufacturing, fleets and more — the demo opens with two real machines and multilingual query.",
             })}</p>
+            <div className="cta" style={{ marginTop: 22 }}>
+              <Link className="btn primary lg" href="/demo">{t({ es: "Abrir la demo", en: "Open the demo" })}<Icon name="arrow-right" size={16} /></Link>
+            </div>
           </div>
           <div className="cb-list">
-            {CODOS_BRIDGE.map((c) => (
-              <Link key={c.key} className="cb-item" href="/demo">
+            {CODOS_REALES.map((c, i) => (
+              <div key={i} className="cb-item" style={{ cursor: "default" }}>
                 <Icon name={c.icon} size={17} />
-                <span>{c.label}</span>
-                <span className="cb-entity">{c.entity}</span>
-                <Icon name="arrow-right" size={15} />
-              </Link>
+                <span>{t(c.name)}</span>
+                <span className="cb-entity">{t(c.detail)}</span>
+              </div>
             ))}
           </div>
         </div>
