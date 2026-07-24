@@ -648,6 +648,24 @@ class IngestPipeline:
                 f"Último error: {last_exc}"
             ) from last_exc
 
+        # ── FAIL-LOUD ante 429/cap del proveedor tragado por el SDK ──────────────
+        # Incidente real (jul 2026): al excederse el cap mensual de Gemini, cada llamada
+        # de extracción 429ea y el SDK lo convierte en un resultado VACÍO **sin lanzar
+        # excepción** → el bucle de proveedor (que solo escala en excepción) nunca prueba
+        # el fallback de Opus, y el job se declara "completado" con 0 ontología. Eso
+        # PUBLICA UN GRAFO VACÍO (demo caído sin señal). Señal inequívoca de falla tragada
+        # del proveedor: 0 entidades DESPUÉS de 0 llamadas LLM exitosas (un doc legítimo
+        # sin entidades sí habría hecho llamadas y recibido respuesta). Fallamos RUIDOSO:
+        # el job queda `error`, visible y reintentable — nunca un "completado" vacío por
+        # cap. (La escalada automática a Opus en 0-ontología queda como robustez aparte.)
+        _nodos_final = getattr(ingest_result, "nodes_created", 0) or 0
+        if _nodos_final == 0 and int(uso.get("calls", 0) or 0) == 0:
+            raise RuntimeError(
+                f"job {job.job_id}: EXTRACCION_VACIA_SIN_LLAMADAS — 0 entidades tras 0 "
+                f"llamadas LLM exitosas (probable 429/cap de gasto del proveedor tragado "
+                f"por el SDK). Fallo ruidoso para NO publicar un grafo vacío."
+            )
+
         # Visibilidad de costo (decisión Jorge #4): el cotizador estima contra la
         # PRIMARIA (Flash). Si operó la capa 2/3, el costo real difiere.
         sin_ontologia = (getattr(ingest_result, "nodes_created", 0) or 0) == 0
