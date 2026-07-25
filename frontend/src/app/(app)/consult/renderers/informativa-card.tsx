@@ -27,16 +27,18 @@ export function InformativaCard({
   // ED-2 §2.4: el botón aparece SOLO si el backend marcó el dato accionable.
   const accionable = !!primary?.accionable;
 
-  // El slot `.big` (display gigante) es SOLO para un valor corto tipo "85 N·m" o "SAE-30".
-  // Una frase NUNCA va en `.big`: se lee como nota. Heurística: hay unidad, o el valor es un
-  // token corto sin espacios (no una oración).
-  const valor = (primary?.valor ?? "").trim();
-  const unidad = (primary?.unidad ?? "").trim();
-  const isShortValue = !!unidad || /^[\w.,:/+\-]{1,16}$/.test(valor);
-  const hasBig = !!valor && isShortValue;
+  // TÍTULO-DATO (paridad con el hero, `page.tsx` LiveDemo → DemoAnswerCard): el DATO
+  // destacado es `nombre` ("1750 psi", "+12 VDC", "Flash Point: 52 °F") y la definición
+  // es `valor`. Antes se usaba `valor` (la definición larga) en el slot `.big`, que por
+  // no ser "corto" caía a nota → el demo mostraba la definición sin el valor arriba
+  // (corrección Jorge #5). Ahora el valor va grande y la definición debajo, como el hero.
+  const valorGrande = (primary?.nombre ?? "").trim();
+  const unidadRaw = (primary?.unidad ?? "").trim();
+  const unidad = unidadRaw && unidadRaw.toLowerCase() !== "none" ? unidadRaw : "";
+  const hasBig = !!valorGrande;
 
-  // Texto de respuesta: la definición; o el valor cuando trae la prosa (no es número corto).
-  const answerText = (payload.definicion ?? "").trim() || (!hasBig ? valor : "");
+  // Cuerpo: la definición del dato (`valor`), con respaldo a `payload.definicion`.
+  const answerText = (primary?.valor ?? payload.definicion ?? "").trim();
 
   // §3.2 — degradación honesta: sin especificación relevante ni definición, la tarjeta
   // DICE que el documento no trae ese dato, en vez de un cuerpo vacío o (peor) relleno
@@ -61,10 +63,10 @@ export function InformativaCard({
       {hasBig ? (
         <>
           <div className="big">
-            {valor}
+            {valorGrande}
             {unidad ? <span className="u">{unidad}</span> : null}
           </div>
-          {payload.definicion ? <p className="note">{payload.definicion}</p> : null}
+          {answerText ? <p className="note">{answerText}</p> : null}
         </>
       ) : answerText ? (
         <p className="note" style={{ fontSize: 14.5, color: "var(--fg)" }}>
@@ -86,7 +88,7 @@ export function InformativaCard({
               onSolicitar({
                 cita,
                 tipoSugerido: primary?.tipo_sugerido ?? null,
-                dato: valor || answerText || payload.titulo,
+                dato: valorGrande || answerText || payload.titulo,
               })
             }
           />

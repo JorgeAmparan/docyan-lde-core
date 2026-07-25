@@ -49,6 +49,10 @@
 .consult-desktop .cb-group{display:flex;flex-direction:column;gap:8px;}
 .consult-desktop .cb-lab{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle);margin:6px 2px 2px;}
 .consult-desktop .cb-lab svg{width:13px;height:13px;color:var(--cinnabar-500);}
+/* Contenedor de las sugeridas. Por defecto (vista autenticada) = columna, idéntico
+   al layout previo. En el demo/bezel se vuelve fila con scroll táctil (kit-demo.css,
+   corrección Jorge #2). */
+.consult-desktop .sug-row{display:flex;flex-direction:column;gap:8px;}
 .consult-desktop .obs-hint{font-size:11.5px;color:var(--fg-subtle);line-height:1.45;margin:0 2px;}
 .consult-desktop .sug{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font-size:13px;font-weight:500;color:var(--fg);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer;}
 .consult-desktop .sug:hover{border-color:var(--cinnabar-300);background:var(--cinnabar-50);}

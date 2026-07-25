@@ -21,8 +21,12 @@
 
 /* citerow + cita corner-bracket + abrir pdf + guardar */
 .citerow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:13px;}
-.cite2{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);padding:5px 10px 5px 8px;border-radius:8px;cursor:pointer;}
+.cite2{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--accent-fg);background:var(--cinnabar-50);border:1px solid var(--cinnabar-100);padding:5px 10px 5px 8px;border-radius:8px;cursor:pointer;max-width:100%;min-width:0;}
 .cite2:hover{background:var(--cinnabar-100);}
+/* La etiqueta de la cita ("Manual de Operación — LS-400 · BOMBA LS-400…") se trunca
+   con ellipsis dentro del chip en vez de desbordarse (corrección Jorge #4). */
+.cite2 .cite-lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.citerow{min-width:0;}
 .cite2 .brk{position:relative;width:12px;height:12px;flex:none;}
 .cite2 .brk::before,.cite2 .brk::after{content:"";position:absolute;top:0;bottom:0;width:4px;border:1.5px solid var(--cinnabar-500);}
 .cite2 .brk::before{left:0;border-right:none;border-radius:2px 0 0 2px;}

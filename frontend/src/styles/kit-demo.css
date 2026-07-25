@@ -56,6 +56,20 @@
 .ds-bezel.phone .ds-screen .consult-desktop .col-right{flex:none;min-height:340px;}
 .ds-bezel.phone .ds-screen .consult-desktop .thread{min-height:240px;}
 
+/* ── Correcciones UI pre-video (Jorge, jul 2026) ─────────────────────────────
+   Solo dentro del demo/bezel (`.ds-screen`); la vista autenticada no se toca. */
+/* #2 — Sugeridas en UNA fila horizontal con scroll táctil (repeating group en
+   contenedor row, desplazable con el dedo), no lista vertical apilada. */
+.ds-screen .sug-row{flex-direction:row;flex-wrap:nowrap;gap:8px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;padding:2px 2px 6px;margin:0 -2px;}
+.ds-screen .sug-row::-webkit-scrollbar{height:6px;}
+.ds-screen .sug-row::-webkit-scrollbar-thumb{background:var(--cinnabar-100);border-radius:99px;}
+.ds-screen .sug-row .sug{width:auto;flex:0 0 auto;max-width:82%;scroll-snap-align:start;}
+.ds-screen .sug-row .sug .tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* #1 — Un SOLO scroll dentro del marco (el `.cwrap`); el hilo no scrollea aparte,
+   así el auto-scroll al último mensaje (cwrap.scrollTop) funciona de forma fiable. */
+.ds-bezel.phone .ds-screen .consult-desktop .thread{overflow:visible;min-height:0;}
+.ds-bezel.phone .ds-screen .consult-desktop .col-right{min-height:0;}
+
 /* Marco TABLET: layout de dos columnas (Shell-A) tal cual; solo asegura que el
    consult quepa y desplace dentro del marco. */
 .ds-bezel.tablet .ds-screen .consult-desktop .cwrap{min-height:0;}

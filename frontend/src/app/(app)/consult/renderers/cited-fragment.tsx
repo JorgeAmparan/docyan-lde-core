@@ -61,7 +61,7 @@ export function CitedFragment({
           aria-label={`Ver fragmento citado: ${label}`}
         >
           <span className="brk" aria-hidden="true" />
-          {label}
+          <span className="cite-lbl">{label}</span>
           <span style={{ opacity: 0.6 }} aria-hidden="true">
             {open ? " ▾" : " ↗"}
           </span>

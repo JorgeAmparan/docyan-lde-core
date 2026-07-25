@@ -364,6 +364,11 @@ export function ConsultView({
   const [savedIds, setSavedIds] = useState<number[]>([]);
   const [source, setSource] = useState<SourceSpan | null>(null);
   const convoRef = useRef<HTMLDivElement>(null);
+  // Contenedor scrollable REAL en el demo/bezel: el `.cwrap` (col-left apilada sobre
+  // col-right) es el que scrollea dentro del marco de teléfono, no el `.thread` (que
+  // en el demo va con overflow visible). Auto-scroll fiable = mover ESTE al fondo.
+  const cwrapRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
   const idRef = useRef(0);
   const nextId = () => (idRef.current += 1);
 
@@ -489,21 +494,16 @@ export function ConsultView({
     if (c) c.scrollTop = c.scrollHeight;
   }, [msgs]);
 
-  // DEMO-CIERRE: en el demo público (móvil) el hilo vive DEBAJO de la lista de
-  // sugerencias; el scroll interno de arriba mueve el hilo pero no el VIEWPORT, así
-  // que la respuesta queda fuera de vista. Al llegar una respuesta, si el hilo está
-  // fuera de pantalla, lo traemos al viewport. Solo en modo demo (queryFn) para no
-  // perturbar la vista autenticada de escritorio (dos columnas, hilo ya visible).
+  // DEMO — auto-scroll al ÚLTIMO mensaje (corrección Jorge #1). En el bezel el
+  // contenedor que scrollea es el `.cwrap` (col-left apilada sobre el hilo), no el
+  // `.thread`; llevar el cwrap al fondo deja la pregunta y su respuesta a la vista,
+  // como cualquier chat. Se ejecuta al enviar (aparece la burbuja) y al recibir (llega
+  // la respuesta). Solo en modo demo (queryFn) — la vista autenticada no se toca.
   useEffect(() => {
-    if (!queryFn) return;
-    const last = msgs[msgs.length - 1];
-    if (!last || last.role !== "answer") return;
-    const c = convoRef.current;
-    if (!c) return;
-    const r = c.getBoundingClientRect();
-    if (r.top < 8 || r.top > window.innerHeight * 0.5) {
-      c.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    if (!queryFn || msgs.length === 0) return;
+    const cw = cwrapRef.current;
+    if (cw) cw.scrollTop = cw.scrollHeight;
+    endRef.current?.scrollIntoView({ block: "nearest" });
   }, [msgs, queryFn]);
 
   const onSave = useCallback(
@@ -717,7 +717,7 @@ export function ConsultView({
           </div>
         )}
 
-        <div className="cwrap">
+        <div className="cwrap" ref={cwrapRef}>
           <div className="col-left">
             <div className="doc-card2">
               <div className="dh">
@@ -754,21 +754,31 @@ export function ConsultView({
                   <Icon name="sparkles" size={13} />
                   Sugeridas por DOCYAN
                 </div>
-                {(activeDoc?.sugerencias ?? []).map((s, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="sug"
-                    onClick={() => !busy && askFree(s)}
-                  >
-                    <Icon name="sparkles" size={15} />
-                    <span className="tx">{s}</span>
-                    <span className="ar">→</span>
-                  </button>
-                ))}
+                {/* Fila horizontal con scroll táctil en el demo (corrección Jorge #2);
+                    en la vista autenticada `.sug-row` cae a columna (CSS por defecto). */}
+                <div className="sug-row">
+                  {(activeDoc?.sugerencias ?? []).map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="sug"
+                      onClick={() => !busy && askFree(s)}
+                    >
+                      <Icon name="sparkles" size={15} />
+                      <span className="tx">{s}</span>
+                      <span className="ar">→</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
+            {/* Funciones de OPERADOR (guardar consultas + observaciones): NO en el
+                demo público (corrección Jorge #3) — el chat queda "solo mensajes +
+                input", sin botones de acción sueltos arriba del hilo. En la vista
+                autenticada se conservan intactas. */}
+            {!demoSolicitud && (
+            <>
             {/* Tus consultas — guardadas en esta sesión (real). */}
             <div className="cb-group">
               <div className="cb-lab">
@@ -867,6 +877,8 @@ export function ConsultView({
                 </button>
               )}
             </div>
+            </>
+            )}
           </div>
 
           <div className="col-right">
@@ -875,7 +887,7 @@ export function ConsultView({
                 <Icon name="messages-square" size={14} />
                 Conversación{activeDoc?.nombre ? ` · ${activeDoc.nombre}` : ""}
               </span>
-              {msgs.length > 0 && (
+              {msgs.length > 0 && !demoSolicitud && (
                 <button type="button" className="clearbtn" onClick={() => setMsgs([])}>
                   <Icon name="eraser" size={14} />
                   Limpiar conversación
@@ -924,6 +936,9 @@ export function ConsultView({
                   </div>
                 </div>
               )}
+              {/* Centinela de auto-scroll (corrección Jorge #1): el efecto lo trae
+                  a la vista al llegar cada mensaje. */}
+              <div ref={endRef} aria-hidden="true" />
             </div>
 
             {qbarForm}
