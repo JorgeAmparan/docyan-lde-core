@@ -394,6 +394,9 @@ export function ConsultView({
   const [obs, setObs] = useState<Array<{ t: string; at: string }>>([]);
   const [obsAdding, setObsAdding] = useState(false);
   const [obsVal, setObsVal] = useState("");
+  // Demo móvil (corrección Jorge): submenú activo del menú inferior tipo app. Arranca
+  // cerrado; se abre al tocar un botón y se cierra al elegir/tocar fuera.
+  const [sheet, setSheet] = useState<"sug" | "consulta" | "nota" | null>(null);
   // Hidrata las observaciones del cliente tras el montaje (evita mismatch SSR; el
   // server no conoce localStorage). setState-en-effect es el patrón correcto aquí
   // y consistente con el resto del repo (site-i18n).
@@ -673,6 +676,223 @@ export function ConsultView({
             </button>
           </form>
         </div>
+        <ConsultaSpanOverlay
+          open={source !== null}
+          onOpenChange={(o) => !o && setSource(null)}
+          source={source}
+        />
+        {solicitudModalEl}
+      </div>
+    );
+  }
+
+  // ── Demo público móvil (correcciones Jorge): app de chat estándar —
+  //    header acotado · ventana del hilo (solo mensajes, scrollea) · menú
+  //    inferior fijo con 3 botones (Sugeridas/Consulta/Nota) que abren un
+  //    bottom-sheet, + input con aire abajo. Scopeado al demo, no toca el
+  //    camino autenticado (Shell-A de abajo). ──────────────────────────────
+  if (demoSolicitud) {
+    const runSug = (s: string) => {
+      setSheet(null);
+      if (!busy) askFree(s);
+    };
+    const toggle = (k: "sug" | "consulta" | "nota") =>
+      setSheet((cur) => (cur === k ? null : k));
+    return (
+      <div className="consult-desktop dchat-scope">
+        <div className="dchat">
+          {/* Header acotado (una línea): equipo + documento. */}
+          <header className="dchat-head">
+            <span className="dh-dot" aria-hidden="true" />
+            <div className="dh-txt">
+              <b className="dh-name">{ctx.entityName}</b>
+              <span className="dh-doc">{activeDoc?.nombre || ctx.entityTitle}</span>
+            </div>
+            <span className="dh-live">
+              <span className="bd" />
+              vivo
+            </span>
+          </header>
+
+          {/* Ventana del chat: SOLO los mensajes; scrollea aquí. */}
+          <div className="dchat-thread" ref={cwrapRef}>
+            {msgs.length === 0 ? (
+              <div className="dchat-empty">
+                <Icon name="message-circle-question" size={24} />
+                <p>
+                  Pregunta sobre <b>{ctx.entityName}</b>. La respuesta llega citada a la
+                  fuente, con su página.
+                </p>
+                <p className="dchat-empty-hint">
+                  Toca <b>Sugeridas</b> abajo para ver preguntas de ejemplo.
+                </p>
+              </div>
+            ) : (
+              msgs.map(renderAnswer)
+            )}
+            <div ref={endRef} aria-hidden="true" />
+          </div>
+
+          {/* Bottom-sheet: sube desde el fondo, se cierra al elegir/tocar fuera. */}
+          {sheet && (
+            <div className="dchat-sheet-wrap" onClick={() => setSheet(null)}>
+              <div
+                className="dchat-sheet"
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="dchat-sheet-grip" aria-hidden="true" />
+                {sheet === "sug" && (
+                  <>
+                    <div className="dchat-sheet-lab">
+                      <Icon name="sparkles" size={13} />
+                      Sugeridas por DOCYAN
+                    </div>
+                    <div className="dchat-sheet-list">
+                      {(activeDoc?.sugerencias ?? []).map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className="sug"
+                          onClick={() => runSug(s)}
+                        >
+                          <Icon name="sparkles" size={15} />
+                          <span className="tx">{s}</span>
+                          <span className="ar">→</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {sheet === "consulta" && (
+                  <>
+                    <div className="dchat-sheet-lab">
+                      <Icon name="bookmark" size={13} />
+                      Agregar consulta
+                    </div>
+                    <div className="add-row">
+                      <input
+                        autoFocus
+                        value={addVal}
+                        placeholder="Escribe una consulta…"
+                        onChange={(e) => setAddVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            setSheet(null);
+                            addUser();
+                          }
+                          if (e.key === "Escape") setSheet(null);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="ok"
+                        onClick={() => {
+                          setSheet(null);
+                          addUser();
+                        }}
+                      >
+                        <Icon name="check" size={16} />
+                      </button>
+                    </div>
+                  </>
+                )}
+                {sheet === "nota" && (
+                  <>
+                    <div className="dchat-sheet-lab">
+                      <Icon name="pencil-line" size={13} />
+                      Anotar nota
+                    </div>
+                    <p className="obs-hint">
+                      Anota algo que viste en el equipo. Queda como tu nota; no es una
+                      instrucción.
+                    </p>
+                    <div className="add-row">
+                      <input
+                        autoFocus
+                        value={obsVal}
+                        placeholder="Ej. holgura en el acople motor-eje…"
+                        onChange={(e) => setObsVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            addObs();
+                            setSheet(null);
+                          }
+                          if (e.key === "Escape") setSheet(null);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="ok"
+                        onClick={() => {
+                          addObs();
+                          setSheet(null);
+                        }}
+                      >
+                        <Icon name="check" size={16} />
+                      </button>
+                    </div>
+                    {obs.length > 0 && (
+                      <div className="dchat-notes">
+                        {obs.map((o, i) => (
+                          <div className="obs-item" key={i}>
+                            <span className="obs-ic">
+                              <Icon name="message-square-text" size={14} />
+                            </span>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div className="obs-t">{o.t}</div>
+                              <div className="obs-m">tú · {o.at}</div>
+                            </div>
+                            <button
+                              type="button"
+                              className="obs-del"
+                              onClick={() => delObs(i)}
+                            >
+                              <Icon name="x" size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Menú inferior fijo (tipo app): botones de submenú + input con aire. */}
+          <div className="dchat-foot">
+            <div className="dchat-actions">
+              <button
+                type="button"
+                className={"dact" + (sheet === "sug" ? " on" : "")}
+                onClick={() => toggle("sug")}
+              >
+                <Icon name="sparkles" size={16} />
+                Sugeridas
+              </button>
+              <button
+                type="button"
+                className={"dact" + (sheet === "consulta" ? " on" : "")}
+                onClick={() => toggle("consulta")}
+              >
+                <Icon name="bookmark" size={16} />
+                Consulta
+              </button>
+              <button
+                type="button"
+                className={"dact" + (sheet === "nota" ? " on" : "")}
+                onClick={() => toggle("nota")}
+              >
+                <Icon name="pencil-line" size={16} />
+                Nota
+              </button>
+            </div>
+            {qbarForm}
+          </div>
+        </div>
+
         <ConsultaSpanOverlay
           open={source !== null}
           onOpenChange={(o) => !o && setSource(null)}

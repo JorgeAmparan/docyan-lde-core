@@ -70,6 +70,46 @@
 .ds-bezel.phone .ds-screen .consult-desktop .thread{overflow:visible;min-height:0;}
 .ds-bezel.phone .ds-screen .consult-desktop .col-right{min-height:0;}
 
+/* ── Demo público = app de chat móvil (correcciones Jorge, jul 2026) ──────────
+   Header acotado · ventana del hilo (solo mensajes) · menú inferior fijo con
+   3 botones que abren un bottom-sheet · input con aire abajo. Solo el demo. */
+.ds-screen .consult-desktop.dchat-scope{padding:0;overflow:hidden;height:100%;}
+.ds-screen .dchat{display:flex;flex-direction:column;height:100%;position:relative;background:var(--amate-50);}
+
+/* Header acotado (1 línea). */
+.ds-screen .dchat-head{flex:none;display:flex;align-items:center;gap:9px;padding:12px 14px;background:var(--surface);border-bottom:1px solid var(--border);}
+.ds-screen .dchat-head .dh-dot{width:8px;height:8px;border-radius:99px;background:var(--cinnabar-500);flex:none;}
+.ds-screen .dchat-head .dh-txt{min-width:0;display:flex;flex-direction:column;line-height:1.25;}
+.ds-screen .dchat-head .dh-name{font-size:14px;font-weight:700;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ds-screen .dchat-head .dh-doc{font-size:11px;color:var(--fg-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ds-screen .dchat-head .dh-live{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--accent-fg);background:var(--cinnabar-50);border-radius:99px;padding:3px 8px;}
+.ds-screen .dchat-head .dh-live .bd{width:6px;height:6px;border-radius:99px;background:var(--cinnabar-500);}
+
+/* Ventana del chat (el hilo). */
+.ds-screen .dchat-thread{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:14px;}
+.ds-screen .dchat-empty{margin:auto;text-align:center;color:var(--fg-subtle);max-width:30ch;padding:16px 0;}
+.ds-screen .dchat-empty svg{color:var(--cinnabar-400);}
+.ds-screen .dchat-empty p{font-size:13.5px;line-height:1.5;margin:10px 0 0;}
+.ds-screen .dchat-empty .dchat-empty-hint{font-size:12px;color:var(--fg-subtle);}
+
+/* Menú inferior fijo (tipo app): botones + input con aire abajo. */
+.ds-screen .dchat-foot{flex:none;display:flex;flex-direction:column;gap:9px;padding:10px 12px 16px;background:var(--surface);border-top:1px solid var(--border);}
+.ds-screen .dchat-actions{display:flex;gap:8px;}
+.ds-screen .dchat-actions .dact{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:var(--fg-muted);background:var(--amate-50);border:1px solid var(--border);border-radius:10px;padding:9px 6px;cursor:pointer;white-space:nowrap;}
+.ds-screen .dchat-actions .dact svg{color:var(--cinnabar-500);}
+.ds-screen .dchat-actions .dact.on{border-color:var(--cinnabar-300);background:var(--cinnabar-50);color:var(--accent-fg);}
+.ds-screen .dchat-foot .qbar{margin:0;}
+
+/* Bottom-sheet (submenú). */
+.ds-screen .dchat-sheet-wrap{position:absolute;inset:0;z-index:20;display:flex;align-items:flex-end;background:rgba(33,28,22,.34);}
+.ds-screen .dchat-sheet{width:100%;max-height:66%;overflow-y:auto;background:var(--surface);border-radius:18px 18px 0 0;padding:8px 14px 16px;box-shadow:0 -14px 44px -14px rgba(33,28,22,.45);animation:dsheet-up .18s ease-out;}
+@keyframes dsheet-up{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.ds-screen .dchat-sheet-grip{width:36px;height:4px;border-radius:99px;background:var(--border);margin:2px auto 12px;}
+.ds-screen .dchat-sheet-lab{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle);margin-bottom:10px;}
+.ds-screen .dchat-sheet-lab svg{color:var(--cinnabar-500);}
+.ds-screen .dchat-sheet-list{display:flex;flex-direction:column;gap:8px;}
+.ds-screen .dchat-notes{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+
 /* Marco TABLET: layout de dos columnas (Shell-A) tal cual; solo asegura que el
    consult quepa y desplace dentro del marco. */
 .ds-bezel.tablet .ds-screen .consult-desktop .cwrap{min-height:0;}
