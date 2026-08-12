@@ -4,6 +4,8 @@
 
 Este documento + el repo `docyan-lde-core` en GitHub son **la única fuente de reconstrucción**. Todo lo necesario para volver a levantar el entorno está aquí o en el repo.
 
+**Destrucción verificada.** Las cinco apps se destruyeron sin errores con `fly apps destroy <app> --yes`. Después de ejecutarlas, `fly apps list` devuelve **cero apps** en la organización `personal` (la única de la cuenta). Al destruir una app, Fly elimina con ella sus machines, volúmenes e IPs: no quedaron volúmenes huérfanos — `docyan_graph_data` y `redis_data` se fueron con `docyan-lde-graph` y `docyan-lde-redis`. El cargo recurrente de Fly.io es cero.
+
 > **Sobre los secrets:** este documento lista únicamente los **NOMBRES** de las variables que cada app necesita. Ningún valor está aquí ni estará nunca. Los valores se reconfiguran desde sus fuentes originales (consolas de Google AI Studio, OpenAI, Anthropic, Resend, Supabase, Banxico) al momento de reactivar.
 
 ---
