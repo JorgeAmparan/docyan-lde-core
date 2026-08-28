@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Icon } from "@/components/icon";
 import { DocyanMark } from "@/components/brand/docyan-mark";
+import { SearchModal } from "@/components/search-modal";
 import { useAuth } from "@/lib/auth";
 import { getCuenta } from "@/lib/onboarding";
 
@@ -79,6 +81,19 @@ export function OrgShell({ children }: { children: React.ReactNode }) {
   const user = useAuth((s) => s.user);
   const token = useAuth((s) => s.token);
   const clear = useAuth((s) => s.clear);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // ⌘K / Ctrl+K abre la búsqueda global (P2) — atajo estándar de command-palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Plan free/pro del rail: sale de `GET /onboarding/cuenta` (CuentaResumen.plan),
   // el MISMO origen que `admin/codos/page.tsx` (Mapa de Paridad §8.1). NO se deriva
@@ -110,10 +125,11 @@ export function OrgShell({ children }: { children: React.ReactNode }) {
           <span className="role-tag">Org</span>
         </div>
         <div className="hsep" />
-        <div className="search">
+        <button type="button" className="search" onClick={() => setSearchOpen(true)} aria-label="Buscar (⌘K)">
           <Icon name="search" size={16} className="lic" />
-          <input readOnly placeholder="Busca un documento o pregunta directo…" aria-label="Buscar" />
-        </div>
+          <span className="search-ph">Busca un documento o pregunta directo…</span>
+          <kbd className="search-kbd">⌘K</kbd>
+        </button>
         <div className="haccount">
           <Link href="/cuenta" className="av-user" title="Mi cuenta">
             {userInitials}
@@ -163,6 +179,8 @@ export function OrgShell({ children }: { children: React.ReactNode }) {
           <div className={"content" + (isConsultRoute(pathname) ? " consult" : "")}>{children}</div>
         </div>
       </div>
+
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }
